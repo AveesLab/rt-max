@@ -1633,6 +1633,9 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     int names_size = 0;
     char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list);
 
+    char *target_model = "yolo";
+    int object_detection = strstr(cfgfile, target_model);
+
     image **alphabet = load_alphabet();
     network net = parse_network_cfg_custom(cfgfile, 1, 1); // set batch=1
     if (weightfile) {
@@ -1642,7 +1645,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     net.benchmark_layers = benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
-    if (net.layers[net.n - 1].classes != names_size) {
+    if (object_detection && net.layers[net.n - 1].classes != names_size) {
         printf("\n Error: in the file %s number of names %d that isn't equal to classes=%d in the file %s \n",
             name_list, names_size, net.layers[net.n - 1].classes, cfgfile);
         if (net.layers[net.n - 1].classes > names_size) getchar();
@@ -1679,9 +1682,8 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         //image im;
         //image sized = load_image_resize(input, net.w, net.h, net.c, &im);
         image im = load_image(input, 0, 0, net.c);
-        image sized;
-        if(letter_box) sized = letterbox_image(im, net.w, net.h);
-        else sized = resize_image(im, net.w, net.h);
+        image resized = resize_min(im, net.w);
+        image cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
 
         layer l = net.layers[net.n - 1];
         int k;
@@ -1697,22 +1699,41 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         //float **probs = calloc(l.w*l.h*l.n, sizeof(float*));
         //for(j = 0; j < l.w*l.h*l.n; ++j) probs[j] = (float*)xcalloc(l.classes, sizeof(float));
 
-        float *X = sized.data;
+        float *X = cropped.data;
 
         //time= what_time_is_it_now();
         double time = get_time_point();
-        network_predict(net, X);
+        float *predictions = network_predict(net, X);
         //network_predict_image(&net, im); letterbox = 1;
         printf("%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
         //printf("%s: Predicted in %f seconds.\n", input, (what_time_is_it_now()-time));
 
         int nboxes = 0;
-        detection *dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
-        if (nms) {
-            if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
-            else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+        detection *dets;
+
+        int top = 5;
+        int i;
+        int index;
+        int* indexes = (int*)xcalloc(top, sizeof(int));
+
+        if (object_detection) {
+            dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
+            if (nms) {
+                if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+                else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+            }
+            draw_detections_v3(im, dets, nboxes, thresh, names, alphabet, l.classes, ext_output);
         }
-        draw_detections_v3(im, dets, nboxes, thresh, names, alphabet, l.classes, ext_output);
+        else {
+            if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+            top_k(predictions, net.outputs, top, indexes);
+            for(i = 0; i < top; ++i){
+                index = indexes[i];
+                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                else printf("%s: %f\n",names[index], predictions[index]);
+            }
+        }
+
         save_image(im, "predictions");
         if (!dont_show) {
             show_image(im, "predictions");
@@ -1758,7 +1779,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
         free_detections(dets, nboxes);
         free_image(im);
-        free_image(sized);
+        free_image(cropped);
 
         if (!dont_show) {
             wait_until_press_key_cv();
