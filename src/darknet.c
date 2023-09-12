@@ -12,6 +12,11 @@
 #include "blas.h"
 #include "connected_layer.h"
 
+#ifdef GPU
+    static int device = 1;
+#else
+    static int device = 0;
+#endif
 
 extern void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filename, int top);
 extern void run_voxel(int argc, char **argv);
@@ -172,7 +177,7 @@ void oneoff(char *cfgfile, char *weightfile, char *outfile)
 void partial(char *cfgfile, char *weightfile, char *outfile, int max)
 {
     gpu_index = -1;
-    network net = parse_network_cfg_custom(cfgfile, 1, 1);
+    network net = parse_network_cfg_custom(cfgfile, 1, 1, device);
     if(weightfile){
         load_weights_upto(&net, weightfile, max);
     }

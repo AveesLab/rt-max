@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 network parse_network_cfg(char *filename);
-network parse_network_cfg_custom(char *filename, int batch, int time_steps);
+network parse_network_cfg_custom(char *filename, int batch, int time_steps, int device);
 void save_network(network net, char *filename);
 void save_weights(network net, char *filename);
 void save_weights_upto(network net, char *filename, int cutoff, int save_ema);

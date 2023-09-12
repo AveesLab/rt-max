@@ -19,6 +19,12 @@ typedef __compar_fn_t comparison_fn_t;
 
 #include "http_stream.h"
 
+#ifdef GPU
+    static int device = 1;
+#else
+    static int device = 0;
+#endif
+
 int check_mistakes = 0;
 
 static int coco_ids[] = { 1,2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,27,28,31,32,33,34,35,36,37,38,39,40,41,42,43,44,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,67,70,72,73,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90 };
@@ -43,7 +49,7 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
 
         cuda_set_device(gpus[0]);
         printf(" Prepare additional network for mAP calculation...\n");
-        net_map = parse_network_cfg_custom(cfgfile, 1, 1);
+        net_map = parse_network_cfg_custom(cfgfile, 1, 1, device);
         net_map.benchmark_layers = benchmark_layers;
         const int net_classes = net_map.layers[net_map.n - 1].classes;
 
@@ -654,7 +660,7 @@ void validate_detector(char *datacfg, char *cfgfile, char *weightfile, char *out
     int *map = 0;
     if (mapf) map = read_map(mapf);
 
-    network net = parse_network_cfg_custom(cfgfile, 1, 1);    // set batch=1
+    network net = parse_network_cfg_custom(cfgfile, 1, 1, device);    // set batch=1
     if (weightfile) {
         load_weights(&net, weightfile);
     }
@@ -845,7 +851,7 @@ void validate_detector(char *datacfg, char *cfgfile, char *weightfile, char *out
 
 void validate_detector_recall(char *datacfg, char *cfgfile, char *weightfile)
 {
-    network net = parse_network_cfg_custom(cfgfile, 1, 1);    // set batch=1
+    network net = parse_network_cfg_custom(cfgfile, 1, 1, device);    // set batch=1
     if (weightfile) {
         load_weights(&net, weightfile);
     }
@@ -963,7 +969,7 @@ float validate_detector_map(char *datacfg, char *cfgfile, char *weightfile, floa
         free_network_recurrent_state(*existing_net);
     }
     else {
-        net = parse_network_cfg_custom(cfgfile, 1, 1);    // set batch=1
+        net = parse_network_cfg_custom(cfgfile, 1, 1, device);    // set batch=1
         if (weightfile) {
             load_weights(&net, weightfile);
         }
@@ -1637,7 +1643,10 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     int object_detection = strstr(cfgfile, target_model);
 
     image **alphabet = load_alphabet();
-    network net = parse_network_cfg_custom(cfgfile, 1, 1); // set batch=1
+
+    int device = 0; // Choose CPU or GPU
+
+    network net = parse_network_cfg_custom(cfgfile, 1, 1, device); // set batch=1
     if (weightfile) {
         load_weights(&net, weightfile);
     }
@@ -1703,7 +1712,15 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
         //time= what_time_is_it_now();
         double time = get_time_point();
-        float *predictions = network_predict(net, X);
+        
+        float *predictions;
+        if (device) {
+            predictions = network_predict(net, X);
+        }
+        else {
+            predictions = network_predict_cpu(net, X);
+        }
+
         //network_predict_image(&net, im); letterbox = 1;
         printf("%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
         //printf("%s: Predicted in %f seconds.\n", input, (what_time_is_it_now()-time));

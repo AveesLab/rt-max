@@ -19,6 +19,12 @@
 
 #include "http_stream.h"
 
+#ifdef GPU
+    static int device = 1;
+#else
+    static int device = 0;
+#endif
+
 static char **demo_names;
 static image **demo_alphabet;
 static int demo_classes;
@@ -158,7 +164,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     demo_ext_output = ext_output;
     demo_json_port = json_port;
     printf("Demo\n");
-    net = parse_network_cfg_custom(cfgfile, 1, 1);    // set batch=1
+    net = parse_network_cfg_custom(cfgfile, 1, 1, device);    // set batch=1
     if(weightfile){
         load_weights(&net, weightfile);
     }

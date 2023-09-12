@@ -39,6 +39,14 @@
 #include "upsample_layer.h"
 #include "parser.h"
 
+#ifdef GPU
+    static int device = 1;
+    int gpu_yolo = 1;
+#else
+    static int device = 0;
+    int gpu_yolo = 0;
+#endif
+
 load_args get_base_args(network *net)
 {
     load_args args = { 0 };
@@ -304,14 +312,20 @@ void update_network(network net)
     }
 }
 
-float *get_network_output(network net)
+float *get_network_output(network net, int device)
 {
 #ifdef GPU
-    if (gpu_index >= 0) return get_network_output_gpu(net);
-#endif
+    if (device) {
+        if (gpu_index >= 0) return get_network_output_gpu(net);
+    }
     int i;
     for(i = net.n-1; i > 0; --i) if(net.layers[i].type != COST) break;
     return net.layers[i].output;
+#else   
+    int i;
+    for(i = net.n-1; i > 0; --i) if(net.layers[i].type != COST) break;
+    return net.layers[i].output;
+#endif
 }
 
 float get_network_cost(network net)
@@ -330,7 +344,7 @@ float get_network_cost(network net)
 
 int get_predicted_class_network(network net)
 {
-    float *out = get_network_output(net);
+    float *out = get_network_output(net, device);
     int k = get_network_output_size(net);
     return max_index(out, k);
 }
@@ -747,7 +761,7 @@ void visualize_network(network net)
 void top_predictions(network net, int k, int *index)
 {
     int size = get_network_output_size(net);
-    float *out = get_network_output(net);
+    float *out = get_network_output(net, device);
     top_k(out, size, k, index);
 }
 
@@ -760,9 +774,28 @@ float *network_predict_ptr(network *net, float *input)
 
 float *network_predict(network net, float *input)
 {
-#ifdef GPU
-    if(gpu_index >= 0)  return network_predict_gpu(net, input);
-#endif
+    if (device) {
+        printf("\n\n --predict with GPU-- \n\n");
+        if(gpu_index >= 0)  return network_predict_gpu(net, input);
+    }
+
+    printf("\n\n --predict with CPU-- \n\n");
+    network_state state = {0};
+    state.net = net;
+    state.index = 0;
+    state.input = input;
+    state.truth = 0;
+    state.train = 0;
+    state.delta = 0;
+    forward_network(net, state);
+    float *out = get_network_output(net, device);
+    return out;
+}
+float *network_predict_cpu(network net, float *input)
+{
+    printf("\n\n --predict_cpu-- \n\n");
+
+    gpu_yolo = 0;
 
     network_state state = {0};
     state.net = net;
@@ -772,10 +805,9 @@ float *network_predict(network net, float *input)
     state.train = 0;
     state.delta = 0;
     forward_network(net, state);
-    float *out = get_network_output(net);
+    float *out = get_network_output(net, 0);
     return out;
 }
-
 #ifdef CUDA_OPENGL_INTEGRATION
 float *network_predict_gl_texture(network *net, uint32_t texture_id)
 {

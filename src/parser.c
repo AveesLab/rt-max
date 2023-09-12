@@ -41,6 +41,12 @@
 #include "gaussian_yolo_layer.h"
 #include "representation_layer.h"
 
+#ifdef GPU
+    static int device = 1;
+#else
+    static int device = 0;
+#endif
+
 void empty_func(dropout_layer l, network_state state) {
     //l.output_gpu = state.input;
 }
@@ -1354,10 +1360,10 @@ void set_train_only_bn(network net)
 
 network parse_network_cfg(char *filename)
 {
-    return parse_network_cfg_custom(filename, 0, 0);
+    return parse_network_cfg_custom(filename, 0, 0, device);
 }
 
-network parse_network_cfg_custom(char *filename, int batch, int time_steps)
+network parse_network_cfg_custom(char *filename, int batch, int time_steps, int device)
 {
     list *sections = read_cfg(filename);
     node *n = sections->front;
@@ -1763,7 +1769,9 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps)
     set_train_only_bn(net); // set l.train_only_bn for all required layers
 
     net.outputs = get_network_output_size(net);
-    net.output = get_network_output(net);
+
+    net.output = get_network_output(net, device);
+
     avg_outputs = avg_outputs / avg_counter;
     fprintf(stderr, "Total BFLOPS %5.3f \n", bflops);
     fprintf(stderr, "avg_outputs = %d \n", avg_outputs);
@@ -1789,9 +1797,11 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps)
             *net.max_output16_size = max_outputs;
             CHECK_CUDA(cudaMalloc((void **)net.output16_gpu, *net.max_output16_size * sizeof(short))); //sizeof(half)
         }
-        if (workspace_size) {
-            fprintf(stderr, " Allocate additional workspace_size = %1.2f MB \n", (float)workspace_size/1000000);
-            net.workspace = cuda_make_array(0, workspace_size / sizeof(float) + 1);
+        if (device) {
+            if (workspace_size) {
+                fprintf(stderr, " Allocate additional workspace_size = %1.2f MB \n", (float)workspace_size/1000000);
+                net.workspace = cuda_make_array(0, workspace_size / sizeof(float) + 1);
+            }
         }
         else {
             net.workspace = (float*)xcalloc(1, workspace_size);
@@ -2380,7 +2390,7 @@ network *load_network_custom(char *cfg, char *weights, int clear, int batch)
 {
     printf(" Try to load cfg: %s, weights: %s, clear = %d \n", cfg, weights, clear);
     network* net = (network*)xcalloc(1, sizeof(network));
-    *net = parse_network_cfg_custom(cfg, batch, 1);
+    *net = parse_network_cfg_custom(cfg, batch, 1, device);
     if (weights && weights[0] != 0) {
         printf(" Try to load weights: %s \n", weights);
         load_weights(net, weights);

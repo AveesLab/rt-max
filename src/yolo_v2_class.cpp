@@ -24,6 +24,12 @@ extern "C" {
 
 #define NFRAMES 3
 
+#ifdef GPU
+    static int device = 1;
+#else
+    static int device = 0;
+#endif
+
 //static Detector* detector = NULL;
 static std::unique_ptr<Detector> detector;
 
@@ -154,7 +160,7 @@ LIB_API Detector::Detector(std::string cfg_filename, std::string weight_filename
     char *cfgfile = const_cast<char *>(_cfg_filename.c_str());
     char *weightfile = const_cast<char *>(_weight_filename.c_str());
 
-    net = parse_network_cfg_custom(cfgfile, batch_size, batch_size);
+    net = parse_network_cfg_custom(cfgfile, batch_size, batch_size, device);
     if (weightfile) {
         load_weights(&net, weightfile);
     }

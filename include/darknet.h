@@ -1031,6 +1031,7 @@ LIB_API void diounms_sort(detection *dets, int total, int classes, float thresh,
 
 // network.h
 LIB_API float *network_predict(network net, float *input);
+LIB_API float *network_predict_cpu(network net, float *input);
 LIB_API float *network_predict_ptr(network *net, float *input);
 #ifdef CUDA_OPENGL_INTEGRATION
 LIB_API float *network_predict_gl_texture(network *net, uint32_t texture_id);
