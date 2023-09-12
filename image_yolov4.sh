@@ -1,6 +1,6 @@
 
 
-./darknet detector test ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -i 0 -thresh 0.25
+./darknet detector test ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg # -benchmark
 
 
 
