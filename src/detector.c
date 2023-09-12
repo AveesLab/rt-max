@@ -9,6 +9,11 @@
 #include "demo.h"
 #include "option_list.h"
 
+#include <pthread.h>
+#define _GNU_SOURCE
+#include <sched.h>
+#include <unistd.h>
+
 #ifndef __COMPAR_FN_T
 #define __COMPAR_FN_T
 typedef int (*__compar_fn_t)(const void*, const void*);
@@ -18,6 +23,7 @@ typedef __compar_fn_t comparison_fn_t;
 #endif
 
 #include "http_stream.h"
+#include "detector.h"
 
 #ifdef GPU
     static int device = 1;
@@ -1633,6 +1639,17 @@ void calc_anchors(char *datacfg, int num_of_clusters, int width, int height, int
 void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+    // __CPU AFFINITY SETTING__
+    int core_idx = 1; // cpu core index
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_idx, &cpuset);
+    int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+    if (ret != 0) {
+        fprintf(stderr, "pthread_setaffinity_np() failed \n");
+        exit(0);
+    } 
+
     list *options = read_data_cfg(datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
     int names_size = 0;
@@ -1676,7 +1693,6 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     else printf("Error! File is not exist.");
 
     while (1) {
-
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -1718,7 +1734,6 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
             wait_key_cv(1);
         }
     }
-
 
     // free memory
     free_detections(dets, nboxes);
@@ -1980,6 +1995,8 @@ void run_detector(int argc, char **argv)
             if (weights[strlen(weights) - 1] == 0x0d) weights[strlen(weights) - 1] = 0;
     char *filename = (argc > 6) ? argv[6] : 0;
     if (0 == strcmp(argv[2], "test")) test_detector(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "sequential")) sequential(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "data-parallel")) data_parallel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear, dont_show, calc_map, thresh, iou_thresh, mjpeg_port, show_imgs, benchmark_layers, chart_path, mAP_epochs);
     else if (0 == strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights, outfile);
     else if (0 == strcmp(argv[2], "recall")) validate_detector_recall(datacfg, cfg, weights);

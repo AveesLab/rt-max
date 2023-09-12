@@ -10,7 +10,7 @@
 #include <sched.h>
 #include <unistd.h>
 
-void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     // __CPU AFFINITY SETTING__
