@@ -775,11 +775,9 @@ float *network_predict_ptr(network *net, float *input)
 float *network_predict(network net, float *input)
 {
     if (device) {
-        printf("\n\n --predict with GPU-- \n\n");
         if(gpu_index >= 0)  return network_predict_gpu(net, input);
     }
 
-    printf("\n\n --predict with CPU-- \n\n");
     network_state state = {0};
     state.net = net;
     state.index = 0;
@@ -793,8 +791,6 @@ float *network_predict(network net, float *input)
 }
 float *network_predict_cpu(network net, float *input)
 {
-    printf("\n\n --predict_cpu-- \n\n");
-
     gpu_yolo = 0;
 
     network_state state = {0};

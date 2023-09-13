@@ -80,7 +80,7 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
-        printf("%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+        printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
 
         // __Postprecess__
         // __NMS & TOP acccuracy__

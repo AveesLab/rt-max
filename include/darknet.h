@@ -799,6 +799,7 @@ typedef struct network {
     float *truth;
     float *delta;
     float *workspace;
+    float *workspace_cpu;
     int train;
     int index;
     float *cost;

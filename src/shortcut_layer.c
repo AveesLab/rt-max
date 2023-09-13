@@ -7,13 +7,18 @@
 #include <stdio.h>
 #include <assert.h>
 
+extern int skip_layers[1000];
+
 layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes, int w, int h, int c,
     float **layers_output, float **layers_delta, float **layers_output_gpu, float **layers_delta_gpu, WEIGHTS_TYPE_T weights_type, WEIGHTS_NORMALIZATION_T weights_normalization,
     ACTIVATION activation, int train)
 {
     fprintf(stderr, "Shortcut Layer: ");
     int i;
-    for(i = 0; i < n; ++i) fprintf(stderr, "%d, ", input_layers[i]);
+    for(i = 0; i < n; ++i) {
+        fprintf(stderr, "%d, ", input_layers[i]);
+        skip_layers[input_layers[i]] = 1;
+    }
 
     layer l = { (LAYER_TYPE)0 };
     l.train = train;

@@ -10,7 +10,7 @@
 #include <sched.h>
 #include <unistd.h>
 
-void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     // __CPU AFFINITY SETTING__
@@ -38,17 +38,21 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     double time;
 
     int top = 5;
-    int nboxes, index, i, j, k = 0;
+    int index, i, j, k = 0;
     int* indexes = (int*)xcalloc(top, sizeof(int));
+
+    int nboxes;
+    detection *dets;
 
     image im, resized, cropped;
     float *X, *predictions;
-    detection *dets;
 
     char *target_model = "yolo";
     int object_detection = strstr(cfgfile, target_model);
 
-    int device = 0; // Choose CPU or GPU
+    int device = 1; // Choose CPU or GPU
+    extern int skip_layers[1000];
+    extern gpu_yolo;
 
     network net = parse_network_cfg_custom(cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
@@ -67,7 +71,6 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     else printf("Error! File is not exist.");
 
     while (1) {
-
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -77,8 +80,63 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         time = get_time_point();
         
         // __Inference__
-        if (device) predictions = network_predict(net, X);
-        else predictions = network_predict_cpu(net, X);
+        // if (device) predictions = network_predict(net, X);
+        // else predictions = network_predict_cpu(net, X);
+
+        if (net.gpu_index != cuda_get_device())
+            cuda_set_device(net.gpu_index);
+        int size = get_network_input_size(net) * net.batch;
+        network_state state;
+        state.index = 0;
+        state.net = net;
+        // state.input = X;
+        state.input = net.input_state_gpu;
+        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+        state.truth = 0;
+        state.train = 0;
+        state.delta = 0;
+
+        cuda_push_array(state.input, net.input_pinned_cpu, size);
+
+        // GPU Inference
+        state.workspace = net.workspace;
+        int glayer = 33;
+        for(i = 0; i < glayer; ++i){
+            state.index = i;
+            l = net.layers[i];
+            if(l.delta_gpu && state.train){
+                fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
+            }
+
+            l.forward_gpu(l, state);
+            if (skip_layers[i]){
+                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            }
+            state.input = l.output_gpu;
+        }
+
+        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        state.input = l.output;
+
+        // CPU Inference
+        state.workspace = net.workspace_cpu;
+        gpu_yolo = 0;
+        for(i = glayer; i < net.n; ++i){
+            state.index = i;
+            l = net.layers[i];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
+
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+
+        if (glayer == net.n) predictions = get_network_output_gpu(net);
+        else predictions = get_network_output(net, 0);
+        reset_wait_stream_events();
+        //cuda_free(state.input);   // will be freed in the free_network()
 
         printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
 
@@ -91,7 +149,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
                 else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
             }
             draw_detections_v3(im, dets, nboxes, thresh, names, alphabet, l.classes, ext_output);
-        } // yolo model
+        }
         else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
             top_k(predictions, net.outputs, top, indexes);
@@ -100,15 +158,13 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
                 else printf("%s: %f\n",names[index], predictions[index]);
             }
-        } // classifier model
+        }
 
         // __Display__
-        //save_image(im, "predictions");
         if (!dont_show) {
             show_image(im, "predictions");
             wait_key_cv(1);
         }
-
         // free memory
         free_image(im);
         free_image(resized);

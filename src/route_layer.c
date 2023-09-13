@@ -4,6 +4,8 @@
 #include "blas.h"
 #include <stdio.h>
 
+extern int skip_layers[1000];
+
 route_layer make_route_layer(int batch, int n, int *input_layers, int *input_sizes, int groups, int group_id)
 {
     fprintf(stderr,"route ");
@@ -21,6 +23,7 @@ route_layer make_route_layer(int batch, int n, int *input_layers, int *input_siz
     for(i = 0; i < n; ++i){
         fprintf(stderr," %d", input_layers[i]);
         outputs += input_sizes[i];
+        skip_layers[input_layers[i]] = 1;
     }
     outputs = outputs / groups;
     l.outputs = outputs;

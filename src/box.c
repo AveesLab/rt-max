@@ -830,7 +830,6 @@ void do_nms_sort(detection *dets, int total, int classes, float thresh)
         }
         qsort(dets, total, sizeof(detection), nms_comparator_v3);
         for (i = 0; i < total; ++i) {
-            //printf("  k = %d, \t i = %d \n", k, i);
             if (dets[i].prob[k] == 0) continue;
             box a = dets[i].bbox;
             for (j = i + 1; j < total; ++j) {

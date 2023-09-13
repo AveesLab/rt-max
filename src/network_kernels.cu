@@ -85,6 +85,7 @@ void forward_network_gpu(network net, network_state state)
         }
 
         l.forward_gpu(l, state);
+        if (i == 19) printf("l.output_gpu[0] : %0.3lf \n\n", l.output_gpu[0]);
 
         if (net.benchmark_layers) {
             CHECK_CUDA(cudaDeviceSynchronize());
