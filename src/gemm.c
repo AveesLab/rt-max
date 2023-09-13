@@ -12,6 +12,8 @@
 #include <omp.h>
 #endif
 
+#include <cblas.h>
+
 #if defined(_MSC_VER)
 #if defined(_M_ARM) || defined(_M_ARM64)
 static inline uint32_t popcnt(uint32_t v) {
@@ -107,14 +109,19 @@ void time_random_matrix(int TA, int TB, int m, int k, int n)
 }
 
 
-void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
-        float *A, int lda,
-        float *B, int ldb,
-        float BETA,
-        float *C, int ldc)
+void gemm (int TA ,int TB ,int M ,int N ,int K ,float ALPHA ,  
+    float *A ,int lda ,  
+    float *B ,int ldb ,  
+    float BETA ,  
+    float *C ,int ldc )  
 {
-    gemm_cpu( TA,  TB,  M, N, K, ALPHA,A,lda, B, ldb,BETA,C,ldc);
+#ifdef OPENBLAS  
+	cblas_sgemm (CblasRowMajor ,CblasNoTrans ,CblasNoTrans ,M ,N ,K ,ALPHA ,A ,lda ,B ,ldb ,BETA ,C ,ldc );  
+#else  
+	gemm_cpu (TA ,TB ,M ,N ,K ,ALPHA ,A ,lda ,B ,ldb ,BETA ,C ,ldc );  
+#endif  
 }
+
 
 
 //--------------------------------------------
