@@ -16,7 +16,9 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers);
-int skip_layers[1000] = {0, };
+
+extern int core_id;
+
 #ifdef __cplusplus
 }
 #endif

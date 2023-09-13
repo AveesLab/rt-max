@@ -2,7 +2,7 @@
 #include "darknet.h"
 #include "network.h"
 #include "parser.h"
-#include "demo.h"
+#include "detector.h"
 #include "option_list.h"
 
 #include <pthread.h>
@@ -14,10 +14,9 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     // __CPU AFFINITY SETTING__
-    int core_idx = 1; // cpu core index
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(core_idx, &cpuset);
+    CPU_SET(core_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
