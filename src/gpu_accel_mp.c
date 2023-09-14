@@ -19,6 +19,9 @@
 
 #ifdef MULTI_PROCESSOR
 
+int sem_id;
+key_t key = 1234;
+
 typedef struct process_data_t{
     char *datacfg;
     char *cfgfile;
@@ -34,6 +37,28 @@ typedef struct process_data_t{
     int benchmark_layers;
     int process_id;
 } process_data_t;
+
+union semun {
+    int val;
+    struct semid_ds *buf;
+    unsigned short *array;
+};
+
+void wait_semaphore(int sem_id, int sem_num) {
+    struct sembuf sem_op;
+    sem_op.sem_num = sem_num;
+    sem_op.sem_op = -1;
+    sem_op.sem_flg = 0;
+    semop(sem_id, &sem_op, 1);
+}
+
+void release_semaphore(int sem_id, int sem_num) {
+    struct sembuf sem_op;
+    sem_op.sem_num = sem_num;
+    sem_op.sem_op = 1;
+    sem_op.sem_flg = 0;
+    semop(sem_id, &sem_op, 1);
+}
 
 #ifdef GPU
 static void processFunc(process_data_t data)
@@ -138,9 +163,10 @@ static void processFunc(process_data_t data)
         state.train = 0;
         state.delta = 0;
 
-        cuda_push_array(state.input, net.input_pinned_cpu, size);
-
         // GPU Inference
+        wait_semaphore(sem_id, data.process_id - 1);
+
+        cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
         for(i = 0; i < gLayer; ++i){
             state.index = i;
@@ -158,6 +184,12 @@ static void processFunc(process_data_t data)
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
+
+        if (data.process_id == num_process) {
+            release_semaphore(sem_id, 0);
+        } else {
+            release_semaphore(sem_id, data.process_id);
+        }
 
         // CPU Inference
         state.workspace = net.workspace_cpu;
@@ -230,6 +262,23 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     pid_t pid;
     int status;
 
+    // Create semaphore set with NUM_PROCESSES semaphores
+    sem_id = semget(key, 1, IPC_CREAT | 0666);
+
+    if (sem_id == -1) {
+        perror("semget");
+        exit(1);
+    }
+
+    // Initialize semaphores
+    union semun arg;
+    unsigned short values[num_process];
+    for (i = 0; i < num_process; i++) values[i] = 0;
+    values[0] = 1;
+
+    arg.array = values;
+    semctl(sem_id, 0, SETALL, arg);
+
     process_data_t data[num_process];
 
     for (i = 0; i < num_process; i++) {
@@ -262,6 +311,9 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     for (i = 0; i < num_process; i++) {
         wait(&status);
     }
+
+    // Remove semaphores
+    semctl(sem_id, 0, IPC_RMID);
 
     return 0;
 
