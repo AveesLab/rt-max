@@ -12,6 +12,7 @@
 
 int skip_layers[1000] = {0, };
 
+#ifdef GPU
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
@@ -180,3 +181,11 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     free_alphabet(alphabet);
     free_network(net);
 }
+#else
+
+void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+    printf("!!ERROR!! GPU = 0 \n");
+}
+#endif  // GPU

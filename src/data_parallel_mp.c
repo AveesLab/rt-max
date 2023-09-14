@@ -5,12 +5,22 @@
 #include "detector.h"
 #include "option_list.h"
 
-#include <pthread.h>
 #define _GNU_SOURCE
 #include <sched.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
-typedef struct thread_data_t{
+#ifdef OPENBLAS
+#include <cblas.h>
+#endif
+
+#ifdef MULTI_PROCESSOR
+#define NUM_PROCESSES 3
+
+typedef struct process_data_t{
     char *datacfg;
     char *cfgfile;
     char *weightfile;
@@ -23,21 +33,36 @@ typedef struct thread_data_t{
     char *outfile;
     int letter_box;
     int benchmark_layers;
-    int thread_id;
-} thread_data_t;
+    int process_id;
+} process_data_t;
 
-void threadFunc(thread_data_t data)
+void processFunc(process_data_t data)
 {
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.thread_id, &cpuset); // cpu core index
+    CPU_SET(data.process_id, &cpuset); // cpu core index
 
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
         exit(0);
     } 
+
+    // __GPU SETUP__
+#ifdef GPU   // GPU
+    if(gpu_index >= 0){
+        cuda_set_device(gpu_index);
+        CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+    }
+#ifdef CUDNN_HALF
+    printf(" CUDNN_HALF=1 \n");
+#endif  // CUDNN_HALF
+#else
+    gpu_index = -1;
+    printf(" GPU isn't used \n");
+    init_cpu();
+#endif  // GPU
 
     list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
@@ -82,8 +107,8 @@ void threadFunc(thread_data_t data)
     else printf("Error! File is not exist.");
 
     while (1) {
-        printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
+        printf("Process %d (%d) 300ms ...\n", data.process_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -92,7 +117,20 @@ void threadFunc(thread_data_t data)
         X = cropped.data;
 
         time = get_time_point();
-        
+        if(data.process_id == 2) {        
+            openblas_set_num_threads(3);
+            CPU_ZERO(&cpuset);
+            CPU_SET(data.process_id, &cpuset);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+            CPU_ZERO(&cpuset);
+            CPU_SET(6, &cpuset);
+            openblas_setaffinity(0, sizeof(cpuset), &cpuset);
+            
+            CPU_ZERO(&cpuset);
+            CPU_SET(7, &cpuset);
+            openblas_setaffinity(1, sizeof(cpuset), &cpuset);
+        }
         // __Inference__
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
@@ -144,16 +182,17 @@ void threadFunc(thread_data_t data)
 
 }
 
-void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    pthread_t threads[num_thread];
-    int rc;
     int i;
 
-    thread_data_t data[num_thread];
+    pid_t pid;
+    int status;
 
-    for (i = 0; i < num_thread; i++) {
+    process_data_t data[NUM_PROCESSES];
+
+    for (i = 0; i < NUM_PROCESSES; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -166,21 +205,32 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         data[i].outfile = outfile;
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
-        data[i].thread_id = i + 1;
-        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-        if (rc) {
-            printf("Error: Unable to create thread, %d\n", rc);
-            exit(-1);
+        data[i].process_id = i + 1;
+    }
+
+    for (i = 0; i < NUM_PROCESSES; i++) {
+        pid = fork();
+        if (pid == 0) { // child process
+            processFunc(data[i]);
+            exit(0);
+        } else if (pid < 0) {
+            perror("fork");
+            exit(1);
         }
     }
 
-    for (i = 0; i < num_thread; i++) {
-        pthread_join(threads[i], NULL);
+    for (i = 0; i < NUM_PROCESSES; i++) {
+        wait(&status);
     }
-
-    // pthread_mutex_destroy(&mutex);
-    // pthread_cond_destroy(&cond);
 
     return 0;
 
 }
+#else
+
+void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+    printf("!!ERROR!! MULTI_PROCESSOR = 0 \n");
+}
+#endif  // MULTI_PROCESSOR

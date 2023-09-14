@@ -465,6 +465,7 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
+#ifndef MULTI_PROCESSOR
 #ifndef GPU
     gpu_index = -1;
     printf(" GPU isn't used \n");
@@ -483,6 +484,7 @@ int main(int argc, char **argv)
 #endif  // CUDNN_HALF
 
 #endif  // GPU
+#endif  // MULTI_PROCESSOR
 
     show_opencv_info();
 
