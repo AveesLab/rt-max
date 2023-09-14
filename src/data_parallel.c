@@ -84,7 +84,6 @@ static void threadFunc(thread_data_t data)
     while (1) {
         printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
-
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);

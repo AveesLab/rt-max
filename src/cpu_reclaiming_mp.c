@@ -182,6 +182,7 @@ static void processFunc(process_data_t data)
         }
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         state.input = l.output;
 
         if (data.process_id == num_process) {
@@ -190,10 +191,23 @@ static void processFunc(process_data_t data)
             release_semaphore(sem_id, data.process_id);
         }
 
-        // CPU Inference
+        // Reclaiming Inference
+        openblas_set_num_threads(3);
+        CPU_ZERO(&cpuset);
+        CPU_SET(data.process_id, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+        CPU_ZERO(&cpuset);
+        CPU_SET(6, &cpuset);
+        openblas_setaffinity(0, sizeof(cpuset), &cpuset);
+        
+        CPU_ZERO(&cpuset);
+        CPU_SET(7, &cpuset);
+        openblas_setaffinity(1, sizeof(cpuset), &cpuset);
+
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
-        for(i = gLayer; i < net.n; ++i){
+        for(i = gLayer; i < rLayer; ++i){
             state.index = i;
             l = net.layers[i];
             if(l.delta && state.train && l.train){
@@ -203,7 +217,17 @@ static void processFunc(process_data_t data)
             state.input = l.output;
         }
 
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        // CPU Inference
+        openblas_set_num_threads(1);
+        for(i = rLayer; i < net.n; ++i){
+            state.index = i;
+            l = net.layers[i];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
 
         if (gLayer == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
@@ -253,7 +277,7 @@ static void processFunc(process_data_t data)
 }
 
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     int i;
@@ -319,7 +343,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 }
 #else
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
@@ -327,7 +351,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 #endif  // GPU
 #else
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! MULTI_PROCESSOR = 0 \n");

@@ -5,9 +5,11 @@
 
 # ./darknet detector data-parallel-mp ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_process 3
 
-# ./darknet detector gpu-accel ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_thread 3 -glayer 20
+# ./darknet detector gpu-accel ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_thread 3 -glayer 10
 
-./darknet detector gpu-accel-mp ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_process 3 -glayer 20
+# ./darknet detector gpu-accel-mp ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_process 3 -glayer 10
 
-# ./darknet detector data-parallel ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_thread 3
+# ./darknet detector cpu-reclaiming ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_thread 3 -glayer 10 -rlayer 20
+
+./darknet detector cpu-reclaiming-mp ./cfg/coco.data ./cfg/yolov4-tiny.cfg ./weights/yolov4-tiny.weights data/dog.jpg -num_thread 3 -glayer 10 -rlayer 20
 

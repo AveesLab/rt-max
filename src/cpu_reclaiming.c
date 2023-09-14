@@ -5,24 +5,16 @@
 #include "detector.h"
 #include "option_list.h"
 
+#include <pthread.h>
 #define _GNU_SOURCE
 #include <sched.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/ipc.h>
-#include <sys/sem.h>
 
-#ifdef OPENBLAS
-#include <cblas.h>
-#endif
+static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+static int current_thread = 1;
 
-#ifdef MULTI_PROCESSOR
-
-static int sem_id;
-static key_t key = 1234;
-
-typedef struct process_data_t{
+typedef struct thread_data_t{
     char *datacfg;
     char *cfgfile;
     char *weightfile;
@@ -35,38 +27,16 @@ typedef struct process_data_t{
     char *outfile;
     int letter_box;
     int benchmark_layers;
-    int process_id;
-} process_data_t;
-
-static union semun {
-    int val;
-    struct semid_ds *buf;
-    unsigned short *array;
-};
-
-static void wait_semaphore(int sem_id, int sem_num) {
-    struct sembuf sem_op;
-    sem_op.sem_num = sem_num;
-    sem_op.sem_op = -1;
-    sem_op.sem_flg = 0;
-    semop(sem_id, &sem_op, 1);
-}
-
-static void release_semaphore(int sem_id, int sem_num) {
-    struct sembuf sem_op;
-    sem_op.sem_num = sem_num;
-    sem_op.sem_op = 1;
-    sem_op.sem_flg = 0;
-    semop(sem_id, &sem_op, 1);
-}
+    int thread_id;
+} thread_data_t;
 
 #ifdef GPU
-static void processFunc(process_data_t data)
+static void threadFunc(thread_data_t data)
 {
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.process_id, &cpuset); // cpu core index
+    CPU_SET(data.thread_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -115,6 +85,7 @@ static void processFunc(process_data_t data)
     int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 1; // Choose CPU or GPU
+    extern int skip_layers[1000];
     extern gpu_yolo;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
@@ -135,7 +106,7 @@ static void processFunc(process_data_t data)
 
     while (1) {
 
-        printf("Process %d is set to CPU core %d\n", data.process_id, sched_getcpu());
+        printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -163,7 +134,11 @@ static void processFunc(process_data_t data)
         state.delta = 0;
 
         // GPU Inference
-        wait_semaphore(sem_id, data.process_id - 1);
+        pthread_mutex_lock(&mutex_gpu);
+
+        while(data.thread_id != current_thread) {
+            pthread_cond_wait(&cond, &mutex_gpu);
+        }
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
@@ -182,18 +157,35 @@ static void processFunc(process_data_t data)
         }
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         state.input = l.output;
 
-        if (data.process_id == num_process) {
-            release_semaphore(sem_id, 0);
+        if (data.thread_id == num_thread) {
+            current_thread = 1;
         } else {
-            release_semaphore(sem_id, data.process_id);
+            current_thread++;
         }
 
-        // CPU Inference
+        pthread_cond_broadcast(&cond);
+        pthread_mutex_unlock(&mutex_gpu);
+
+        // Reclaiming Inference
+        openblas_set_num_threads(3);
+        CPU_ZERO(&cpuset);
+        CPU_SET(data.thread_id, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+        CPU_ZERO(&cpuset);
+        CPU_SET(6, &cpuset);
+        openblas_setaffinity(0, sizeof(cpuset), &cpuset);
+        
+        CPU_ZERO(&cpuset);
+        CPU_SET(7, &cpuset);
+        openblas_setaffinity(1, sizeof(cpuset), &cpuset);
+
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
-        for(i = gLayer; i < net.n; ++i){
+        for(i = gLayer; i < rLayer; ++i){
             state.index = i;
             l = net.layers[i];
             if(l.delta && state.train && l.train){
@@ -203,7 +195,17 @@ static void processFunc(process_data_t data)
             state.input = l.output;
         }
 
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        // CPU Inference
+        openblas_set_num_threads(1);
+        for(i = rLayer; i < net.n; ++i){
+            state.index = i;
+            l = net.layers[i];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
 
         if (gLayer == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
@@ -250,37 +252,23 @@ static void processFunc(process_data_t data)
     free_list(options);
     free_alphabet(alphabet);
     free_network(net);
+
+    pthread_exit(NULL);
+
 }
 
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    pthread_t threads[num_thread];
+    int rc;
     int i;
 
-    pid_t pid;
-    int status;
+    thread_data_t data[num_thread];
 
-    // Create semaphore set with NUM_PROCESSES semaphores
-    sem_id = semget(key, 1, IPC_CREAT | 0666);
-
-    if (sem_id == -1) {
-        perror("semget");
-        exit(1);
-    }
-
-    // Initialize semaphores
-    union semun arg;
-    unsigned short values[num_process];
-    for (i = 0; i < num_process; i++) values[i] = 0;
-    values[0] = 1;
-
-    arg.array = values;
-    semctl(sem_id, 0, SETALL, arg);
-
-    process_data_t data[num_process];
-
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -293,43 +281,29 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].outfile = outfile;
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
-        data[i].process_id = i + 1;
-    }
-
-    for (i = 0; i < num_process; i++) {
-        pid = fork();
-        if (pid == 0) { // child process
-            processFunc(data[i]);
-            exit(0);
-        } else if (pid < 0) {
-            perror("fork");
-            exit(1);
+        data[i].thread_id = i + 1;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
         }
     }
 
-    for (i = 0; i < num_process; i++) {
-        wait(&status);
+    for (i = 0; i < num_thread; i++) {
+        pthread_join(threads[i], NULL);
     }
 
-    // Remove semaphores
-    semctl(sem_id, 0, IPC_RMID);
+    // pthread_mutex_destroy(&mutex);
+    // pthread_cond_destroy(&cond);
 
     return 0;
 
 }
 #else
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
 }
 #endif  // GPU
-#else
-
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
-{
-    printf("!!ERROR!! MULTI_PROCESSOR = 0 \n");
-}
-#endif  // MULTI-PROCESSOR
