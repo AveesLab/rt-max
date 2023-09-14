@@ -10,20 +10,39 @@
 #include <sched.h>
 #include <unistd.h>
 
-void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+#define NUM_THREADS 2
+// pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+typedef struct thread_data_t{
+    char *datacfg;
+    char *cfgfile;
+    char *weightfile;
+    char *filename;
+    float thresh;
+    float hier_thresh;
+    int dont_show;
+    int ext_output;
+    int save_labels;
+    char *outfile;
+    int letter_box;
+    int benchmark_layers;
+    int thread_id;
+} thread_data_t;
+
+void threadFunc(thread_data_t data)
 {
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset); // cpu core index
+    CPU_SET(data.thread_id, &cpuset); // cpu core index
+
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
         exit(0);
     } 
 
-    list *options = read_data_cfg(datacfg);
+    list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
     int names_size = 0;
     char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
@@ -45,27 +64,29 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     detection *dets;
 
     char *target_model = "yolo";
-    int object_detection = strstr(cfgfile, target_model);
+    int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 0; // Choose CPU or GPU
 
-    network net = parse_network_cfg_custom(cfgfile, 1, 1, device); // set batch=1
+    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
 
-    if (weightfile) {
-        load_weights(&net, weightfile);
+    if (data.weightfile) {
+        load_weights(&net, data.weightfile);
     }
-    if (net.letter_box) letter_box = 1;
-    net.benchmark_layers = benchmark_layers;
+    if (net.letter_box) data.letter_box = 1;
+    net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
     srand(2222222);
 
-    if (filename) strncpy(input, filename, 256);
+    if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
     while (1) {
+        printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
+
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -84,12 +105,12 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         // __Postprecess__
         // __NMS & TOP acccuracy__
         if (object_detection) {
-            dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
+            dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
             if (nms) {
                 if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
                 else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
             }
-            draw_detections_v3(im, dets, nboxes, thresh, names, alphabet, l.classes, ext_output);
+            draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
         } // yolo model
         else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
@@ -103,7 +124,7 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
         // __Display__
         //save_image(im, "predictions");
-        if (!dont_show) {
+        if (!data.dont_show) {
             show_image(im, "predictions");
             wait_key_cv(1);
         }
@@ -121,4 +142,48 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     free_list(options);
     free_alphabet(alphabet);
     free_network(net);
+
+    pthread_exit(NULL);
+
+}
+
+void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+    pthread_t threads[NUM_THREADS];
+    int rc;
+    int i;
+
+    thread_data_t data[NUM_THREADS];
+
+    for (i = 0; i < NUM_THREADS; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    // pthread_mutex_destroy(&mutex);
+    // pthread_cond_destroy(&cond);
+
+    return 0;
+
 }
