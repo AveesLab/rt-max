@@ -10,7 +10,7 @@
 #include <sched.h>
 #include <unistd.h>
 
-#define NUM_THREADS 2
+// #define NUM_THREADS 2
 // pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 typedef struct thread_data_t{
@@ -150,13 +150,13 @@ void threadFunc(thread_data_t data)
 void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    pthread_t threads[NUM_THREADS];
+    pthread_t threads[num_thread];
     int rc;
     int i;
 
-    thread_data_t data[NUM_THREADS];
+    thread_data_t data[num_thread];
 
-    for (i = 0; i < NUM_THREADS; i++) {
+    for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -177,7 +177,7 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         }
     }
 
-    for (i = 0; i < NUM_THREADS; i++) {
+    for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
 
