@@ -5,12 +5,21 @@
 #include "detector.h"
 #include "option_list.h"
 
-#include <pthread.h>
 #define _GNU_SOURCE
 #include <sched.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
-typedef struct thread_data_t{
+#ifdef OPENBLAS
+#include <cblas.h>
+#endif
+
+#ifdef MULTI_PROCESSOR
+
+typedef struct process_data_t{
     char *datacfg;
     char *cfgfile;
     char *weightfile;
@@ -23,21 +32,36 @@ typedef struct thread_data_t{
     char *outfile;
     int letter_box;
     int benchmark_layers;
-    int thread_id;
-} thread_data_t;
+    int process_id;
+} process_data_t;
 
-static void threadFunc(thread_data_t data)
+#ifdef GPU
+static void processFunc(process_data_t data)
 {
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.thread_id, &cpuset); // cpu core index
-
+    CPU_SET(data.process_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
         exit(0);
     } 
+
+    // __GPU SETUP__
+#ifdef GPU   // GPU
+    if(gpu_index >= 0){
+        cuda_set_device(gpu_index);
+        CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+    }
+#ifdef CUDNN_HALF
+    printf(" CUDNN_HALF=1 \n");
+#endif  // CUDNN_HALF
+#else
+    gpu_index = -1;
+    printf(" GPU isn't used \n");
+    init_cpu();
+#endif  // GPU
 
     list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
@@ -53,17 +77,21 @@ static void threadFunc(thread_data_t data)
     double time;
 
     int top = 5;
-    int nboxes, index, i, j, k = 0;
+    int index, i, j, k = 0;
     int* indexes = (int*)xcalloc(top, sizeof(int));
+
+    int nboxes;
+    detection *dets;
 
     image im, resized, cropped;
     float *X, *predictions;
-    detection *dets;
 
     char *target_model = "yolo";
     int object_detection = strstr(data.cfgfile, target_model);
 
-    int device = 0; // Choose CPU or GPU
+    int device = 1; // Choose CPU or GPU
+    extern int skip_layers[1000];
+    extern gpu_yolo;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
@@ -82,8 +110,8 @@ static void threadFunc(thread_data_t data)
     else printf("Error! File is not exist.");
 
     while (1) {
-        printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
+        printf("Process %d is set to CPU core %d\n", data.process_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -94,8 +122,62 @@ static void threadFunc(thread_data_t data)
         time = get_time_point();
         
         // __Inference__
-        if (device) predictions = network_predict(net, X);
-        else predictions = network_predict_cpu(net, X);
+        // if (device) predictions = network_predict(net, X);
+        // else predictions = network_predict_cpu(net, X);
+
+        if (net.gpu_index != cuda_get_device())
+            cuda_set_device(net.gpu_index);
+        int size = get_network_input_size(net) * net.batch;
+        network_state state;
+        state.index = 0;
+        state.net = net;
+        // state.input = X;
+        state.input = net.input_state_gpu;
+        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+        state.truth = 0;
+        state.train = 0;
+        state.delta = 0;
+
+        cuda_push_array(state.input, net.input_pinned_cpu, size);
+
+        // GPU Inference
+        state.workspace = net.workspace;
+        for(i = 0; i < gLayer; ++i){
+            state.index = i;
+            l = net.layers[i];
+            if(l.delta_gpu && state.train){
+                fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
+            }
+
+            l.forward_gpu(l, state);
+            if (skip_layers[i]){
+                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            }
+            state.input = l.output_gpu;
+        }
+
+        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        state.input = l.output;
+
+        // CPU Inference
+        state.workspace = net.workspace_cpu;
+        gpu_yolo = 0;
+        for(i = gLayer; i < net.n; ++i){
+            state.index = i;
+            l = net.layers[i];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
+
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+
+        if (gLayer == net.n) predictions = get_network_output_gpu(net);
+        else predictions = get_network_output(net, 0);
+        reset_wait_stream_events();
+        //cuda_free(state.input);   // will be freed in the free_network()
 
         printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
 
@@ -108,7 +190,7 @@ static void threadFunc(thread_data_t data)
                 else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
             }
             draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
-        } // yolo model
+        }
         else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
             top_k(predictions, net.outputs, top, indexes);
@@ -117,15 +199,13 @@ static void threadFunc(thread_data_t data)
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
                 else printf("%s: %f\n",names[index], predictions[index]);
             }
-        } // classifier model
+        }
 
         // __Display__
-        //save_image(im, "predictions");
         if (!data.dont_show) {
             show_image(im, "predictions");
             wait_key_cv(1);
         }
-
         // free memory
         free_image(im);
         free_image(resized);
@@ -139,21 +219,20 @@ static void threadFunc(thread_data_t data)
     free_list(options);
     free_alphabet(alphabet);
     free_network(net);
-
-    pthread_exit(NULL);
-
 }
 
-void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+
+void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    pthread_t threads[num_thread];
-    int rc;
     int i;
 
-    thread_data_t data[num_thread];
+    pid_t pid;
+    int status;
 
-    for (i = 0; i < num_thread; i++) {
+    process_data_t data[num_process];
+
+    for (i = 0; i < num_process; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -166,21 +245,40 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         data[i].outfile = outfile;
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
-        data[i].thread_id = i + 1;
-        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-        if (rc) {
-            printf("Error: Unable to create thread, %d\n", rc);
-            exit(-1);
+        data[i].process_id = i + 1;
+    }
+
+    for (i = 0; i < num_process; i++) {
+        pid = fork();
+        if (pid == 0) { // child process
+            processFunc(data[i]);
+            exit(0);
+        } else if (pid < 0) {
+            perror("fork");
+            exit(1);
         }
     }
 
-    for (i = 0; i < num_thread; i++) {
-        pthread_join(threads[i], NULL);
+    for (i = 0; i < num_process; i++) {
+        wait(&status);
     }
-
-    // pthread_mutex_destroy(&mutex);
-    // pthread_cond_destroy(&cond);
 
     return 0;
 
 }
+#else
+
+void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+    printf("!!ERROR!! GPU = 0 \n");
+}
+#endif  // GPU
+#else
+
+void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+    printf("!!ERROR!! MULTI_PROCESSOR = 0 \n");
+}
+#endif  // MULTI-PROCESSOR

@@ -36,7 +36,7 @@ typedef struct process_data_t{
     int process_id;
 } process_data_t;
 
-void processFunc(process_data_t data)
+static void processFunc(process_data_t data)
 {
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
@@ -108,7 +108,7 @@ void processFunc(process_data_t data)
 
     while (1) {
 
-        printf("Process %d (%d) 300ms ...\n", data.process_id, sched_getcpu());
+        printf("Process %d is set to CPU core %d\n", data.process_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -190,9 +190,9 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     pid_t pid;
     int status;
 
-    process_data_t data[NUM_PROCESSES];
+    process_data_t data[num_process];
 
-    for (i = 0; i < NUM_PROCESSES; i++) {
+    for (i = 0; i < num_process; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -208,7 +208,7 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
         data[i].process_id = i + 1;
     }
 
-    for (i = 0; i < NUM_PROCESSES; i++) {
+    for (i = 0; i < num_process; i++) {
         pid = fork();
         if (pid == 0) { // child process
             processFunc(data[i]);
@@ -219,7 +219,7 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
         }
     }
 
-    for (i = 0; i < NUM_PROCESSES; i++) {
+    for (i = 0; i < num_process; i++) {
         wait(&status);
     }
 
