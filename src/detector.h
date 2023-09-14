@@ -22,6 +22,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
 extern int core_id;
 extern int num_thread;
+extern int gLayer;
 
 #ifdef __cplusplus
 }

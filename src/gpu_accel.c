@@ -12,21 +12,51 @@
 
 int skip_layers[1000] = {0, };
 
+typedef struct thread_data_t{
+    char *datacfg;
+    char *cfgfile;
+    char *weightfile;
+    char *filename;
+    float thresh;
+    float hier_thresh;
+    int dont_show;
+    int ext_output;
+    int save_labels;
+    char *outfile;
+    int letter_box;
+    int benchmark_layers;
+    int thread_id;
+} thread_data_t;
+
 #ifdef GPU
-void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+static void threadFunc(thread_data_t data)
 {
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset); // cpu core index
+    CPU_SET(data.thread_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
         exit(0);
     } 
 
-    list *options = read_data_cfg(datacfg);
+    // __GPU SETUP__
+#ifdef GPU   // GPU
+    if(gpu_index >= 0){
+        cuda_set_device(gpu_index);
+        CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+    }
+#ifdef CUDNN_HALF
+    printf(" CUDNN_HALF=1 \n");
+#endif  // CUDNN_HALF
+#else
+    gpu_index = -1;
+    printf(" GPU isn't used \n");
+    init_cpu();
+#endif  // GPU
+
+    list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
     int names_size = 0;
     char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
@@ -50,29 +80,32 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     float *X, *predictions;
 
     char *target_model = "yolo";
-    int object_detection = strstr(cfgfile, target_model);
+    int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 1; // Choose CPU or GPU
     extern int skip_layers[1000];
     extern gpu_yolo;
 
-    network net = parse_network_cfg_custom(cfgfile, 1, 1, device); // set batch=1
+    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
 
-    if (weightfile) {
-        load_weights(&net, weightfile);
+    if (data.weightfile) {
+        load_weights(&net, data.weightfile);
     }
-    if (net.letter_box) letter_box = 1;
-    net.benchmark_layers = benchmark_layers;
+    if (net.letter_box) data.letter_box = 1;
+    net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
     srand(2222222);
 
-    if (filename) strncpy(input, filename, 256);
+    if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
     while (1) {
+
+        printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
+
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -102,8 +135,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
         // GPU Inference
         state.workspace = net.workspace;
-        int glayer = 33;
-        for(i = 0; i < glayer; ++i){
+        for(i = 0; i < gLayer; ++i){
             state.index = i;
             l = net.layers[i];
             if(l.delta_gpu && state.train){
@@ -123,7 +155,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         // CPU Inference
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
-        for(i = glayer; i < net.n; ++i){
+        for(i = gLayer; i < net.n; ++i){
             state.index = i;
             l = net.layers[i];
             if(l.delta && state.train && l.train){
@@ -135,7 +167,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
-        if (glayer == net.n) predictions = get_network_output_gpu(net);
+        if (gLayer == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
@@ -145,12 +177,12 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         // __Postprecess__
         // __NMS & TOP acccuracy__
         if (object_detection) {
-            dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
+            dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
             if (nms) {
                 if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
                 else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
             }
-            draw_detections_v3(im, dets, nboxes, thresh, names, alphabet, l.classes, ext_output);
+            draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
         }
         else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
@@ -163,7 +195,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         }
 
         // __Display__
-        if (!dont_show) {
+        if (!data.dont_show) {
             show_image(im, "predictions");
             wait_key_cv(1);
         }
@@ -180,6 +212,49 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     free_list(options);
     free_alphabet(alphabet);
     free_network(net);
+}
+
+
+void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+
+    pthread_t threads[num_thread];
+    int rc;
+    int i;
+
+    thread_data_t data[num_thread];
+
+    for (i = 0; i < num_thread; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < num_thread; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    // pthread_mutex_destroy(&mutex);
+    // pthread_cond_destroy(&cond);
+
+    return 0;
+
 }
 #else
 
