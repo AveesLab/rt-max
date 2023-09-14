@@ -11,6 +11,9 @@
 #include <unistd.h>
 
 int skip_layers[1000] = {0, };
+pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+int current_thread = 1;
 
 typedef struct thread_data_t{
     char *datacfg;
@@ -131,9 +134,14 @@ static void threadFunc(thread_data_t data)
         state.train = 0;
         state.delta = 0;
 
-        cuda_push_array(state.input, net.input_pinned_cpu, size);
-
         // GPU Inference
+        pthread_mutex_lock(&mutex_gpu);
+
+        while(data.thread_id != current_thread) {
+            pthread_cond_wait(&cond, &mutex_gpu);
+        }
+
+        cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
         for(i = 0; i < gLayer; ++i){
             state.index = i;
@@ -151,6 +159,15 @@ static void threadFunc(thread_data_t data)
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
+
+        if (data.thread_id == num_thread) {
+            current_thread = 1;
+        } else {
+            current_thread++;
+        }
+
+        pthread_cond_broadcast(&cond);
+        pthread_mutex_unlock(&mutex_gpu);
 
         // CPU Inference
         state.workspace = net.workspace_cpu;
@@ -212,6 +229,9 @@ static void threadFunc(thread_data_t data)
     free_list(options);
     free_alphabet(alphabet);
     free_network(net);
+
+    pthread_exit(NULL);
+
 }
 
 

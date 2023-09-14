@@ -141,7 +141,7 @@ static void threadFunc(thread_data_t data)
     free_network(net);
 
     pthread_exit(NULL);
-
+    
 }
 
 void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
