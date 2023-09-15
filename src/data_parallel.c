@@ -10,6 +10,10 @@
 #include <sched.h>
 #include <unistd.h>
 
+#ifdef NVTX
+#include "nvToolsExt.h"
+#endif
+
 static int flag_exit = 0;
 int count = 0;
 
@@ -85,6 +89,14 @@ static void threadFunc(thread_data_t data)
     else printf("Error! File is not exist.");
 
     while (1) {
+
+#ifdef NVTX
+        char task[100];
+        sprintf(task, "Task (cpu: %d)", data.thread_id);
+        nvtxRangeId_t nvtx_task;
+        nvtx_task = nvtxRangeStartA(task);
+#endif
+
         printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
         // __Preprocess__
@@ -100,7 +112,6 @@ static void threadFunc(thread_data_t data)
         else predictions = network_predict_cpu(net, X);
 
         printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
-        printf("num_exp: %d\n", i);
         // __Postprecess__
         // __NMS & TOP acccuracy__
         if (object_detection) {
@@ -122,16 +133,19 @@ static void threadFunc(thread_data_t data)
         } // classifier model
 
         // __Display__
-        //save_image(im, "predictions");
-        if (!data.dont_show) {
-            show_image(im, "predictions");
-            wait_key_cv(1);
-        }
+        // if (!data.dont_show) {
+        //     show_image(im, "predictions");
+        //     wait_key_cv(1);
+        // }
 
         // free memory
         free_image(im);
         free_image(resized);
         free_image(cropped);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task);
+#endif
     }
 
     // free memory

@@ -17,6 +17,10 @@
 #include <cblas.h>
 #endif
 
+#ifdef NVTX
+#include "nvToolsExt.h"
+#endif
+
 #ifdef MULTI_PROCESSOR
 #define NUM_PROCESSES 3
 
@@ -106,7 +110,14 @@ static void processFunc(process_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    for (i = 0; i < num_exp; i++) {
+    while (1) {
+
+#ifdef NVTX
+        char task[100];
+        sprintf(task, "Task (cpu: %d)", data.process_id);
+        nvtxRangeId_t nvtx_task;
+        nvtx_task = nvtxRangeStartA(task);
+#endif
 
         printf("Process %d is set to CPU core %d\n", data.process_id, sched_getcpu());
 
@@ -145,16 +156,19 @@ static void processFunc(process_data_t data)
         } // classifier model
 
         // __Display__
-        //save_image(im, "predictions");
-        if (!data.dont_show) {
-            show_image(im, "predictions");
-            wait_key_cv(1);
-        }
+        // if (!data.dont_show) {
+        //     show_image(im, "predictions");
+        //     wait_key_cv(1);
+        // }
 
         // free memory
         free_image(im);
         free_image(resized);
         free_image(cropped);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task);
+#endif
     }
 
     // free memory

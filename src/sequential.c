@@ -78,6 +78,8 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
+        printf("Thread %d is set to CPU core %d\n", core_id, sched_getcpu());
+
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -113,11 +115,10 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         } // classifier model
 
         // __Display__
-        //save_image(im, "predictions");
-        if (!dont_show) {
-            show_image(im, "predictions");
-            wait_key_cv(1);
-        }
+        // if (!dont_show) {
+        //     show_image(im, "predictions");
+        //     wait_key_cv(1);
+        // }
 
         // free memory
         free_image(im);
