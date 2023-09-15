@@ -88,7 +88,7 @@ static void threadFunc(thread_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    while (1) {
+    for (i = 0; i < num_exp; i++) {
 
 #ifdef NVTX
         char task[100];
@@ -97,7 +97,7 @@ static void threadFunc(thread_data_t data)
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
-        printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
+        printf("\nThread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -112,6 +112,7 @@ static void threadFunc(thread_data_t data)
         else predictions = network_predict_cpu(net, X);
 
         printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+
         // __Postprecess__
         // __NMS & TOP acccuracy__
         if (object_detection) {
@@ -154,7 +155,7 @@ static void threadFunc(thread_data_t data)
     free_list_contents_kvp(options);
     free_list(options);
     free_alphabet(alphabet);
-    free_network(net);
+    // free_network(net); // Error occur
 
     pthread_exit(NULL);
     

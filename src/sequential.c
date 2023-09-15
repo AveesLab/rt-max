@@ -69,7 +69,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     if (filename) strncpy(input, filename, 256);
     else printf("Error! File is not exist.");
 
-    while (1) {
+    for (i = 0; i < num_exp; i++) {
 
 #ifdef NVTX
         char task[100];
@@ -78,7 +78,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
-        printf("Thread %d is set to CPU core %d\n", core_id, sched_getcpu());
+        printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -136,5 +136,5 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     free_list_contents_kvp(options);
     free_list(options);
     free_alphabet(alphabet);
-    free_network(net);
+    // free_network(net); // Error occur
 }
