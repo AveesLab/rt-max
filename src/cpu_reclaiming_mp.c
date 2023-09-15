@@ -17,6 +17,10 @@
 #include <cblas.h>
 #endif
 
+#ifdef NVTX
+#include "nvToolsExt.h"
+#endif
+
 #ifdef MULTI_PROCESSOR
 
 static int sem_id;
@@ -133,7 +137,14 @@ static void processFunc(process_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    for (i = 0; i < num_exp; i++) {
+    while (1) {
+
+#ifdef NVTX
+        char task[100];
+        sprintf(task, "Task (cpu: %d)", data.process_id);
+        nvtxRangeId_t nvtx_task;
+        nvtx_task = nvtxRangeStartA(task);
+#endif
 
         printf("Process %d is set to CPU core %d\n", data.process_id, sched_getcpu());
 
@@ -165,6 +176,13 @@ static void processFunc(process_data_t data)
         // GPU Inference
         wait_semaphore(sem_id, data.process_id - 1);
 
+#ifdef NVTX
+        char task_gpu[100];
+        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
+        nvtxRangeId_t nvtx_task_gpu;
+        nvtx_task_gpu = nvtxRangeStartA(task_gpu);
+#endif
+
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
         for(i = 0; i < gLayer; ++i){
@@ -182,8 +200,13 @@ static void processFunc(process_data_t data)
         }
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         state.input = l.output;
+
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_gpu);
+#endif
 
         if (data.process_id == num_process) {
             release_semaphore(sem_id, 0);
@@ -192,6 +215,13 @@ static void processFunc(process_data_t data)
         }
 
         // Reclaiming Inference
+#ifdef NVTX
+        char task_reclaiming[100];
+        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.process_id);
+        nvtxRangeId_t nvtx_task_reclaiming;
+        nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
+#endif
+
         openblas_set_num_threads(3);
         CPU_ZERO(&cpuset);
         CPU_SET(data.process_id, &cpuset);
@@ -216,6 +246,10 @@ static void processFunc(process_data_t data)
             l.forward(l, state);
             state.input = l.output;
         }
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_reclaiming);
+#endif
 
         // CPU Inference
         openblas_set_num_threads(1);
@@ -257,14 +291,19 @@ static void processFunc(process_data_t data)
         }
 
         // __Display__
-        if (!data.dont_show) {
-            show_image(im, "predictions");
-            wait_key_cv(1);
-        }
+        // if (!data.dont_show) {
+        //     show_image(im, "predictions");
+        //     wait_key_cv(1);
+        // }
+
         // free memory
         free_image(im);
         free_image(resized);
         free_image(cropped);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task);
+#endif
     }
 
     // free memory
