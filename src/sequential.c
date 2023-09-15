@@ -14,6 +14,101 @@
 #include "nvToolsExt.h"
 #endif
 
+#ifdef MEASURE
+#ifdef WIN32
+#include <time.h>
+#include "gettimeofday.h"
+#else
+#include <sys/time.h>
+#endif
+#endif
+
+#ifdef MEASURE
+static double start_preprocess_array[1000];
+static double end_preprocess_array[1000];
+static double e_preprocess_array[1000];
+
+static double start_infer_array[1000];
+static double end_infer_array[1000];
+static double e_infer_array[1000];
+
+static double start_postprocess_array[1000];
+static double end_postprocess_array[1000];
+static double e_postprocess_array[1000];
+
+static double layers_time_array[1000][400];
+
+static double execution_time_array[1000];
+static double frame_rate;
+#endif
+
+#ifdef MEASURE
+/* Timestamp in ms */
+double get_time_in_ms(void)
+{
+    struct timespec time_after_boot;
+    clock_gettime(CLOCK_MONOTONIC,&time_after_boot);
+    return (time_after_boot.tv_sec*1000+time_after_boot.tv_nsec*0.000001);
+}
+
+static int write_result(char *file_path) 
+{
+    static int exist=0;
+    FILE *fp;
+    int tick = 0;
+
+    fp = fopen(file_path, "w+");
+
+    int i, j;
+    if (fp == NULL) 
+    {
+        /* make directory */
+        while(!exist)
+        {
+            int result;
+
+            usleep(10 * 1000);
+
+            result = mkdir(MEASUREMENT_PATH, 0766);
+            if(result == 0) { 
+                exist = 1;
+
+                fp = fopen(file_path,"w+");
+            }
+
+            if(tick == 100)
+            {
+                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
+
+                return -1;
+            }
+            else tick++;
+        }
+    }
+    else printf("\nWrite output in %s\n", file_path); 
+
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+            "start_preprocess", "e_preprocess", "end_preprocess", 
+            "start_infer", "e_infer", "end_infer", 
+            "start_postprocess", "e_postprocess", "end_postprocess", 
+            "execution_time", "frame_rate");
+
+    for(int i = 0; i < num_exp; i++)
+    {
+        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+                start_preprocess_array[i], e_preprocess_array[i], end_preprocess_array[i], 
+                start_infer_array[i], e_infer_array[i], end_infer_array[i], 
+                start_postprocess_array[i], e_postprocess_array[i], end_postprocess_array[i], 
+                execution_time_array[i], frame_rate);
+    }
+    
+    fclose(fp);
+
+    return 1;
+}
+
+#endif
+
 void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
@@ -81,21 +176,39 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
 
         // __Preprocess__
+#ifdef MEASURE
+        start_preprocess_array[i] = get_time_in_ms();
+#endif
+
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-        time = get_time_point();
+#ifdef MEASURE
+        end_preprocess_array[i] = get_time_in_ms();
+        e_preprocess_array[i] = end_preprocess_array[i] - start_preprocess_array[i];
+#endif
         
         // __Inference__
+#ifdef MEASURE
+        start_infer_array[i] = get_time_in_ms();
+#endif
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
-        printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+#ifdef MEASURE
+        end_infer_array[i] = get_time_in_ms();
+        e_infer_array[i] = end_infer_array[i] - start_infer_array[i];
+#endif
+
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer_array[i]);
 
         // __Postprecess__
         // __NMS & TOP acccuracy__
+#ifdef MEASURE
+        start_postprocess_array[i] = get_time_in_ms();
+#endif
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
             if (nms) {
@@ -120,6 +233,13 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         //     wait_key_cv(1);
         // }
 
+#ifdef MEASURE
+        end_postprocess_array[i] = get_time_in_ms();
+        e_postprocess_array[i] = end_postprocess_array[i] - start_postprocess_array[i];
+        execution_time_array[i] = end_postprocess_array[i] - start_preprocess_array[i];
+        frame_rate = 1000.0 / execution_time_array[i];
+#endif
+
         // free memory
         free_image(im);
         free_image(resized);
@@ -129,6 +249,30 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         nvtxRangeEnd(nvtx_task);
 #endif
     }
+
+#ifdef MEASURE
+    printf("!!Write CSV File!! \n");
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(cfgfile) + 1);
+    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+    model_name[strlen(cfgfile)-10] = '\0';
+    char core_idx[10];
+    sprintf(core_idx, "%02dcore", core_id);
+
+    strcat(file_path, "sequential/");
+    strcat(file_path, model_name);
+    strcat(file_path, "/");
+
+    strcat(file_path, "sequential_");
+    strcat(file_path, core_idx);
+
+    strcat(file_path, ".csv");
+    if(write_result(file_path) == -1) {
+        /* return error */
+        exit(0);
+    }
+#endif
 
     // free memory
     free_detections(dets, nboxes);

@@ -12,6 +12,7 @@ OPENBLAS=1
 MULTI_PROCESSOR=1
 
 NVTX=1
+MEASURE=1
 
 # set GPU=1 and CUDNN=1 to speedup on GPU
 # set CUDNN_HALF=1 to further speedup 3 x times (Mixed-precision on Tensor Cores) GPU: Volta, Xavier, Turing, Ampere, Ada and higher
@@ -146,6 +147,10 @@ endif
 
 ifeq ($(NVTX), 1)
 CFLAGS+= -DNVTX
+endif
+
+ifeq ($(MEASURE), 1)
+CFLAGS+= -DMEASURE
 endif
 
 ifeq ($(GPU), 1)

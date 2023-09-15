@@ -1121,6 +1121,9 @@ LIB_API int fill_remaining_id(detection *new_dets, int new_dets_num, int new_tra
 // gemm.h
 LIB_API void init_cpu();
 
+// detector.h
+double get_time_in_ms(void);
+
 #ifdef __cplusplus
 }
 #endif  // __cplusplus
