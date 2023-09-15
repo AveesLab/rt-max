@@ -11,6 +11,8 @@ ZED_CAMERA_v2_8=0
 OPENBLAS=1
 MULTI_PROCESSOR=1
 
+NVTX=1
+
 # set GPU=1 and CUDNN=1 to speedup on GPU
 # set CUDNN_HALF=1 to further speedup 3 x times (Mixed-precision on Tensor Cores) GPU: Volta, Xavier, Turing, Ampere, Ada and higher
 # set AVX=1 and OPENMP=1 to speedup on CPU (if error occurs then set AVX=0)
@@ -142,6 +144,10 @@ ifeq ($(MULTI_PROCESSOR), 1)
 CFLAGS+= -DMULTI_PROCESSOR
 endif
 
+ifeq ($(NVTX), 1)
+CFLAGS+= -DNVTX
+endif
+
 ifeq ($(GPU), 1)
 COMMON+= -DGPU -I/usr/local/cuda/include/
 CFLAGS+= -DGPU
@@ -202,7 +208,7 @@ $(APPNAMESO): $(LIBNAMESO) include/yolo_v2_class.hpp src/yolo_console_dll.cpp
 endif
 
 $(EXEC): $(OBJS)
-	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CPP) -std=c++11 $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS) -lnvToolsExt
 
 $(OBJDIR)%.o: %.c $(DEPS)
 	$(CC) $(COMMON) $(CFLAGS) -c $< -o $@

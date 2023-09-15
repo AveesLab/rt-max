@@ -10,6 +10,10 @@
 #include <sched.h>
 #include <unistd.h>
 
+#ifdef NVTX
+#include "nvToolsExt.h"
+#endif
+
 void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
@@ -67,6 +71,13 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 
     while (1) {
 
+#ifdef NVTX
+        char task[100];
+        sprintf(task, "Task (cpu: %d)", core_id);
+        nvtxRangeId_t nvtx_task;
+        nvtx_task = nvtxRangeStartA(task);
+#endif
+
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -112,6 +123,10 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         free_image(im);
         free_image(resized);
         free_image(cropped);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task);
+#endif
     }
 
     // free memory

@@ -32,6 +32,7 @@ typedef __compar_fn_t comparison_fn_t;
 #endif
 
 int check_mistakes = 0;
+int num_exp;
 int core_id;
 int num_thread;
 int num_process;
@@ -1926,6 +1927,7 @@ void draw_object(char *datacfg, char *cfgfile, char *weightfile, char *filename,
 
 void run_detector(int argc, char **argv)
 {
+    num_exp = find_int_arg(argc, argv, "-num_exp", 1);
     core_id = find_int_arg(argc, argv, "-core_id", 1);
     num_thread = find_int_arg(argc, argv, "-num_thread", 1);
     num_process = find_int_arg(argc, argv, "-num_process", 1);

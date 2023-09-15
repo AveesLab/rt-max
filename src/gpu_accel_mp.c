@@ -133,7 +133,7 @@ static void processFunc(process_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    while (1) {
+    for (i = 0; i < num_exp; i++) {
 
         printf("Process %d is set to CPU core %d\n", data.process_id, sched_getcpu());
 

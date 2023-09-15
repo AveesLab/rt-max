@@ -10,6 +10,9 @@
 #include <sched.h>
 #include <unistd.h>
 
+static int flag_exit = 0;
+int count = 0;
+
 typedef struct thread_data_t{
     char *datacfg;
     char *cfgfile;
@@ -97,7 +100,7 @@ static void threadFunc(thread_data_t data)
         else predictions = network_predict_cpu(net, X);
 
         printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
-
+        printf("num_exp: %d\n", i);
         // __Postprecess__
         // __NMS & TOP acccuracy__
         if (object_detection) {

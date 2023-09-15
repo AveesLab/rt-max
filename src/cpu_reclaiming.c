@@ -104,7 +104,7 @@ static void threadFunc(thread_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    while (1) {
+    for (i = 0; i < num_exp; i++) {
 
         printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
