@@ -10,6 +10,10 @@
 #include <sched.h>
 #include <unistd.h>
 
+#ifdef NVTX
+#include "nvToolsExt.h"
+#endif
+
 int skip_layers[1000] = {0, };
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -105,7 +109,14 @@ static void threadFunc(thread_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    for (i = 0; i < num_exp; i++) {
+    while(1) {
+
+#ifdef NVTX
+        char task[100];
+        sprintf(task, "Task (cpu: %d)", data.thread_id);
+        nvtxRangeId_t nvtx_task;
+        nvtx_task = nvtxRangeStartA(task);
+#endif
 
         printf("Thread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
 
@@ -137,9 +148,17 @@ static void threadFunc(thread_data_t data)
         // GPU Inference
         pthread_mutex_lock(&mutex_gpu);
 
+
         while(data.thread_id != current_thread) {
             pthread_cond_wait(&cond, &mutex_gpu);
         }
+
+#ifdef NVTX
+        char task_gpu[100];
+        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.thread_id);
+        nvtxRangeId_t nvtx_task_gpu;
+        nvtx_task_gpu = nvtxRangeStartA(task_gpu);
+#endif
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
@@ -160,12 +179,18 @@ static void threadFunc(thread_data_t data)
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
 
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_gpu);
+#endif
+
         if (data.thread_id == num_thread) {
             current_thread = 1;
         } else {
             current_thread++;
         }
-
+        
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
 
@@ -181,8 +206,6 @@ static void threadFunc(thread_data_t data)
             l.forward(l, state);
             state.input = l.output;
         }
-
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
         if (gLayer == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
@@ -212,14 +235,19 @@ static void threadFunc(thread_data_t data)
         }
 
         // __Display__
-        if (!data.dont_show) {
-            show_image(im, "predictions");
-            wait_key_cv(1);
-        }
+        // if (!data.dont_show) {
+        //     show_image(im, "predictions");
+        //     wait_key_cv(1);
+        // }
+
         // free memory
         free_image(im);
         free_image(resized);
         free_image(cropped);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task);
+#endif
     }
 
     // free memory
