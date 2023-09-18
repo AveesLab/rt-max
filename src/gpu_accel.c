@@ -227,8 +227,8 @@ static void threadFunc(thread_data_t data)
         else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
             top_k(predictions, net.outputs, top, indexes);
-            for(i = 0; i < top; ++i){
-                index = indexes[i];
+            for(j = 0; j < top; ++j){
+                index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
                 else printf("%s: %f\n",names[index], predictions[index]);
             }
