@@ -191,7 +191,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 #ifdef MEASURE
         start_infer[i] = get_time_in_ms();
 #else
-        double time = get_time_point();
+        time = get_time_in_ms();
 #endif
 
         if (device) predictions = network_predict(net, X);
@@ -202,7 +202,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         e_infer[i] = end_infer[i] - start_infer[i];
         printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
 #else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_in_ms() - time) / 1000);
 #endif
 
         // __Postprecess__

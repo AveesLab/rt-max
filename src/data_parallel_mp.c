@@ -212,9 +212,9 @@ static void processFunc(process_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
+        printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
 #else
-        printf("\nThread %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
+        printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
 #endif
         // __Preprocess__
 #ifdef MEASURE
@@ -235,7 +235,7 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         data.start_infer[i] = get_time_in_ms();
 #else
-        double time = get_time_point();
+        time = get_time_in_ms();
 #endif
 
         if (device) predictions = network_predict(net, X);
@@ -246,7 +246,7 @@ static void processFunc(process_data_t data)
         data.e_infer[i] = data.end_infer[i] - data.start_infer[i];
         printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
 #else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_in_ms() - time) / 1000);
 #endif
 
 
@@ -318,7 +318,9 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     pid_t pid;
     int status;
 
+#ifdef MEASURE
     int fd[num_process][2];
+#endif
 
     process_data_t data[num_process];
 

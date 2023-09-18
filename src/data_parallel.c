@@ -198,8 +198,6 @@ static void threadFunc(thread_data_t data)
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
-
-        time = get_time_point();
         
 #ifdef MEASURE
         end_preprocess[count] = get_time_in_ms();
@@ -210,7 +208,7 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         start_infer[count] = get_time_in_ms();
 #else
-        double time = get_time_point();
+        time = get_time_in_ms();
 #endif
 
         if (device) predictions = network_predict(net, X);
@@ -221,7 +219,7 @@ static void threadFunc(thread_data_t data)
         e_infer[count] = end_infer[count] - start_infer[count];
         printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_in_ms() - time) / 1000);
 #endif
 
         // __Postprecess__

@@ -14,6 +14,15 @@
 #include "nvToolsExt.h"
 #endif
 
+#ifdef MEASURE
+#ifdef WIN32
+#include <time.h>
+#include "gettimeofday.h"
+#else
+#include <sys/time.h>
+#endif
+#endif
+
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static int current_thread = 1;
@@ -33,6 +42,82 @@ typedef struct thread_data_t{
     int benchmark_layers;
     int thread_id;
 } thread_data_t;
+
+#ifdef MEASURE
+static double start_preprocess[1000];
+static double end_preprocess[1000];
+static double e_preprocess[1000];
+
+static double start_infer[1000];
+static double end_infer[1000];
+static double e_infer[1000];
+
+static double start_postprocess[1000];
+static double end_postprocess[1000];
+static double e_postprocess[1000];
+
+static double execution_time[1000];
+static double frame_rate;
+#endif
+
+#ifdef MEASURE
+static int write_result(char *file_path) 
+{
+    static int exist=0;
+    FILE *fp;
+    int tick = 0;
+
+    fp = fopen(file_path, "w+");
+
+    int i;
+    if (fp == NULL) 
+    {
+        /* make directory */
+        while(!exist)
+        {
+            int result;
+
+            usleep(10 * 1000);
+
+            result = mkdir(MEASUREMENT_PATH, 0766);
+            if(result == 0) { 
+                exist = 1;
+
+                fp = fopen(file_path,"w+");
+            }
+
+            if(tick == 100)
+            {
+                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
+
+                return -1;
+            }
+            else tick++;
+        }
+    }
+    else printf("\nWrite output in %s\n", file_path); 
+
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+            "core_id", "start_preprocess", "e_preprocess", "end_preprocess", 
+            "start_infer", "e_infer", "end_infer", 
+            "start_postprocess", "e_postprocess", "end_postprocess", 
+            "execution_time", "frame_rate");
+
+    for(i = 0; i < num_exp * num_thread; i++)
+    {
+        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+                (i + 1) - (i / num_thread) * num_thread, 
+                start_preprocess[i], e_preprocess[i], end_preprocess[i], 
+                start_infer[i], e_infer[i], end_infer[i], 
+                start_postprocess[i], e_postprocess[i], end_postprocess[i], 
+                execution_time[i], frame_rate);
+    }
+    
+    fclose(fp);
+
+    return 1;
+}
+#endif
 
 #ifdef GPU
 static void threadFunc(thread_data_t data)
@@ -110,6 +195,10 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
 
+#ifdef MEASURE
+        int count = i * num_thread + data.thread_id - 1;
+#endif
+
 #ifdef NVTX
         char task[100];
         sprintf(task, "Task (cpu: %d)", data.thread_id);
@@ -117,19 +206,35 @@ static void threadFunc(thread_data_t data)
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
-        printf("\nThread %d is set to CPU core %d\n", data.thread_id, sched_getcpu());
+#ifdef MEASURE
+        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+#else
+        printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
+#endif
 
         // __Preprocess__
+#ifdef MEASURE
+        start_preprocess[count] = get_time_in_ms();
+#endif
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-        time = get_time_point();
+#ifdef MEASURE
+        end_preprocess[count] = get_time_in_ms();
+        e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
+#endif
         
         // __Inference__
         // if (device) predictions = network_predict(net, X);
         // else predictions = network_predict_cpu(net, X);
+
+#ifdef MEASURE
+        start_infer[count] = get_time_in_ms();
+#else
+        time = get_time_in_ms();
+#endif
 
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
@@ -160,15 +265,15 @@ static void threadFunc(thread_data_t data)
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
-        for(i = 0; i < gLayer; ++i){
-            state.index = i;
-            l = net.layers[i];
+        for(j = 0; j < gLayer; ++j){
+            state.index = j;
+            l = net.layers[j];
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
 
             l.forward_gpu(l, state);
-            if (skip_layers[i]){
+            if (skip_layers[j]){
                 cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output_gpu;
@@ -215,9 +320,9 @@ static void threadFunc(thread_data_t data)
 
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
-        for(i = gLayer; i < rLayer; ++i){
-            state.index = i;
-            l = net.layers[i];
+        for(j = gLayer; j < rLayer; ++j){
+            state.index = j;
+            l = net.layers[j];
             if(l.delta && state.train && l.train){
                 scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
             }
@@ -231,9 +336,9 @@ static void threadFunc(thread_data_t data)
 
         // CPU Inference
         openblas_set_num_threads(1);
-        for(i = rLayer; i < net.n; ++i){
-            state.index = i;
-            l = net.layers[i];
+        for(j = rLayer; j < net.n; ++j){
+            state.index = j;
+            l = net.layers[j];
             if(l.delta && state.train && l.train){
                 scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
             }
@@ -246,9 +351,18 @@ static void threadFunc(thread_data_t data)
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
 
-        printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+#ifdef MEASURE
+        end_infer[count] = get_time_in_ms();
+        e_infer[count] = end_infer[count] - start_infer[count];
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
+#else
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_in_ms() - time) / 1000);
+#endif
 
         // __Postprecess__
+#ifdef MEASURE
+        start_postprocess[count] = get_time_in_ms();
+#endif
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
@@ -273,6 +387,13 @@ static void threadFunc(thread_data_t data)
         //     show_image(im, "predictions");
         //     wait_key_cv(1);
         // }
+
+#ifdef MEASURE
+        end_postprocess[count] = get_time_in_ms();
+        e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
+        execution_time[count] = end_postprocess[count] - start_preprocess[count];
+        frame_rate = 1000.0 / execution_time[count];
+#endif
 
         // free memory
         free_image(im);
@@ -331,6 +452,28 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
+
+#ifdef MEASURE
+    printf("!!Write CSV File!! \n");
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(cfgfile) + 1);
+    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+    model_name[strlen(cfgfile)-10] = '\0';
+    
+
+    strcat(file_path, "cpu-reclaiming/");
+    strcat(file_path, model_name);
+    strcat(file_path, "/");
+
+    strcat(file_path, "cpu-reclaiming");
+
+    strcat(file_path, ".csv");
+    if(write_result(file_path) == -1) {
+        /* return error */
+        exit(0);
+    }
+#endif
 
     // pthread_mutex_destroy(&mutex);
     // pthread_cond_destroy(&cond);
