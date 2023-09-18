@@ -1,5 +1,7 @@
 mkdir measure
 cd measure
+
+## Sequential
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
 	mkdir -p sequential/$model/
@@ -12,6 +14,7 @@ do
 done
 rm sequential_cpu_utilization.csv
 
+## Pipeline
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
 	mkdir -p pipeline/$model/
@@ -24,6 +27,7 @@ do
 done
 rm pipeline_cpu_utilization.csv
 
+## Data-Parallel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
 	mkdir -p data-parallel/$model/
@@ -36,9 +40,29 @@ do
 done
 rm data-parallel_cpu_utilization.csv
 
+## Data-Parallel-MP
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel-mp/$model/
+done
+
+touch data-parallel-mp_cpu_utilization.csv
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	cp data-parallel-mp_cpu_utilization.csv data-parallel-mp/$model/
+done
+rm data-parallel-mp_cpu_utilization.csv
+
+## GPU-Accel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
 	mkdir -p gpu-accel/$model/
+done
+
+## GPU-Accel-MP
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p gpu-accel-mp/$model/
 done
 
 for var in {1..305}

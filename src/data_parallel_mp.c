@@ -21,9 +21,16 @@
 #include "nvToolsExt.h"
 #endif
 
-#ifdef MULTI_PROCESSOR
-#define NUM_PROCESSES 3
+#ifdef MEASURE
+#ifdef WIN32
+#include <time.h>
+#include "gettimeofday.h"
+#else
+#include <sys/time.h>
+#endif
+#endif
 
+#ifdef MULTI_PROCESSOR
 typedef struct process_data_t{
     char *datacfg;
     char *cfgfile;
@@ -38,10 +45,95 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
+
+#ifdef MEASURE
+    double start_preprocess[1000];
+    double end_preprocess[1000];
+    double e_preprocess[1000];
+
+    double start_infer[1000];
+    double end_infer[1000];
+    double e_infer[1000];
+
+    double start_postprocess[1000];
+    double end_postprocess[1000];
+    double e_postprocess[1000];
+
+    double execution_time[1000];
+    double frame_rate[1000];
+#endif
+
 } process_data_t;
 
-static void processFunc(process_data_t data)
+
+#ifdef MEASURE
+static int write_result(char *file_path, process_data_t *data) 
 {
+    static int exist=0;
+    FILE *fp;
+    int tick = 0;
+
+    fp = fopen(file_path, "w+");
+
+    int i;
+    if (fp == NULL) 
+    {
+        /* make directory */
+        while(!exist)
+        {
+            int result;
+
+            usleep(10 * 1000);
+
+            result = mkdir(MEASUREMENT_PATH, 0766);
+            if(result == 0) { 
+                exist = 1;
+
+                fp = fopen(file_path,"w+");
+            }
+
+            if(tick == 100)
+            {
+                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
+
+                return -1;
+            }
+            else tick++;
+        }
+    }
+    else printf("\nWrite output in %s\n", file_path); 
+
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+            "core_id", "", "e_preprocess", "end_preprocess", 
+            "start_infer", "e_infer", "end_infer", 
+            "start_postprocess", "e_postprocess", "end_postprocess", 
+            "execution_time", "frame_rate");
+
+    for(i = 0; i < num_exp * num_process; i++)
+    {
+        int core_id = (i + 1) - (i / num_process) * num_process;
+        int count = i / num_process;
+        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+                core_id, 
+                data[core_id - 1].start_preprocess[count], data[core_id - 1].e_preprocess[count], data[core_id - 1].end_preprocess[count], 
+                data[core_id - 1].start_infer[count], data[core_id - 1].e_infer[count], data[core_id - 1].end_infer[count], 
+                data[core_id - 1].start_postprocess[count], data[core_id - 1].e_postprocess[count], data[core_id - 1].end_postprocess[count], 
+                data[core_id - 1].execution_time[count], data[core_id - 1].frame_rate[count]);
+    }
+    
+    fclose(fp);
+
+    return 1;
+}
+#endif
+
+#ifdef MEASURE
+static void processFunc(process_data_t data, int write_fd)
+#else
+static void processFunc(process_data_t data)
+#endif
+{
+
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -119,23 +211,50 @@ static void processFunc(process_data_t data)
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
-        printf("\nProcess %d is set to CPU core %d\n", data.process_id, sched_getcpu());
-
+#ifdef MEASURE
+        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
+#else
+        printf("\nThread %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
+#endif
         // __Preprocess__
+#ifdef MEASURE
+        data.start_preprocess[i] = get_time_in_ms();
+#endif
+
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-        time = get_time_point();
+#ifdef MEASURE
+        data.end_preprocess[i] = get_time_in_ms();
+        data.e_preprocess[i] = data.end_preprocess[i] - data.start_preprocess[i];
+#endif
 
         // __Inference__
+#ifdef MEASURE
+        data.start_infer[i] = get_time_in_ms();
+#else
+        double time = get_time_point();
+#endif
+
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
-        printf("\n%s: Predicted in %lf milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+#ifdef MEASURE
+        data.end_infer[i] = get_time_in_ms();
+        data.e_infer[i] = data.end_infer[i] - data.start_infer[i];
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
+#else
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
+#endif
+
 
         // __Postprecess__
+#ifdef MEASURE
+        data.start_postprocess[i] = get_time_in_ms();
+#endif
+
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
@@ -161,6 +280,13 @@ static void processFunc(process_data_t data)
         //     wait_key_cv(1);
         // }
 
+#ifdef MEASURE
+        data.end_postprocess[i] = get_time_in_ms();
+        data.e_postprocess[i] = data.end_postprocess[i] - data.start_postprocess[i];
+        data.execution_time[i] = data.end_postprocess[i] - data.start_preprocess[i];
+        data.frame_rate[i] = 1000.0 / data.execution_time[i];
+#endif
+
         // free memory
         free_image(im);
         free_image(resized);
@@ -170,6 +296,10 @@ static void processFunc(process_data_t data)
         nvtxRangeEnd(nvtx_task);
 #endif
     }
+
+#ifdef MEASURE
+    write(write_fd, &data, sizeof(process_data_t));
+#endif
 
     // free memory
     free_detections(dets, nboxes);
@@ -187,6 +317,8 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
 
     pid_t pid;
     int status;
+
+    int fd[num_process][2];
 
     process_data_t data[num_process];
 
@@ -207,9 +339,25 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     }
 
     for (i = 0; i < num_process; i++) {
+
+#ifdef MEASURE
+        if (pipe(fd[i]) == -1) {
+            perror("pipe");
+            exit(1);
+        }
+#endif
+
         pid = fork();
         if (pid == 0) { // child process
+
+#ifdef MEASURE
+            close(fd[i][0]); // close reading end in the child
+            processFunc(data[i], fd[i][1]);
+            close(fd[i][1]);
+#else
             processFunc(data[i]);
+#endif
+
             exit(0);
         } else if (pid < 0) {
             perror("fork");
@@ -217,9 +365,43 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
         }
     }
 
+#ifdef MEASURE
+    process_data_t receivedData[num_process];
+
+    // In the parent process, read data from all child processes
+    for (i = 0; i < num_process; i++) {
+        close(fd[i][1]); // close writing end in the parent
+        read(fd[i][0], &receivedData[i], sizeof(process_data_t));
+        data[i] = receivedData[i];
+        close(fd[i][0]);
+    }
+#endif
+
     for (i = 0; i < num_process; i++) {
         wait(&status);
     }
+
+#ifdef MEASURE
+    printf("\n!!Write CSV File!! \n");
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(cfgfile) + 1);
+    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+    model_name[strlen(cfgfile)-10] = '\0';
+    
+
+    strcat(file_path, "data-parallel-mp/");
+    strcat(file_path, model_name);
+    strcat(file_path, "/");
+
+    strcat(file_path, "data-parallel-mp");
+
+    strcat(file_path, ".csv");
+    if(write_result(file_path, data) == -1) {
+        /* return error */
+        exit(0);
+    }
+#endif
 
     return 0;
 

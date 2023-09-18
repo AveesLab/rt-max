@@ -24,21 +24,19 @@
 #endif
 
 #ifdef MEASURE
-static double start_preprocess_array[1000];
-static double end_preprocess_array[1000];
-static double e_preprocess_array[1000];
+static double start_preprocess[1000];
+static double end_preprocess[1000];
+static double e_preprocess[1000];
 
-static double start_infer_array[1000];
-static double end_infer_array[1000];
-static double e_infer_array[1000];
+static double start_infer[1000];
+static double end_infer[1000];
+static double e_infer[1000];
 
-static double start_postprocess_array[1000];
-static double end_postprocess_array[1000];
-static double e_postprocess_array[1000];
+static double start_postprocess[1000];
+static double end_postprocess[1000];
+static double e_postprocess[1000];
 
-static double layers_time_array[1000][400];
-
-static double execution_time_array[1000];
+static double execution_time[1000];
 static double frame_rate;
 #endif
 
@@ -59,7 +57,7 @@ static int write_result(char *file_path)
 
     fp = fopen(file_path, "w+");
 
-    int i, j;
+    int i;
     if (fp == NULL) 
     {
         /* make directory */
@@ -93,20 +91,19 @@ static int write_result(char *file_path)
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "frame_rate");
 
-    for(int i = 0; i < num_exp; i++)
+    for(i = 0; i < num_exp; i++)
     {
         fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                start_preprocess_array[i], e_preprocess_array[i], end_preprocess_array[i], 
-                start_infer_array[i], e_infer_array[i], end_infer_array[i], 
-                start_postprocess_array[i], e_postprocess_array[i], end_postprocess_array[i], 
-                execution_time_array[i], frame_rate);
+                start_preprocess[i], e_preprocess[i], end_preprocess[i], 
+                start_infer[i], e_infer[i], end_infer[i], 
+                start_postprocess[i], e_postprocess[i], end_postprocess[i], 
+                execution_time[i], frame_rate);
     }
     
     fclose(fp);
 
     return 1;
 }
-
 #endif
 
 void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
@@ -177,7 +174,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 
         // __Preprocess__
 #ifdef MEASURE
-        start_preprocess_array[i] = get_time_in_ms();
+        start_preprocess[i] = get_time_in_ms();
 #endif
 
         im = load_image(input, 0, 0, net.c);
@@ -186,29 +183,34 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         X = cropped.data;
 
 #ifdef MEASURE
-        end_preprocess_array[i] = get_time_in_ms();
-        e_preprocess_array[i] = end_preprocess_array[i] - start_preprocess_array[i];
+        end_preprocess[i] = get_time_in_ms();
+        e_preprocess[i] = end_preprocess[i] - start_preprocess[i];
 #endif
         
         // __Inference__
 #ifdef MEASURE
-        start_infer_array[i] = get_time_in_ms();
+        start_infer[i] = get_time_in_ms();
+#else
+        double time = get_time_point();
 #endif
+
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
 #ifdef MEASURE
-        end_infer_array[i] = get_time_in_ms();
-        e_infer_array[i] = end_infer_array[i] - start_infer_array[i];
+        end_infer[i] = get_time_in_ms();
+        e_infer[i] = end_infer[i] - start_infer[i];
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
+#else
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_point() - time) / 1000);
 #endif
-
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer_array[i]);
 
         // __Postprecess__
-        // __NMS & TOP acccuracy__
 #ifdef MEASURE
-        start_postprocess_array[i] = get_time_in_ms();
+        start_postprocess[i] = get_time_in_ms();
 #endif
+
+        // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
             if (nms) {
@@ -234,10 +236,10 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         // }
 
 #ifdef MEASURE
-        end_postprocess_array[i] = get_time_in_ms();
-        e_postprocess_array[i] = end_postprocess_array[i] - start_postprocess_array[i];
-        execution_time_array[i] = end_postprocess_array[i] - start_preprocess_array[i];
-        frame_rate = 1000.0 / execution_time_array[i];
+        end_postprocess[i] = get_time_in_ms();
+        e_postprocess[i] = end_postprocess[i] - start_postprocess[i];
+        execution_time[i] = end_postprocess[i] - start_preprocess[i];
+        frame_rate = 1000.0 / execution_time[i];
 #endif
 
         // free memory
@@ -257,6 +259,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     char* model_name = malloc(strlen(cfgfile) + 1);
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
+
     char core_idx[10];
     sprintf(core_idx, "%02dcore", core_id);
 
