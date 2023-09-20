@@ -40,7 +40,6 @@ static double execution_time[1000];
 static double frame_rate;
 #endif
 
-#ifdef MEASURE
 /* Timestamp in ms */
 double get_time_in_ms(void)
 {
@@ -49,6 +48,7 @@ double get_time_in_ms(void)
     return (time_after_boot.tv_sec*1000+time_after_boot.tv_nsec*0.000001);
 }
 
+#ifdef MEASURE
 static int write_result(char *file_path) 
 {
     static int exist=0;
