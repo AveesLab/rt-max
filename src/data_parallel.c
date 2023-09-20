@@ -219,7 +219,7 @@ static void threadFunc(thread_data_t data)
         e_infer[count] = end_infer[count] - start_infer[count];
         printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_in_ms() - time) / 1000);
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, get_time_in_ms() - time);
 #endif
 
         // __Postprecess__

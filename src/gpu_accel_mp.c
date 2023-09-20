@@ -345,7 +345,7 @@ static void processFunc(process_data_t data)
         data.e_infer[i] = data.end_infer[i] - data.start_infer[i];
         printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
 #else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, ((double)get_time_in_ms() - time) / 1000);
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, get_time_in_ms() - time);
 #endif
 
         // __Postprecess__
