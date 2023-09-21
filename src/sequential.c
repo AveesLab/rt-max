@@ -35,10 +35,11 @@ static double e_infer[1000];
 static double start_postprocess[1000];
 static double end_postprocess[1000];
 static double e_postprocess[1000];
+#endif
 
 static double execution_time[1000];
-static double frame_rate;
-#endif
+static double frame_rate[1000];
+
 
 /* Timestamp in ms */
 double get_time_in_ms(void)
@@ -97,7 +98,7 @@ static int write_result(char *file_path)
                 start_preprocess[i], e_preprocess[i], end_preprocess[i], 
                 start_infer[i], e_infer[i], end_infer[i], 
                 start_postprocess[i], e_postprocess[i], end_postprocess[i], 
-                execution_time[i], frame_rate);
+                execution_time[i], frame_rate[i]);
     }
     
     fclose(fp);
@@ -172,6 +173,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 
         printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
 
+        time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
         start_preprocess[i] = get_time_in_ms();
@@ -190,8 +192,6 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         // __Inference__
 #ifdef MEASURE
         start_infer[i] = get_time_in_ms();
-#else
-        time = get_time_in_ms();
 #endif
 
         if (device) predictions = network_predict(net, X);
@@ -200,9 +200,6 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 #ifdef MEASURE
         end_infer[i] = get_time_in_ms();
         e_infer[i] = end_infer[i] - start_infer[i];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
-#else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, get_time_in_ms() - time);
 #endif
 
         // __Postprecess__
@@ -239,9 +236,13 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         end_postprocess[i] = get_time_in_ms();
         e_postprocess[i] = end_postprocess[i] - start_postprocess[i];
         execution_time[i] = end_postprocess[i] - start_preprocess[i];
-        frame_rate = 1000.0 / execution_time[i];
+        frame_rate[i] = 1000.0 / execution_time[i];
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
+#else
+        execution_time[i] = get_time_in_ms() - time;
+        frame_rate[i] = 1000.0 / (execution_time[i] / 1); // 1 single thread
+        printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
-
         // free memory
         free_image(im);
         free_image(resized);

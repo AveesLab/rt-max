@@ -62,10 +62,10 @@ typedef struct process_data_t{
     double start_postprocess[1000];
     double end_postprocess[1000];
     double e_postprocess[1000];
+#endif
 
     double execution_time[1000];
     double frame_rate[1000];
-#endif
 
 } process_data_t;
 
@@ -245,6 +245,7 @@ static void processFunc(process_data_t data)
         printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
 #endif
 
+        time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
         data.start_preprocess[i] = get_time_in_ms();
@@ -265,8 +266,6 @@ static void processFunc(process_data_t data)
 
 #ifdef MEASURE
         data.start_infer[i] = get_time_in_ms();
-#else
-        time = get_time_in_ms();
 #endif
 
         if (net.gpu_index != cuda_get_device())
@@ -380,9 +379,6 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         data.end_infer[i] = get_time_in_ms();
         data.e_infer[i] = data.end_infer[i] - data.start_infer[i];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
-#else
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, get_time_in_ms() - time);
 #endif
 
         // __Postprecess__
@@ -420,6 +416,11 @@ static void processFunc(process_data_t data)
         data.e_postprocess[i] = data.end_postprocess[i] - data.start_postprocess[i];
         data.execution_time[i] = data.end_postprocess[i] - data.start_preprocess[i];
         data.frame_rate[i] = 1000.0 / data.execution_time[i];
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
+#else
+        data.execution_time[i] = get_time_in_ms() - time;
+        data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
+        printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, data.execution_time[i], data.frame_rate[i]);
 #endif
 
         // free memory
