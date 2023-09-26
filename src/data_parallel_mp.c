@@ -122,7 +122,6 @@ static int write_result(char *file_path, measure_data_t *measure_data)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
-
         fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 core_id, 
                 measure_data[core_id - 1].start_preprocess[count],  measure_data[core_id - 1].e_preprocess[count],  measure_data[core_id - 1].end_preprocess[count], 
@@ -406,17 +405,18 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
-
     strcat(file_path, "data-parallel-mp/");
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
     strcat(file_path, "data-parallel-mp_");
 
-    strcat(file_path, num_process);
-    strcat(file_path, "process");
+    char process[20];
+    sprintf(process, "%dprocess", num_process);
+    strcat(file_path, process);
 
     strcat(file_path, ".csv");
+
     if(write_result(file_path, receivedData) == -1) {
         /* return error */
         exit(0);
