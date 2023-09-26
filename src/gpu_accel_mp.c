@@ -518,7 +518,11 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "gpu-accel-mp");
+    strcat(file_path, "gpu-accel-mp_");
+
+    char gpu_portion[20];
+    sprintf(gpu_portion, "%03dglayer", gLayer);
+    strcat(file_path, gpu_portion);
 
     strcat(file_path, ".csv");
     if(write_result(file_path, data) == -1) {

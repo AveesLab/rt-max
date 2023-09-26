@@ -330,7 +330,10 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "data-parallel");
+    strcat(file_path, "data-parallel_");
+
+    strcat(file_path, num_thread);
+    strcat(file_path, "thread");
 
     strcat(file_path, ".csv");
     if(write_result(file_path) == -1) {

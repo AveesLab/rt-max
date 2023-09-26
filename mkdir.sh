@@ -71,6 +71,16 @@ for var in {1..305}
 	mkdir -p cpu-reclaiming/densenet201/${var}glayer/
 	done
 
+for var in {1..37}
+	do
+	mkdir -p cpu-reclaiming/yolov4-tiny/${var}glayer/
+	done
+
+for var in {1..162}
+	do
+	mkdir -p cpu-reclaiming/yolov4/${var}glayer/
+	done
+
 for var in {1..100}
 	do
 	mkdir -p cpu-reclaiming/yolov7-tiny/${var}glayer/
@@ -107,6 +117,16 @@ for var in {1..138}
 for var in {1..305}
 	do
 	mkdir -p cpu-reclaiming-mp/densenet201/${var}glayer/
+	done
+
+for var in {1..37}
+	do
+	mkdir -p cpu-reclaiming-mp/yolov4-tiny/${var}glayer/
+	done
+
+for var in {1..162}
+	do
+	mkdir -p cpu-reclaiming-mp/yolov4/${var}glayer/
 	done
 
 for var in {1..100}

@@ -466,7 +466,15 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "cpu-reclaiming");
+    char gpu_portion[20];
+    sprintf(gpu_portion, "%dglayer/", gLayer);
+    strcat(file_path, gpu_portion);
+
+    strcat(file_path, "cpu-reclaiming_");
+
+    char reclaim_portion[20];
+    sprintf(reclaim_portion, "%03drlayer", rLayer);
+    strcat(file_path, reclaim_portion);
 
     strcat(file_path, ".csv");
     if(write_result(file_path) == -1) {

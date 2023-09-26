@@ -399,7 +399,10 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "data-parallel-mp");
+    strcat(file_path, "data-parallel-mp_");
+
+    strcat(file_path, num_process);
+    strcat(file_path, "process");
 
     strcat(file_path, ".csv");
     if(write_result(file_path, data) == -1) {
