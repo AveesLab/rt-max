@@ -29,7 +29,7 @@ void softmax_tree(float *input, int batch, int inputs, float temp, tree *hierarc
 softmax_layer make_softmax_layer(int batch, int inputs, int groups)
 {
     assert(inputs%groups == 0);
-    fprintf(stderr, "softmax                                        %4d\n",  inputs);
+    // fprintf(stderr, "softmax                                        %4d\n",  inputs);
     softmax_layer l = { (LAYER_TYPE)0 };
     l.type = SOFTMAX;
     l.batch = batch;

@@ -92,7 +92,7 @@ layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes,
 
     l.bflops = l.out_w * l.out_h * l.out_c * l.n / 1000000000.;
     if (l.weights_type) l.bflops *= 2;
-    fprintf(stderr, " wt = %d, wn = %d, outputs:%4d x%4d x%4d %5.3f BF\n", l.weights_type, l.weights_normalization, l.out_w, l.out_h, l.out_c, l.bflops);
+    // fprintf(stderr, " wt = %d, wn = %d, outputs:%4d x%4d x%4d %5.3f BF\n", l.weights_type, l.weights_normalization, l.out_w, l.out_h, l.out_c, l.bflops);
     return l;
 }
 

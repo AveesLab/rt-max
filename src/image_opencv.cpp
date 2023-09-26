@@ -1550,8 +1550,8 @@ extern "C" void show_acnhors(int number_of_boxes, int num_of_clusters, float *re
 
 void show_opencv_info()
 {
-    std::cerr << " OpenCV version: " << CV_VERSION_MAJOR << "." << CV_VERSION_MINOR << "." << CVAUX_STR(CV_VERSION_REVISION) OCV_D
-        << std::endl;
+    // std::cerr << " OpenCV version: " << CV_VERSION_MAJOR << "." << CV_VERSION_MINOR << "." << CVAUX_STR(CV_VERSION_REVISION) OCV_D
+    //     << std::endl;
 }
 
 

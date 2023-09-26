@@ -121,7 +121,7 @@ static int streamInit[16] = { 0 };
 cudaStream_t get_cuda_stream() {
     int i = cuda_get_device();
     if (!streamInit[i]) {
-        printf("Create CUDA-stream - %d \n", i);
+        // printf("Create CUDA-stream - %d \n", i);
 #ifdef CUDNN
         cudaError_t status = cudaStreamCreateWithFlags(&streamsArray[i], cudaStreamNonBlocking);
 #else

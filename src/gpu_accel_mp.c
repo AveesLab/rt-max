@@ -278,7 +278,7 @@ static void processFunc(process_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
+        // printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
 #else
         printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
 #endif
@@ -366,7 +366,6 @@ static void processFunc(process_data_t data)
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
 
-        printf("end %d process inference \n", data.process_id);
         unlock_resource(0);
 
         // CPU Inference
@@ -418,7 +417,11 @@ static void processFunc(process_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
+#endif
+
             }
         }
 
@@ -434,7 +437,7 @@ static void processFunc(process_data_t data)
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
         measure_data.frame_rate[i] = 1000 / measure_data.execution_time[i];
         
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
+        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
 #else
         data.execution_time[i] = get_time_in_ms() - time;
         data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process

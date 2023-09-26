@@ -260,7 +260,7 @@ layer make_history_layer(int batch, int h, int w, int c, int history_size, int s
     l.forward = forward_history_layer;
     l.backward = backward_history_layer;
 
-    fprintf(stderr, "HISTORY b = %d, s = %2d, steps = %2d   %4d x%4d x%4d -> %4d x%4d x%4d \n", l.batch / l.steps, l.history_size, l.steps, w, h, c, l.out_w, l.out_h, l.out_c);
+    // fprintf(stderr, "HISTORY b = %d, s = %2d, steps = %2d   %4d x%4d x%4d -> %4d x%4d x%4d \n", l.batch / l.steps, l.history_size, l.steps, w, h, c, l.out_w, l.out_h, l.out_c);
 
     l.output = (float*)xcalloc(l.batch * l.outputs, sizeof(float));
     l.delta = (float*)xcalloc(l.batch * l.outputs, sizeof(float));
