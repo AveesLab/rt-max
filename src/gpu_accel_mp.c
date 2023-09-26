@@ -162,20 +162,28 @@ static union semun {
     unsigned short *array;
 };
 
-static void wait_semaphore(int sem_id, int sem_num) {
-    struct sembuf sem_op;
-    sem_op.sem_num = sem_num;
-    sem_op.sem_op = -1;
-    sem_op.sem_flg = 0;
-    semop(sem_id, &sem_op, 1);
+static void lock_resource(int resource_num) {
+    struct sembuf operations[1];
+    operations[0].sem_num = resource_num;  
+    operations[0].sem_op = -1;  
+    operations[0].sem_flg = 0;  
+
+    if (semop(sem_id, operations, 1) == -1) {
+        perror("semop - lock_resource");
+        exit(1);
+    }
 }
 
-static void release_semaphore(int sem_id, int sem_num) {
-    struct sembuf sem_op;
-    sem_op.sem_num = sem_num;
-    sem_op.sem_op = 1;
-    sem_op.sem_flg = 0;
-    semop(sem_id, &sem_op, 1);
+static void unlock_resource(int resource_num) {
+    struct sembuf operations[1];
+    operations[0].sem_num = resource_num;  
+    operations[0].sem_op = 1;   
+    operations[0].sem_flg = 0;  
+
+    if (semop(sem_id, operations, 1) == -1) {
+        perror("semop - unlock_resource");
+        exit(1);
+    }
 }
 
 #ifdef GPU
@@ -277,6 +285,7 @@ static void processFunc(process_data_t data)
 
         time = get_time_in_ms();
         // __Preprocess__
+        lock_resource(0);
 #ifdef MEASURE
         measure_data.start_preprocess[i] = get_time_in_ms();
 #endif
@@ -316,8 +325,6 @@ static void processFunc(process_data_t data)
 #endif
 
         // GPU Inference
-        wait_semaphore(sem_id, data.process_id - 1);
-        printf("start %d process inference \n", data.process_id);
 
 #ifdef NVTX
         char task_gpu[100];
@@ -360,12 +367,7 @@ static void processFunc(process_data_t data)
 #endif
 
         printf("end %d process inference \n", data.process_id);
-
-        if (data.process_id == num_process) {
-            release_semaphore(sem_id, 0);
-        } else {
-            release_semaphore(sem_id, data.process_id);
-        }
+        unlock_resource(0);
 
         // CPU Inference
 #ifdef MEASURE
@@ -476,7 +478,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 #endif
 
     // Create semaphore set with NUM_PROCESSES semaphores
-    sem_id = semget(key, 1, IPC_CREAT | 0666);
+    sem_id = semget(key, 2, IPC_CREAT | 0666);
 
     if (sem_id == -1) {
         perror("semget");
@@ -485,10 +487,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 
     // Initialize semaphores
     union semun arg;
-    unsigned short values[num_process];
-    for (i = 0; i < num_process; i++) values[i] = 0;
-    values[0] = 1;
-
+    unsigned short values[2] = {1, 1};  // Initialize both semaphores to 1
     arg.array = values;
     semctl(sem_id, 0, SETALL, arg);
 
