@@ -50,7 +50,15 @@ static double end_preprocess[1000];
 static double e_preprocess[1000];
 
 static double start_infer[1000];
+static double start_gpu_waiting[1000];
+static double start_gpu_infer[1000];
+static double end_gpu_infer[1000];
+static double start_cpu_infer[1000];
 static double end_infer[1000];
+
+static double waiting_gpu[1000];
+static double e_gpu_infer[1000];
+static double e_cpu_infer[1000];
 static double e_infer[1000];
 
 static double start_postprocess[1000];
@@ -99,20 +107,29 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "core_id", "start_preprocess", "e_preprocess", "end_preprocess", 
-            "start_infer", "e_infer", "end_infer", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+            "core_id", 
+            "start_preprocess", "e_preprocess", "end_preprocess", 
+            "start_infer", 
+            "start_gpu_waiting", "waiting_gpu", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_infer", 
+            "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "frame_rate");
 
     for(i = 0; i < num_exp * num_thread; i++)
     {
-        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 (i + 1) - (i / num_thread) * num_thread, 
-                start_preprocess[i], e_preprocess[i], end_preprocess[i], 
-                start_infer[i], e_infer[i], end_infer[i], 
-                start_postprocess[i], e_postprocess[i], end_postprocess[i], 
-                execution_time[i], frame_rate[i]);
+                start_preprocess[i],    e_preprocess[i],    end_preprocess[i], 
+                start_infer[i], 
+                start_gpu_waiting[i],   waiting_gpu[i],
+                start_gpu_infer[i],     e_gpu_infer[i],     end_gpu_infer[i],
+                start_cpu_infer[i],     e_cpu_infer[i],     end_infer[i], 
+                e_infer[i], 
+                start_postprocess[i],   e_postprocess[i],     end_postprocess[i], 
+                execution_time[i],      frame_rate[i]);
     }
     
     fclose(fp);
@@ -310,11 +327,12 @@ static void threadFunc(thread_data_t data)
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
 
+        // CPU Inference
+
 #ifdef MEASURE
         start_cpu_infer[count] = get_time_in_ms();
 #endif
 
-        // CPU Inference
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
         for(j = gLayer; j < net.n; ++j){
@@ -334,6 +352,9 @@ static void threadFunc(thread_data_t data)
 
 #ifdef MEASURE
         end_infer[count] = get_time_in_ms();
+        waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
+        e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
+        e_cpu_infer[count] = end_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
 #endif
 

@@ -95,19 +95,20 @@ static int write_result(char *file_path)
     else printf("\nWrite output in %s\n", file_path); 
 
     fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "core_id", "start_preprocess", "e_preprocess", "end_preprocess", 
-            "start_infer", "e_infer", "end_infer", 
-            "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate");
+            "core_id", 
+            "start_preprocess",     "e_preprocess",     "end_preprocess", 
+            "start_infer",          "e_infer",          "end_infer", 
+            "start_postprocess",    "e_postprocess",    "end_postprocess", 
+            "execution_time",       "frame_rate");
 
     for(i = 0; i < num_exp * num_thread; i++)
     {
         fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 (i + 1) - (i / num_thread) * num_thread, 
-                start_preprocess[i], e_preprocess[i], end_preprocess[i], 
-                start_infer[i], e_infer[i], end_infer[i], 
-                start_postprocess[i], e_postprocess[i], end_postprocess[i], 
-                execution_time[i], frame_rate[i]);
+                start_preprocess[i],    e_preprocess[i],    end_preprocess[i], 
+                start_infer[i],         e_infer[i],         end_infer[i], 
+                start_postprocess[i],   e_postprocess[i],   end_postprocess[i], 
+                execution_time[i],      frame_rate[i]);
     }
     
     fclose(fp);

@@ -46,28 +46,36 @@ typedef struct process_data_t{
     int benchmark_layers;
     int process_id;
 
-#ifdef MEASURE
-    double start_preprocess[1000];
-    double end_preprocess[1000];
-    double e_preprocess[1000];
-
-    double start_infer[1000];
-    double end_infer[1000];
-    double e_infer[1000];
-
-    double start_postprocess[1000];
-    double end_postprocess[1000];
-    double e_postprocess[1000];
+#ifndef MEASURE
+    double execution_time[200];
+    double frame_rate[200];
 #endif
-
-    double execution_time[1000];
-    double frame_rate[1000];
 
 } process_data_t;
 
+#ifdef MEASURE
+
+typedef struct measure_data_t{
+    double start_preprocess[200];
+    double end_preprocess[200];
+    double e_preprocess[200];
+
+    double start_infer[200];
+    double end_infer[200];
+    double e_infer[200];
+
+    double start_postprocess[200];
+    double end_postprocess[200];
+    double e_postprocess[200];
+
+    double execution_time[200];
+    double frame_rate[200];
+
+} measure_data_t;
+#endif
 
 #ifdef MEASURE
-static int write_result(char *file_path, process_data_t *data) 
+static int write_result(char *file_path, measure_data_t *measure_data) 
 {
     static int exist=0;
     FILE *fp;
@@ -104,25 +112,23 @@ static int write_result(char *file_path, process_data_t *data)
     else printf("\nWrite output in %s\n", file_path); 
 
     fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "core_id", "", "e_preprocess", "end_preprocess", 
-            "start_infer", "e_infer", "end_infer", 
-            "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate");
+            "core_id", 
+            "start_preprocess",     "e_preprocess",     "end_preprocess", 
+            "start_infer",          "e_infer",          "end_infer", 
+            "start_postprocess",    "e_postprocess",    "end_postprocess", 
+            "execution_time",       "frame_rate");
 
     for(i = 0; i < num_exp * num_process; i++)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
 
-        data[core_id - 1].execution_time[count] = data[core_id - 1].end_postprocess[count] - data[core_id - 1].start_preprocess[count];
-        data[core_id - 1].frame_rate[count] = 1000 / data[core_id - 1].execution_time[count];
-
         fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 core_id, 
-                data[core_id - 1].start_preprocess[count], data[core_id - 1].e_preprocess[count], data[core_id - 1].end_preprocess[count], 
-                data[core_id - 1].start_infer[count], data[core_id - 1].e_infer[count], data[core_id - 1].end_infer[count], 
-                data[core_id - 1].start_postprocess[count], data[core_id - 1].e_postprocess[count], data[core_id - 1].end_postprocess[count], 
-                data[core_id - 1].execution_time[count], data[core_id - 1].frame_rate[count]);
+                measure_data[core_id - 1].start_preprocess[count],  measure_data[core_id - 1].e_preprocess[count],  measure_data[core_id - 1].end_preprocess[count], 
+                measure_data[core_id - 1].start_infer[count],       measure_data[core_id - 1].e_infer[count],       measure_data[core_id - 1].end_infer[count], 
+                measure_data[core_id - 1].start_postprocess[count], measure_data[core_id - 1].e_postprocess[count], measure_data[core_id - 1].end_postprocess[count], 
+                measure_data[core_id - 1].execution_time[count],    measure_data[core_id - 1].frame_rate[count]);
     }
     
     fclose(fp);
@@ -137,6 +143,10 @@ static void processFunc(process_data_t data, int write_fd)
 static void processFunc(process_data_t data)
 #endif
 {
+
+#ifdef MEASURE
+    measure_data_t measure_data;
+#endif
 
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
@@ -224,7 +234,7 @@ static void processFunc(process_data_t data)
         time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
-        data.start_preprocess[i] = get_time_in_ms();
+        measure_data.start_preprocess[i] = get_time_in_ms();
 #endif
 
         im = load_image(input, 0, 0, net.c);
@@ -233,26 +243,26 @@ static void processFunc(process_data_t data)
         X = cropped.data;
 
 #ifdef MEASURE
-        data.end_preprocess[i] = get_time_in_ms();
-        data.e_preprocess[i] = data.end_preprocess[i] - data.start_preprocess[i];
+        measure_data.end_preprocess[i] = get_time_in_ms();
+        measure_data.e_preprocess[i] = measure_data.end_preprocess[i] - measure_data.start_preprocess[i];
 #endif
 
         // __Inference__
 #ifdef MEASURE
-        data.start_infer[i] = get_time_in_ms();
+        measure_data.start_infer[i] = get_time_in_ms();
 #endif
 
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
 #ifdef MEASURE
-        data.end_infer[i] = get_time_in_ms();
-        data.e_infer[i] = data.end_infer[i] - data.start_infer[i];
+        measure_data.end_infer[i] = get_time_in_ms();
+        measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
 #endif
 
         // __Postprecess__
 #ifdef MEASURE
-        data.start_postprocess[i] = get_time_in_ms();
+        measure_data.start_postprocess[i] = get_time_in_ms();
 #endif
 
         // __NMS & TOP acccuracy__
@@ -281,9 +291,12 @@ static void processFunc(process_data_t data)
         // }
 
 #ifdef MEASURE
-        data.end_postprocess[i] = get_time_in_ms();
-        data.e_postprocess[i] = data.end_postprocess[i] - data.start_postprocess[i];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
+        measure_data.end_postprocess[i] = get_time_in_ms();
+        measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
+        measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
+        measure_data.frame_rate[i] = 1000 / measure_data.execution_time[i];
+
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
 #else
         data.execution_time[i] = get_time_in_ms() - time;
         data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
@@ -301,7 +314,7 @@ static void processFunc(process_data_t data)
     }
 
 #ifdef MEASURE
-    write(write_fd, &data, sizeof(process_data_t));
+    write(write_fd, &measure_data, sizeof(measure_data_t));
 #endif
 
     // free memory
@@ -371,13 +384,12 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     }
 
 #ifdef MEASURE
-    process_data_t receivedData[num_process];
+    measure_data_t receivedData[num_process];
 
     // In the parent process, read data from all child processes
     for (i = 0; i < num_process; i++) {
         close(fd[i][1]); // close writing end in the parent
-        read(fd[i][0], &receivedData[i], sizeof(process_data_t));
-        data[i] = receivedData[i];
+        read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
         close(fd[i][0]);
     }
 #endif
@@ -405,7 +417,7 @@ void data_parallel_mp(char *datacfg, char *cfgfile, char *weightfile, char *file
     strcat(file_path, "process");
 
     strcat(file_path, ".csv");
-    if(write_result(file_path, data) == -1) {
+    if(write_result(file_path, receivedData) == -1) {
         /* return error */
         exit(0);
     }
