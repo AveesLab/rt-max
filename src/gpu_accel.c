@@ -250,9 +250,12 @@ static void threadFunc(thread_data_t data)
         state.train = 0;
         state.delta = 0;
 
+#ifdef MEASURE
+        start_gpu_waiting[count] = get_time_in_ms();
+#endif
+
         // GPU Inference
         pthread_mutex_lock(&mutex_gpu);
-
 
         while(data.thread_id != current_thread) {
             pthread_cond_wait(&cond, &mutex_gpu);
@@ -263,6 +266,10 @@ static void threadFunc(thread_data_t data)
         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.thread_id);
         nvtxRangeId_t nvtx_task_gpu;
         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
+#endif
+
+#ifdef MEASURE
+        start_gpu_infer[count] = get_time_in_ms();
 #endif
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
@@ -286,6 +293,10 @@ static void threadFunc(thread_data_t data)
 
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
+#ifdef MEASURE
+        end_gpu_infer[count] = get_time_in_ms();
+#endif
+
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
@@ -298,6 +309,10 @@ static void threadFunc(thread_data_t data)
         
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
+
+#ifdef MEASURE
+        start_cpu_infer[count] = get_time_in_ms();
+#endif
 
         // CPU Inference
         state.workspace = net.workspace_cpu;

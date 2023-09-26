@@ -513,7 +513,6 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
-
     strcat(file_path, "gpu-accel-mp/");
     strcat(file_path, model_name);
     strcat(file_path, "/");
