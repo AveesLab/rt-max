@@ -186,7 +186,7 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
@@ -240,7 +240,11 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
+#endif
+
             }
         } // classifier model
 
@@ -255,7 +259,7 @@ static void threadFunc(thread_data_t data)
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
         frame_rate[count] = 1000.0 / execution_time[count];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
+        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
         frame_rate[i] = 1000.0 / (execution_time[i] / num_thread); // N thread
@@ -287,6 +291,9 @@ static void threadFunc(thread_data_t data)
 void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    printf("\n\nData-Parallel with %d threads \n", num_thread);
+
     pthread_t threads[num_thread];
     int rc;
     int i;
@@ -319,7 +326,6 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     }
 
 #ifdef MEASURE
-    printf("!!Write CSV File!! \n");
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);
@@ -333,8 +339,9 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
     strcat(file_path, "data-parallel_");
 
-    strcat(file_path, num_thread);
-    strcat(file_path, "thread");
+    char thread[20];
+    sprintf(thread, "%dthread", num_thread);
+    strcat(file_path, thread);
 
     strcat(file_path, ".csv");
     if(write_result(file_path) == -1) {

@@ -226,7 +226,7 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
@@ -378,7 +378,11 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
+#endif
+
             }
         }
 
@@ -393,7 +397,7 @@ static void threadFunc(thread_data_t data)
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
         frame_rate[count] = 1000.0 / execution_time[count];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
+        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
         frame_rate[i] = 1000.0 / (execution_time[i] / num_thread); // N thread
@@ -427,6 +431,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
+    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+
     pthread_t threads[num_thread];
     int rc;
     int i;
@@ -459,7 +465,6 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     }
 
 #ifdef MEASURE
-    printf("!!Write CSV File!! \n");
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);

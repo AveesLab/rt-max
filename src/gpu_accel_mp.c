@@ -193,7 +193,6 @@ static void processFunc(process_data_t data, int write_fd)
 static void processFunc(process_data_t data)
 #endif
 {
-
 #ifdef MEASURE
     measure_data_t measure_data;
 #endif
@@ -471,6 +470,9 @@ static void processFunc(process_data_t data)
 void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    printf("\n\nGPU-Accel-MP with %d processes with %d gpu-layer\n", num_process, gLayer);
+
     int i;
 
     pid_t pids[num_process];
@@ -559,7 +561,6 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     semctl(sem_id, 0, IPC_RMID);
 
 #ifdef MEASURE
-    printf("\n!!Write CSV File!! \n");
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);

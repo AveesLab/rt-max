@@ -204,7 +204,6 @@ static void processFunc(process_data_t data, int write_fd)
 static void processFunc(process_data_t data)
 #endif
 {
-
 #ifdef MEASURE
     measure_data_t measure_data;
 #endif
@@ -289,7 +288,7 @@ static void processFunc(process_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
+        // printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
 #else
         printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
 #endif
@@ -337,8 +336,6 @@ static void processFunc(process_data_t data)
 
         // GPU Inference
 
-        printf("start %d process inference \n", data.process_id);
-
 #ifdef NVTX
         char task_gpu[100];
         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
@@ -378,8 +375,6 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
-
-        printf("end %d process inference \n", data.process_id);
 
         unlock_resource(0);
 
@@ -485,7 +480,11 @@ static void processFunc(process_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
+#endif
+
             }
         }
 
@@ -500,7 +499,7 @@ static void processFunc(process_data_t data)
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
         measure_data.frame_rate[i] = 1000.0 / measure_data.execution_time[i];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
+        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
 #else
         data.execution_time[i] = get_time_in_ms() - time;
         data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
@@ -534,6 +533,9 @@ static void processFunc(process_data_t data)
 void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    printf("\n\nCPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", num_process, gLayer, rLayer);
+
     int i;
 
     pid_t pids[num_process];
@@ -624,7 +626,6 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     semctl(sem_id, 0, IPC_RMID);
 
 #ifdef MEASURE
-    printf("\n!!Write CSV File!! \n");
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);

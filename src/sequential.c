@@ -87,18 +87,18 @@ static int write_result(char *file_path)
     else printf("\nWrite output in %s\n", file_path); 
 
     fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "start_preprocess", "e_preprocess", "end_preprocess", 
-            "start_infer", "e_infer", "end_infer", 
-            "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate");
+            "start_preprocess",     "e_preprocess",     "end_preprocess", 
+            "start_infer",          "e_infer",          "end_infer", 
+            "start_postprocess",    "e_postprocess",    "end_postprocess", 
+            "execution_time",       "frame_rate");
 
     for(i = 0; i < num_exp; i++)
     {
         fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                start_preprocess[i], e_preprocess[i], end_preprocess[i], 
-                start_infer[i], e_infer[i], end_infer[i], 
-                start_postprocess[i], e_postprocess[i], end_postprocess[i], 
-                execution_time[i], frame_rate[i]);
+                start_preprocess[i],    e_preprocess[i],    end_preprocess[i], 
+                start_infer[i],         e_infer[i],         end_infer[i], 
+                start_postprocess[i],   e_postprocess[i],   end_postprocess[i], 
+                execution_time[i],      frame_rate[i]);
     }
     
     fclose(fp);
@@ -110,6 +110,9 @@ static int write_result(char *file_path)
 void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    printf("\n\nSequential with %dth core \n", core_id);
+
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -171,7 +174,9 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
+#ifndef MEASURE
         printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
+#endif
 
         time = get_time_in_ms();
         // __Preprocess__
@@ -222,7 +227,10 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
+#endif
+
             }
         } // classifier model
 
@@ -237,7 +245,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         e_postprocess[i] = end_postprocess[i] - start_postprocess[i];
         execution_time[i] = end_postprocess[i] - start_preprocess[i];
         frame_rate[i] = 1000.0 / execution_time[i];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
+        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
 #else
         execution_time[i] = get_time_in_ms() - time;
         frame_rate[i] = 1000.0 / (execution_time[i] / 1); // 1 single thread
@@ -254,7 +262,6 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     }
 
 #ifdef MEASURE
-    printf("!!Write CSV File!! \n");
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);
