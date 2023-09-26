@@ -11,8 +11,8 @@ ZED_CAMERA_v2_8=0
 OPENBLAS=1
 MULTI_PROCESSOR=1
 
-NVTX=1
-MEASURE=0
+NVTX=0
+MEASURE=1
 
 # set GPU=1 and CUDNN=1 to speedup on GPU
 # set CUDNN_HALF=1 to further speedup 3 x times (Mixed-precision on Tensor Cores) GPU: Volta, Xavier, Turing, Ampere, Ada and higher

@@ -117,6 +117,10 @@ static int write_result(char *file_path, process_data_t *data)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
+        
+        data[core_id - 1].execution_time[count] = data[core_id - 1].end_postprocess[count] - data[core_id - 1].start_preprocess[count];
+        data[core_id - 1].frame_rate[count] = 1000 / data[core_id - 1].execution_time[count];
+
         fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 core_id, 
                 data[core_id - 1].start_preprocess[count], data[core_id - 1].e_preprocess[count], data[core_id - 1].end_preprocess[count], 
@@ -414,8 +418,6 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         data.end_postprocess[i] = get_time_in_ms();
         data.e_postprocess[i] = data.end_postprocess[i] - data.start_postprocess[i];
-        data.execution_time[i] = data.end_postprocess[i] - data.start_preprocess[i];
-        data.frame_rate[i] = 1000.0 / data.execution_time[i];
         printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
 #else
         data.execution_time[i] = get_time_in_ms() - time;
