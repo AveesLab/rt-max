@@ -317,6 +317,7 @@ static void processFunc(process_data_t data)
 
         // GPU Inference
         wait_semaphore(sem_id, data.process_id - 1);
+        printf("start %d process inference \n", data.process_id);
 
 #ifdef NVTX
         char task_gpu[100];
@@ -357,6 +358,8 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
+
+        printf("end %d process inference \n", data.process_id);
 
         if (data.process_id == num_process) {
             release_semaphore(sem_id, 0);
@@ -465,7 +468,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 {
     int i;
 
-    pid_t pid;
+    pid_t pids[num_process];
     int status;
 
 #ifdef MEASURE
@@ -516,8 +519,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         }
 #endif
 
-        pid = fork();
-        if (pid == 0) { // child process
+        pids[i] = fork();
+        if (pids[i] == 0) { // child process
 
 #ifdef MEASURE
             close(fd[i][0]); // close reading end in the child
@@ -528,7 +531,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 #endif
 
             exit(0);
-        } else if (pid < 0) {
+        } else if (pids[i] < 0) {
             perror("fork");
             exit(1);
         }

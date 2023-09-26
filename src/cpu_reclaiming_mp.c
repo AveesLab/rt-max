@@ -50,28 +50,46 @@ typedef struct process_data_t{
     int benchmark_layers;
     int process_id;
 
-#ifdef MEASURE
-    double start_preprocess[1000];
-    double end_preprocess[1000];
-    double e_preprocess[1000];
-
-    double start_infer[1000];
-    double end_infer[1000];
-    double e_infer[1000];
-
-    double start_postprocess[1000];
-    double end_postprocess[1000];
-    double e_postprocess[1000];
+#ifndef MEASURE
+    double execution_time[200];
+    double frame_rate[200];
 #endif
-
-    double execution_time[1000];
-    double frame_rate[1000];
 
 } process_data_t;
 
+#ifdef MEASURE
+typedef struct measure_data_t{
+    double start_preprocess[200];
+    double end_preprocess[200];
+    double e_preprocess[200];
+
+    double start_infer[200];
+    double start_gpu_waiting[200];
+    double start_gpu_infer[200];
+    double end_gpu_infer[200];
+    double start_reclaim_infer[1000];
+    double end_reclaim_infer[1000];
+    double start_cpu_infer[200];
+    double end_infer[200];
+
+    double waiting_gpu[200];
+    double e_gpu_infer[200];
+    double e_reclaim_infer[1000];
+    double e_cpu_infer[200];
+    double e_infer[200];
+
+    double start_postprocess[200];
+    double end_postprocess[200];
+    double e_postprocess[200];
+
+    double execution_time[200];
+    double frame_rate[200];
+
+} measure_data_t;
+#endif
 
 #ifdef MEASURE
-static int write_result(char *file_path, process_data_t *data) 
+static int write_result(char *file_path, measure_data_t *measure_data) 
 {
     static int exist=0;
     FILE *fp;
@@ -107,9 +125,15 @@ static int write_result(char *file_path, process_data_t *data)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "core_id", "", "e_preprocess", "end_preprocess", 
-            "start_infer", "e_infer", "end_infer", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+            "core_id", 
+            "start_preprocess", "e_preprocess", "end_preprocess", 
+            "start_infer", 
+            "start_gpu_waiting", "waiting_gpu", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", 
+            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_infer", 
+            "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "frame_rate");
 
@@ -118,15 +142,20 @@ static int write_result(char *file_path, process_data_t *data)
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
         
-        data[core_id - 1].execution_time[count] = data[core_id - 1].end_postprocess[count] - data[core_id - 1].start_preprocess[count];
-        data[core_id - 1].frame_rate[count] = 1000 / data[core_id - 1].execution_time[count];
+        measure_data[core_id - 1].execution_time[count] = measure_data[core_id - 1].end_postprocess[count] - measure_data[core_id - 1].start_preprocess[count];
+        measure_data[core_id - 1].frame_rate[count] = 1000 / measure_data[core_id - 1].execution_time[count];
 
-        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 core_id, 
-                data[core_id - 1].start_preprocess[count], data[core_id - 1].e_preprocess[count], data[core_id - 1].end_preprocess[count], 
-                data[core_id - 1].start_infer[count], data[core_id - 1].e_infer[count], data[core_id - 1].end_infer[count], 
-                data[core_id - 1].start_postprocess[count], data[core_id - 1].e_postprocess[count], data[core_id - 1].end_postprocess[count], 
-                data[core_id - 1].execution_time[count], data[core_id - 1].frame_rate[count]);
+                measure_data[core_id - 1].start_preprocess[count],        measure_data[core_id - 1].e_preprocess[count],        measure_data[core_id - 1].end_preprocess[count], 
+                measure_data[core_id - 1].start_infer[count], 
+                measure_data[core_id - 1].start_gpu_waiting[count],       measure_data[core_id - 1].waiting_gpu[count],
+                measure_data[core_id - 1].start_gpu_infer[count],         measure_data[core_id - 1].e_gpu_infer[count],         measure_data[core_id - 1].end_gpu_infer[count],
+                measure_data[core_id - 1].start_reclaim_infer[count],     measure_data[core_id - 1].e_reclaim_infer[count],     measure_data[core_id - 1].end_reclaim_infer[count],
+                measure_data[core_id - 1].start_cpu_infer[count],         measure_data[core_id - 1].e_cpu_infer[count],         measure_data[core_id - 1].end_infer[count], 
+                measure_data[core_id - 1].e_infer[count], 
+                measure_data[core_id - 1].start_postprocess[count],       measure_data[core_id - 1].e_postprocess[count],       measure_data[core_id - 1].end_postprocess[count], 
+                measure_data[core_id - 1].execution_time[count],          measure_data[core_id - 1].frame_rate[count]);
     }
     
     fclose(fp);
@@ -164,6 +193,11 @@ static void processFunc(process_data_t data, int write_fd)
 static void processFunc(process_data_t data)
 #endif
 {
+
+#ifdef MEASURE
+    measure_data_t measure_data;
+#endif
+
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -252,7 +286,7 @@ static void processFunc(process_data_t data)
         time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
-        data.start_preprocess[i] = get_time_in_ms();
+        measure_data.start_preprocess[i] = get_time_in_ms();
 #endif
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -260,8 +294,8 @@ static void processFunc(process_data_t data)
         X = cropped.data;
 
 #ifdef MEASURE
-        data.end_preprocess[i] = get_time_in_ms();
-        data.e_preprocess[i] = data.end_preprocess[i] - data.start_preprocess[i];
+        measure_data.end_preprocess[i] = get_time_in_ms();
+        measure_data.e_preprocess[i] = measure_data.end_preprocess[i] - measure_data.start_preprocess[i];
 #endif
         
         // __Inference__
@@ -269,7 +303,7 @@ static void processFunc(process_data_t data)
         // else predictions = network_predict_cpu(net, X);
 
 #ifdef MEASURE
-        data.start_infer[i] = get_time_in_ms();
+        measure_data.start_infer[i] = get_time_in_ms();
 #endif
 
         if (net.gpu_index != cuda_get_device())
@@ -285,14 +319,24 @@ static void processFunc(process_data_t data)
         state.train = 0;
         state.delta = 0;
 
+#ifdef MEASURE
+        measure_data.start_gpu_waiting[i] = get_time_in_ms();
+#endif
+
         // GPU Inference
         wait_semaphore(sem_id, data.process_id - 1);
+
+        printf("start %d process inference \n", data.process_id);
 
 #ifdef NVTX
         char task_gpu[100];
         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
         nvtxRangeId_t nvtx_task_gpu;
         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
+#endif
+
+#ifdef MEASURE
+        measure_data.start_gpu_infer[i] = get_time_in_ms();
 #endif
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
@@ -316,9 +360,15 @@ static void processFunc(process_data_t data)
 
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
+#ifdef MEASURE
+        measure_data.end_gpu_infer[i] = get_time_in_ms();
+#endif
+
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
+
+        printf("end %d process inference \n", data.process_id);
 
         if (data.process_id == num_process) {
             release_semaphore(sem_id, 0);
@@ -332,6 +382,10 @@ static void processFunc(process_data_t data)
         sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.process_id);
         nvtxRangeId_t nvtx_task_reclaiming;
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
+#endif
+
+#ifdef MEASURE
+        measure_data.start_reclaim_infer[i] = get_time_in_ms();
 #endif
 
         openblas_set_num_threads(3);
@@ -363,7 +417,16 @@ static void processFunc(process_data_t data)
         nvtxRangeEnd(nvtx_task_reclaiming);
 #endif
 
+#ifdef MEASURE
+        measure_data.end_reclaim_infer[i] = get_time_in_ms();
+#endif
+
         // CPU Inference
+
+#ifdef MEASURE
+        measure_data.start_cpu_infer[i] = get_time_in_ms();
+#endif
+
         openblas_set_num_threads(1);
         for(j = rLayer; j < net.n; ++j){
             state.index = j;
@@ -381,13 +444,17 @@ static void processFunc(process_data_t data)
         //cuda_free(state.input);   // will be freed in the free_network()
 
 #ifdef MEASURE
-        data.end_infer[i] = get_time_in_ms();
-        data.e_infer[i] = data.end_infer[i] - data.start_infer[i];
+        measure_data.end_infer[i] = get_time_in_ms();
+        measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
+        measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
+        measure_data.e_reclaim_infer[i] = measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i];
+        measure_data.e_cpu_infer[i] = measure_data.end_infer[i] - measure_data.start_cpu_infer[i];
+        measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
 #endif
 
         // __Postprecess__
 #ifdef MEASURE
-        data.start_postprocess[i] = get_time_in_ms();
+        measure_data.start_postprocess[i] = get_time_in_ms();
 #endif
 
         // __NMS & TOP acccuracy__
@@ -416,9 +483,11 @@ static void processFunc(process_data_t data)
         // }
 
 #ifdef MEASURE
-        data.end_postprocess[i] = get_time_in_ms();
-        data.e_postprocess[i] = data.end_postprocess[i] - data.start_postprocess[i];
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, data.e_infer[i]);
+        measure_data.end_postprocess[i] = get_time_in_ms();
+        measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
+        measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
+        measure_data.frame_rate[i] = 1000.0 / measure_data.execution_time[i];
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
 #else
         data.execution_time[i] = get_time_in_ms() - time;
         data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
@@ -436,7 +505,7 @@ static void processFunc(process_data_t data)
     }
 
 #ifdef MEASURE
-    write(write_fd, &data, sizeof(process_data_t));
+    write(write_fd, &measure_data, sizeof(measure_data_t));
 #endif
 
     // free memory
@@ -454,7 +523,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 {
     int i;
 
-    pid_t pid;
+    pid_t pids[num_process];
     int status;
 
 #ifdef MEASURE
@@ -505,8 +574,8 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         }
 #endif
 
-        pid = fork();
-        if (pid == 0) { // child process
+        pids[i] = fork();
+        if (pids[i] == 0) { // child process
 
 #ifdef MEASURE
             close(fd[i][0]); // close reading end in the child
@@ -517,20 +586,19 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 #endif
 
             exit(0);
-        } else if (pid < 0) {
+        } else if (pids[i] < 0) {
             perror("fork");
             exit(1);
         }
     }
 
 #ifdef MEASURE
-    process_data_t receivedData[num_process];
+    measure_data_t receivedData[num_process];
 
     // In the parent process, read data from all child processes
     for (i = 0; i < num_process; i++) {
         close(fd[i][1]); // close writing end in the parent
-        read(fd[i][0], &receivedData[i], sizeof(process_data_t));
-        data[i] = receivedData[i];
+        read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
         close(fd[i][0]);
     }
 #endif
@@ -566,7 +634,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     strcat(file_path, reclaim_portion);
 
     strcat(file_path, ".csv");
-    if(write_result(file_path, data) == -1) {
+    if(write_result(file_path, receivedData) == -1) {
         /* return error */
         exit(0);
     }

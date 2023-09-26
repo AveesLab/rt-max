@@ -310,12 +310,12 @@ static void threadFunc(thread_data_t data)
 
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
-#ifdef MEASURE
-        end_gpu_infer[count] = get_time_in_ms();
-#endif
-
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
+#endif
+
+#ifdef MEASURE
+        end_gpu_infer[count] = get_time_in_ms();
 #endif
 
         if (data.thread_id == num_thread) {
