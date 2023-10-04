@@ -86,6 +86,15 @@ typedef struct measure_data_t{
 #endif
 
 #ifdef MEASURE
+static int compare(const void *a, const void *b) {
+    double valueA = *((double *)a + 1);
+    double valueB = *((double *)b + 1);
+
+    if (valueA < valueB) return -1;
+    if (valueA > valueB) return 1;
+    return 0;
+}
+
 static int write_result(char *file_path, measure_data_t *measure_data) 
 {
     static int exist=0;
@@ -122,6 +131,35 @@ static int write_result(char *file_path, measure_data_t *measure_data)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
+    double sum_measure_data[num_exp * num_process][19];
+    for(i = 0; i < num_exp * num_process; i++)
+    {
+        int core_id = (i + 1) - (i / num_process) * num_process;
+        int count = i / num_process;
+
+        sum_measure_data[i][0] = (double)core_id;
+        sum_measure_data[i][1] = measure_data[core_id - 1].start_preprocess[count];
+        sum_measure_data[i][2] = measure_data[core_id - 1].e_preprocess[count];
+        sum_measure_data[i][3] = measure_data[core_id - 1].end_preprocess[count];
+        sum_measure_data[i][4] = measure_data[core_id - 1].start_infer[count]; 
+        sum_measure_data[i][5] = measure_data[core_id - 1].start_gpu_waiting[count];
+        sum_measure_data[i][6] = measure_data[core_id - 1].waiting_gpu[count];
+        sum_measure_data[i][7] = measure_data[core_id - 1].start_gpu_infer[count];
+        sum_measure_data[i][8] = measure_data[core_id - 1].e_gpu_infer[count];
+        sum_measure_data[i][9] = measure_data[core_id - 1].end_gpu_infer[count];
+        sum_measure_data[i][10] = measure_data[core_id - 1].start_cpu_infer[count];
+        sum_measure_data[i][11] = measure_data[core_id - 1].e_cpu_infer[count];
+        sum_measure_data[i][12] = measure_data[core_id - 1].end_infer[count];
+        sum_measure_data[i][13] = measure_data[core_id - 1].e_infer[count];
+        sum_measure_data[i][14] = measure_data[core_id - 1].start_postprocess[count];
+        sum_measure_data[i][15] = measure_data[core_id - 1].e_postprocess[count];
+        sum_measure_data[i][16] = measure_data[core_id - 1].end_postprocess[count];
+        sum_measure_data[i][17] = measure_data[core_id - 1].execution_time[count];
+        sum_measure_data[i][18] = measure_data[core_id - 1].frame_rate[count];
+    }
+
+    qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
+
     fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
@@ -138,18 +176,14 @@ static int write_result(char *file_path, measure_data_t *measure_data)
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
 
-        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                core_id, 
-                measure_data[core_id - 1].start_preprocess[count],   measure_data[core_id - 1].e_preprocess[count],   measure_data[core_id - 1].end_preprocess[count], 
-                measure_data[core_id - 1].start_infer[count], 
-                measure_data[core_id - 1].start_gpu_waiting[count],  measure_data[core_id - 1].waiting_gpu[count],
-                measure_data[core_id - 1].start_gpu_infer[count],    measure_data[core_id - 1].e_gpu_infer[count],    measure_data[core_id - 1].end_gpu_infer[count],
-                measure_data[core_id - 1].start_cpu_infer[count],    measure_data[core_id - 1].e_cpu_infer[count],    measure_data[core_id - 1].end_infer[count], 
-                measure_data[core_id - 1].e_infer[count], 
-                measure_data[core_id - 1].start_postprocess[count],  measure_data[core_id - 1].e_postprocess[count],  measure_data[core_id - 1].end_postprocess[count], 
-                measure_data[core_id - 1].execution_time[count],     measure_data[core_id - 1].frame_rate[count]);
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+                sum_measure_data[i][0], sum_measure_data[i][1], sum_measure_data[i][2], sum_measure_data[i][3], 
+                sum_measure_data[i][4], sum_measure_data[i][5], sum_measure_data[i][6], sum_measure_data[i][7], 
+                sum_measure_data[i][8], sum_measure_data[i][9], sum_measure_data[i][10], sum_measure_data[i][11], 
+                sum_measure_data[i][12], sum_measure_data[i][13], sum_measure_data[i][14], sum_measure_data[i][15],
+                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18]);
     }
-    
+
     fclose(fp);
 
     return 1;
