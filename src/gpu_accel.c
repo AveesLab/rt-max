@@ -42,6 +42,7 @@ typedef struct thread_data_t{
     int letter_box;
     int benchmark_layers;
     int thread_id;
+    int num_thread;
 } thread_data_t;
 
 #ifdef MEASURE
@@ -65,11 +66,12 @@ static double e_infer[1000];
 static double start_postprocess[1000];
 static double end_postprocess[1000];
 static double e_postprocess[1000];
+
+static int optimal_core;
 #endif
 
 static double execution_time[1000];
 static double frame_rate[1000];
-
 
 #ifdef MEASURE
 static int compare(const void *a, const void *b) {
@@ -117,8 +119,8 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_thread][19];
-    for(i = 0; i < num_exp * num_thread; i++)
+    double sum_measure_data[num_exp * optimal_core][19];
+    for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
         sum_measure_data[i][1] = start_preprocess[i];
@@ -262,7 +264,7 @@ static void threadFunc(thread_data_t data)
     for (i = 0; i < num_exp; i++) {
 
 #ifdef MEASURE
-        int count = i * num_thread + data.thread_id - 1;
+        int count = i * data.num_thread + data.thread_id - 1;
 #endif
 
 #ifdef NVTX
@@ -366,7 +368,7 @@ static void threadFunc(thread_data_t data)
         end_gpu_infer[count] = get_time_in_ms();
 #endif
 
-        if (data.thread_id == num_thread) {
+        if (data.thread_id == data.num_thread) {
             current_thread = 1;
         } else {
             current_thread++;
@@ -448,7 +450,7 @@ static void threadFunc(thread_data_t data)
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
-        frame_rate[i] = 1000.0 / (execution_time[i] / num_thread); // N thread
+        frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
 
@@ -469,24 +471,96 @@ static void threadFunc(thread_data_t data)
     free_list(options);
     free_alphabet(alphabet);
     // free_network(net); // Error occur
-
     pthread_exit(NULL);
 
 }
 
+#ifdef MEASURE
+static double average(double arr[]){
+    double sum;
+    int i;
+    for(i = 3; i < num_exp; i++) {
+        sum += arr[i];
+    }
+    return sum / (num_exp-3);
+}
+#endif
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
-    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
-
-    pthread_t threads[num_thread];
+    pthread_t threads[MAXCORES - 1];
     int rc;
     int i;
 
-    thread_data_t data[num_thread];
+    thread_data_t data[MAXCORES - 1];
 
+#ifdef MEASURE
+    printf("\n\nFinding Optimal Core when GPU-Accel with 1 thread with %d gpu-layer\n", gLayer);
+
+    for (i = 0; i < 1; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = 1;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < 1; i++) {
+        pthread_join(threads[i], NULL);
+        pthread_detach(threads[i]);
+    }
+
+    optimal_core = (int)ceil(average(e_infer) / average(e_gpu_infer));
+    if(optimal_core > 11) optimal_core = 11;
+
+    printf("e_infer : %0.02f,e_infer_gpu : %0.02f,  e_infer_cpu : %0.02f, Optimal Core : %d \n", average(e_infer), average(e_gpu_infer), average(e_cpu_infer), optimal_core);
+
+    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+
+    for (i = 0; i < optimal_core; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = optimal_core;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < optimal_core; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+#else
+    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -511,6 +585,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
+#endif
 
 #ifdef MEASURE
     char file_path[256] = "measure/";
