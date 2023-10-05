@@ -23,6 +23,8 @@
 #endif
 #endif
 
+static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+
 int skip_layers[1000] = {0, };
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -72,6 +74,15 @@ static int optimal_core;
 
 static double execution_time[1000];
 static double frame_rate[1000];
+
+static double average(double arr[]){
+    double sum;
+    int i;
+    for(i = 3; i < num_exp; i++) {
+        sum += arr[i];
+    }
+    return sum / (num_exp-3);
+}
 
 #ifdef MEASURE
 static int compare(const void *a, const void *b) {
@@ -196,7 +207,8 @@ static void threadFunc(thread_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.thread_id, &cpuset); // cpu core index
+    CPU_SET(coreIDOrder[data.thread_id-1], &cpuset); // cpu core index
+
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -477,17 +489,6 @@ static void threadFunc(thread_data_t data)
     pthread_exit(NULL);
 
 }
-
-#ifdef MEASURE
-static double average(double arr[]){
-    double sum;
-    int i;
-    for(i = 3; i < num_exp; i++) {
-        sum += arr[i];
-    }
-    return sum / (num_exp-3);
-}
-#endif
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)

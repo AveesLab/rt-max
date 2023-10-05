@@ -23,6 +23,8 @@
 #endif
 #endif
 
+static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+
 typedef struct thread_data_t{
     char *datacfg;
     char *cfgfile;
@@ -165,7 +167,7 @@ static void threadFunc(thread_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.thread_id, &cpuset); // cpu core index
+    CPU_SET(coreIDOrder[data.thread_id-1], &cpuset); // cpu core index
 
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {

@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <math.h>
+
 #include "darknet.h"
 #include "network.h"
 #include "parser.h"
@@ -22,6 +24,8 @@
 #include <sys/time.h>
 #endif
 #endif
+
+static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
@@ -76,6 +80,19 @@ static int optimal_core;
 
 static double execution_time[1000];
 static double frame_rate[1000];
+
+int is_GPU_larger(double a, double b) {
+    return (a - b) >= 2 ? 1 : 0; // Check 2ms differnce
+}
+
+static double average(double arr[]){
+    double sum;
+    int i;
+    for(i = 3; i < num_exp; i++) {
+        sum += arr[i];
+    }
+    return sum / (num_exp-3);
+}
 
 #ifdef MEASURE
 static int compare(const void *a, const void *b) {
@@ -208,7 +225,8 @@ static void threadFunc(thread_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.thread_id, &cpuset); // cpu core index
+    CPU_SET(coreIDOrder[data.thread_id-1], &cpuset); // cpu core index
+
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -548,17 +566,6 @@ static void threadFunc(thread_data_t data)
 
 }
 
-#ifdef MEASURE
-static double average(double arr[]){
-    double sum;
-    int i;
-    for(i = 3; i < num_exp; i++) {
-        sum += arr[i];
-    }
-    return sum / (num_exp-3);
-}
-#endif
-
 void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
@@ -599,6 +606,8 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         pthread_detach(threads[i]);
     }
 
+    if ( is_GPU_larger(average(e_gpu_infer),average(e_reclaim_infer)) )
+    {
     optimal_core = (int)ceil(average(e_infer) / MAX(average(e_gpu_infer),average(e_reclaim_infer)));
     if(optimal_core > 11) optimal_core = 11;
 
@@ -692,6 +701,12 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
     // pthread_mutex_destroy(&mutex);
     // pthread_cond_destroy(&cond);
+    }
+    else
+    {
+        printf("\n\ne_infer : %0.02f,e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f\n", average(e_infer), average(e_gpu_infer), average(e_reclaim_infer), average(e_cpu_infer));
+        printf("\nError: Reclaiming inference time exceeds GPU inference time. Please check your configurations.\n\n");
+    }
 
     return 0;
 
