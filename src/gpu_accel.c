@@ -157,7 +157,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 0; // Delete some ROWs
+    int startIdx = 10; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -177,7 +177,7 @@ static int write_result(char *file_path)
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate"
+            "execution_time", "frame_rate",
             "optimal_core");
 
     double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][16]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
@@ -530,10 +530,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         pthread_detach(threads[i]);
     }
 
-    optimal_core = (int)ceil(average(execution_time) / average(e_gpu_infer));
+    optimal_core = (int)ceil(average(execution_time) / (average(e_gpu_infer)+average(e_preprocess)));
     if(optimal_core > MAXCORES - 1) optimal_core = MAXCORES - 1;
 
-    printf("e_infer : %0.02f, e_infer_gpu : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d \n", average(e_infer), average(e_gpu_infer), average(e_cpu_infer), optimal_core);
+    printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_cpu_infer), optimal_core);
 
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
