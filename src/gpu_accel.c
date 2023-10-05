@@ -119,7 +119,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][19];
+    double sum_measure_data[num_exp * optimal_core][20];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -141,6 +141,7 @@ static int write_result(char *file_path)
         sum_measure_data[i][16] = end_postprocess[i];
         sum_measure_data[i][17] = execution_time[i];
         sum_measure_data[i][18] = 0.0;
+        sum_measure_data[i][19] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -156,7 +157,7 @@ static int write_result(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
@@ -165,20 +166,22 @@ static int write_result(char *file_path)
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate");
+            "execution_time", "frame_rate"
+            "optimal_core");
 
     double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][16]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
 
     for(i = 0; i < num_exp * num_thread - startIdx; i++)
     {
         new_sum_measure_data[i][18] = frame_rate;
+        new_sum_measure_data[i][19] = (double)optimal_core;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
-                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18]);
+                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19]);
     }
     
     fclose(fp);
@@ -526,10 +529,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         pthread_detach(threads[i]);
     }
 
-    optimal_core = (int)ceil(average(e_infer) / average(e_gpu_infer));
-    if(optimal_core > 11) optimal_core = 11;
+    optimal_core = (int)ceil(average(execution_time) / average(e_gpu_infer));
+    if(optimal_core > MAXCORES - 1) optimal_core = MAXCORES - 1;
 
-    printf("e_infer : %0.02f,e_infer_gpu : %0.02f,  e_infer_cpu : %0.02f, Optimal Core : %d \n", average(e_infer), average(e_gpu_infer), average(e_cpu_infer), optimal_core);
+    printf("e_infer : %0.02f, e_infer_gpu : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d \n", average(e_infer), average(e_gpu_infer), average(e_cpu_infer), optimal_core);
 
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 

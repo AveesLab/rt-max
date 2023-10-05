@@ -123,7 +123,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][23];
+    double sum_measure_data[num_exp * optimal_core][24];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -148,7 +148,8 @@ static int write_result(char *file_path)
         sum_measure_data[i][19] = e_postprocess[i];      
         sum_measure_data[i][20] = end_postprocess[i];
         sum_measure_data[i][21] = execution_time[i];          
-        sum_measure_data[i][22] = 0.0;
+        sum_measure_data[i][22] = 0.0;      
+        sum_measure_data[i][23] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -164,7 +165,7 @@ static int write_result(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
@@ -175,15 +176,16 @@ static int write_result(char *file_path)
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate");
+            "execution_time", "frame_rate", "optimal_core");
 
     double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][20]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
 
     for(i = 0; i < num_exp * optimal_core - startIdx; i++)
     {
         new_sum_measure_data[i][22] = frame_rate;
+        new_sum_measure_data[i][23] = (double)optimal_core;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
                 new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
                 new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
@@ -191,7 +193,7 @@ static int write_result(char *file_path)
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], 
                 new_sum_measure_data[i][15], new_sum_measure_data[i][16], new_sum_measure_data[i][17], 
                 new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
-                new_sum_measure_data[i][21], new_sum_measure_data[i][22]);
+                new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23]);
     }
     
     fclose(fp);
