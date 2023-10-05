@@ -232,6 +232,12 @@ static void threadFunc(thread_data_t data)
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
 
+        pthread_mutex_lock(&mutex_gpu);
+
+        while(data.thread_id != current_thread) {
+            pthread_cond_wait(&cond, &mutex_gpu);
+        }
+        
         time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
@@ -273,11 +279,6 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // GPU Inference
-        pthread_mutex_lock(&mutex_gpu);
-
-        while(data.thread_id != current_thread) {
-            pthread_cond_wait(&cond, &mutex_gpu);
-        }
 
 #ifdef NVTX
         char task_gpu[100];

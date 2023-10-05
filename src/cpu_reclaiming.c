@@ -24,6 +24,7 @@
 #endif
 
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static int current_thread = 1;
 
@@ -60,6 +61,7 @@ static double end_infer[1000];
 
 static double waiting_gpu[1000];
 static double e_gpu_infer[1000];
+double waiting_reclaim[1000];
 static double e_reclaim_infer[1000];
 static double e_cpu_infer[1000];
 static double e_infer[1000];
@@ -110,12 +112,13 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer",
+            "waiting_reclaim",
             "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
@@ -124,12 +127,13 @@ static int write_result(char *file_path)
 
     for(i = 0; i < num_exp * num_thread; i++)
     {
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 core_id_list[i], 
                 start_preprocess[i],        e_preprocess[i],        end_preprocess[i], 
                 start_infer[i], 
                 start_gpu_waiting[i],       waiting_gpu[i],
                 start_gpu_infer[i],         e_gpu_infer[i],         end_gpu_infer[i],
+                waiting_reclaim[i],
                 start_reclaim_infer[i],     e_reclaim_infer[i],     end_reclaim_infer[i],
                 start_cpu_infer[i],         e_cpu_infer[i],         end_infer[i], 
                 e_infer[i], 
@@ -236,6 +240,12 @@ static void threadFunc(thread_data_t data)
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
 
+        pthread_mutex_lock(&mutex_gpu);
+
+        while(data.thread_id != current_thread) {
+            pthread_cond_wait(&cond, &mutex_gpu);
+        }
+
         time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
@@ -277,11 +287,6 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // GPU Inference
-        pthread_mutex_lock(&mutex_gpu);
-
-        // while(data.thread_id != current_thread) {
-        //     pthread_cond_wait(&cond, &mutex_gpu);
-        // }
 
 #ifdef NVTX
         char task_gpu[100];
@@ -329,7 +334,7 @@ static void threadFunc(thread_data_t data)
             current_thread++;
         }
 
-        // pthread_cond_broadcast(&cond);
+        pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
 
         // Reclaiming Inference
@@ -339,6 +344,8 @@ static void threadFunc(thread_data_t data)
         nvtxRangeId_t nvtx_task_reclaiming;
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
+
+        pthread_mutex_lock(&mutex_reclaim);
 
 #ifdef MEASURE
         start_reclaim_infer[count] = get_time_in_ms();
@@ -368,6 +375,8 @@ static void threadFunc(thread_data_t data)
             state.input = l.output;
         }
 
+        pthread_mutex_unlock(&mutex_reclaim);
+
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_reclaiming);
 #endif
@@ -377,6 +386,13 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // CPU Inference
+#ifdef NVTX
+        char task_cpu[100];
+        sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", data.thread_id);
+        nvtxRangeId_t nvtx_task_cpu;
+        nvtx_task_cpu = nvtxRangeStartA(task_cpu);
+#endif
+
 #ifdef MEASURE
         start_cpu_infer[count] = get_time_in_ms();
 #endif
@@ -397,10 +413,15 @@ static void threadFunc(thread_data_t data)
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
 
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_cpu);
+#endif
+
 #ifdef MEASURE
         end_infer[count] = get_time_in_ms();
         waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
         e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
+        waiting_reclaim[count] = start_reclaim_infer[i] - end_gpu_infer[i];
         e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
         e_cpu_infer[count] = end_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
