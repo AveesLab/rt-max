@@ -76,6 +76,15 @@ static double execution_time[1000];
 static double frame_rate[1000];
 
 #ifdef MEASURE
+static int compare(const void *a, const void *b) {
+    double valueA = *((double *)a + 1);
+    double valueB = *((double *)b + 1);
+
+    if (valueA < valueB) return -1;
+    if (valueA > valueB) return 1;
+    return 0;
+}
+
 static int write_result(char *file_path) 
 {
     static int exist=0;
@@ -112,12 +121,53 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
+    double sum_measure_data[num_exp * num_thread][23];
+    for(i = 0; i < num_exp * num_thread; i++)
+    {
+        sum_measure_data[i][0] = core_id_list[i];
+        sum_measure_data[i][1] = start_preprocess[i];     
+        sum_measure_data[i][2] = e_preprocess[i];       
+        sum_measure_data[i][3] = end_preprocess[i];
+        sum_measure_data[i][4] = start_infer[i];
+        sum_measure_data[i][5] = start_gpu_waiting[i];    
+        sum_measure_data[i][6] = waiting_gpu[i];
+        sum_measure_data[i][7] = start_gpu_infer[i];       
+        sum_measure_data[i][8] = e_gpu_infer[i];        
+        sum_measure_data[i][9] = end_gpu_infer[i];
+        sum_measure_data[i][10] = waiting_reclaim[i];
+        sum_measure_data[i][11] = start_reclaim_infer[i];    
+        sum_measure_data[i][12] = e_reclaim_infer[i];    
+        sum_measure_data[i][13] = end_reclaim_infer[i];
+        sum_measure_data[i][14] = start_cpu_infer[i];     
+        sum_measure_data[i][15] = e_cpu_infer[i];     
+        sum_measure_data[i][16] = end_infer[i];
+        sum_measure_data[i][17] = e_infer[i];
+        sum_measure_data[i][18] = start_postprocess[i];     
+        sum_measure_data[i][19] = e_postprocess[i];      
+        sum_measure_data[i][20] = end_postprocess[i];
+        sum_measure_data[i][21] = execution_time[i];          
+        sum_measure_data[i][22] = 0.0;
+    }
+
+    qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
+
+    int startIdx = 0; // Delete some ROWs
+    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
+
+    int newIndex = 0;
+    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
+        for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
+            new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
+        }
+        newIndex++;
+    }
+
     fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer",
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", 
             "waiting_reclaim",
             "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
@@ -125,20 +175,21 @@ static int write_result(char *file_path)
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "frame_rate");
 
-    for(i = 0; i < num_exp * num_thread; i++)
+    double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][20]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
+
+    for(i = 0; i < num_exp * num_thread - startIdx; i++)
     {
+        new_sum_measure_data[i][22] = frame_rate;
+
         fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                core_id_list[i], 
-                start_preprocess[i],        e_preprocess[i],        end_preprocess[i], 
-                start_infer[i], 
-                start_gpu_waiting[i],       waiting_gpu[i],
-                start_gpu_infer[i],         e_gpu_infer[i],         end_gpu_infer[i],
-                waiting_reclaim[i],
-                start_reclaim_infer[i],     e_reclaim_infer[i],     end_reclaim_infer[i],
-                start_cpu_infer[i],         e_cpu_infer[i],         end_infer[i], 
-                e_infer[i], 
-                start_postprocess[i],       e_postprocess[i],       end_postprocess[i], 
-                execution_time[i],          frame_rate[i]);
+                new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
+                new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
+                new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
+                new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11],
+                new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], 
+                new_sum_measure_data[i][15], new_sum_measure_data[i][16], new_sum_measure_data[i][17], 
+                new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
+                new_sum_measure_data[i][21], new_sum_measure_data[i][22]);
     }
     
     fclose(fp);
