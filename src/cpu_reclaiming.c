@@ -44,6 +44,7 @@ typedef struct thread_data_t{
 } thread_data_t;
 
 #ifdef MEASURE
+static double core_id_list[1000];
 static double start_preprocess[1000];
 static double end_preprocess[1000];
 static double e_preprocess[1000];
@@ -123,8 +124,8 @@ static int write_result(char *file_path)
 
     for(i = 0; i < num_exp * num_thread; i++)
     {
-        fprintf(fp, "%d,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                (i + 1) - (i / num_thread) * num_thread, 
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+                core_id_list[i], 
                 start_preprocess[i],        e_preprocess[i],        end_preprocess[i], 
                 start_infer[i], 
                 start_gpu_waiting[i],       waiting_gpu[i],
@@ -442,7 +443,7 @@ static void threadFunc(thread_data_t data)
         end_postprocess[count] = get_time_in_ms();
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
-        frame_rate[count] = 1000.0 / execution_time[count];
+        core_id_list[count] = (double)sched_getcpu();
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
