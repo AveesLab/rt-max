@@ -171,7 +171,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 0; // Delete some ROWs
+    int startIdx = 20; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -608,10 +608,10 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
     if ( is_GPU_larger(average(e_gpu_infer),average(e_reclaim_infer)) )
     {
-    optimal_core = (int)ceil(average(e_infer) / MAX(average(e_gpu_infer),average(e_reclaim_infer)));
+    optimal_core = (int)ceil(average(e_infer) / MAX((average(e_gpu_infer)+average(e_preprocess)),average(e_reclaim_infer)));
     if(optimal_core > 11) optimal_core = 11;
 
-    printf("e_infer : %0.02f,e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d \n", average(e_infer), average(e_gpu_infer), average(e_reclaim_infer), average(e_cpu_infer), optimal_core);
+    printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_reclaim_infer), average(e_cpu_infer), optimal_core, average(e_cpu_infer)/optimal_core);
 
     printf("\n\nCPU-Reclaiming with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
