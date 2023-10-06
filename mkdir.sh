@@ -14,6 +14,19 @@ do
 done
 rm sequential_cpu_utilization.csv
 
+## Sequential-multiblas
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p sequential-multiblas/$model/
+done
+
+touch sequential_cpu_utilization.csv
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	cp sequential_cpu_utilization.csv sequential-multiblas/$model/
+done
+rm sequential_cpu_utilization.csv
+
 ## Pipeline
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do

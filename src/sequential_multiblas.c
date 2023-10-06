@@ -23,6 +23,8 @@
 #endif
 #endif
 
+static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+
 #ifdef MEASURE
 static double start_preprocess[1000];
 static double end_preprocess[1000];
@@ -39,15 +41,6 @@ static double e_postprocess[1000];
 
 static double execution_time[1000];
 static double frame_rate[1000];
-
-
-/* Timestamp in ms */
-double get_time_in_ms(void)
-{
-    struct timespec time_after_boot;
-    clock_gettime(CLOCK_MONOTONIC,&time_after_boot);
-    return (time_after_boot.tv_sec*1000+time_after_boot.tv_nsec*0.000001);
-}
 
 #ifdef MEASURE
 static int write_result(char *file_path) 
@@ -107,17 +100,18 @@ static int write_result(char *file_path)
 }
 #endif
 
-void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
-    printf("\n\nSequential with %dth core \n", core_id);
+    printf("\n\nSequential-multiblas with %d blas \n", num_blas);
 
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset); // cpu core index
+    CPU_SET(coreIDOrder[0], &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
         exit(0);
@@ -169,13 +163,13 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 
 #ifdef NVTX
         char task[100];
-        sprintf(task, "Task (cpu: %d)", core_id);
+        sprintf(task, "Task (cpu: %d)", coreIDOrder[0]);
         nvtxRangeId_t nvtx_task;
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
 #ifndef MEASURE
-        printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
+        printf("\nThread %d is set to CPU core %d\n", coreIDOrder[0], sched_getcpu());
 #endif
 
         time = get_time_in_ms();
@@ -199,6 +193,17 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         start_infer[i] = get_time_in_ms();
 #endif
 
+        openblas_set_num_threads(num_blas);
+        CPU_ZERO(&cpuset);
+        CPU_SET(coreIDOrder[0], &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+        for(int i = 1; i < num_blas; i++) {
+                CPU_ZERO(&cpuset);
+                CPU_SET(coreIDOrder[i], &cpuset);
+                openblas_setaffinity(i-1, sizeof(cpuset), &cpuset);
+        }
+        
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
@@ -269,9 +274,9 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     model_name[strlen(cfgfile)-10] = '\0';
 
     char core_idx[10];
-    sprintf(core_idx, "%02dcore", core_id);
+    sprintf(core_idx, "%02dblas", num_blas);
 
-    strcat(file_path, "sequential/");
+    strcat(file_path, "sequential-multiblas/");
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
