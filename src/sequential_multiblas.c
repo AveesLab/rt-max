@@ -79,19 +79,43 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
+    double sum_measure_data[num_exp][11];
+    for(i = 0; i < num_exp; i++)
+    {
+        sum_measure_data[i][0] = start_preprocess[i];
+        sum_measure_data[i][1] = e_preprocess[i];
+        sum_measure_data[i][2] = end_preprocess[i];
+        sum_measure_data[i][3] = start_infer[i];
+        sum_measure_data[i][4] = e_infer[i];
+        sum_measure_data[i][5] = end_infer[i];
+        sum_measure_data[i][6] = start_postprocess[i];
+        sum_measure_data[i][7] = e_postprocess[i];
+        sum_measure_data[i][8] = end_postprocess[i];
+        sum_measure_data[i][9] = execution_time[i];
+        sum_measure_data[i][10] = frame_rate[i];
+    }
+
+    int startIdx = 10; // Delete some ROWs
+    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
+    int newIndex = 0;
+    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
+        for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
+            new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
+        }
+        newIndex++;
+    }
     fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "start_preprocess",     "e_preprocess",     "end_preprocess", 
             "start_infer",          "e_infer",          "end_infer", 
             "start_postprocess",    "e_postprocess",    "end_postprocess", 
             "execution_time",       "frame_rate");
 
-    for(i = 0; i < num_exp; i++)
+    for(i = 0; i < num_exp - startIdx; i++)
     {
         fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                start_preprocess[i],    e_preprocess[i],    end_preprocess[i], 
-                start_infer[i],         e_infer[i],         end_infer[i], 
-                start_postprocess[i],   e_postprocess[i],   end_postprocess[i], 
-                execution_time[i],      frame_rate[i]);
+                new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
+                new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
+                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10]);
     }
     
     fclose(fp);

@@ -157,7 +157,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 20; // Delete some ROWs
+    int startIdx = 30; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -182,7 +182,7 @@ static int write_result(char *file_path)
 
     double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][16]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
 
-    for(i = 0; i < num_exp * num_thread - startIdx; i++)
+    for(i = 0; i < num_exp * optimal_core - startIdx; i++)
     {
         new_sum_measure_data[i][18] = frame_rate;
         new_sum_measure_data[i][19] = (double)optimal_core;
