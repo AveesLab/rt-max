@@ -491,7 +491,7 @@ static void threadFunc(thread_data_t data)
 }
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
     pthread_t threads[MAXCORES - 1];
@@ -525,43 +525,46 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         }
     }
 
+
     for (i = 0; i < 1; i++) {
         pthread_join(threads[i], NULL);
-        // pthread_detach(threads[i]);
+        pthread_detach(threads[i]);
     }
 
-    // optimal_core = (int)ceil(average(execution_time) / (average(e_gpu_infer)+average(e_preprocess)));
-    // if(optimal_core > MAXCORES - 1) optimal_core = MAXCORES - 1;
-    // optimal_core = 1;
-    // printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_cpu_infer), optimal_core,average(e_cpu_infer)/optimal_core);
+    if (!theoretical_exp) {
+        optimal_core = (int)ceil(average(execution_time) / (average(e_gpu_infer)+average(e_preprocess)));
+        if(optimal_core > MAXCORES - 1) optimal_core = MAXCORES - 1;
 
-    // printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+        printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_cpu_infer), optimal_core,average(e_cpu_infer)/optimal_core);
 
-    // for (i = 0; i < optimal_core; i++) {
-    //     data[i].datacfg = datacfg;
-    //     data[i].cfgfile = cfgfile;
-    //     data[i].weightfile = weightfile;
-    //     data[i].filename = filename;
-    //     data[i].thresh = thresh;
-    //     data[i].hier_thresh = hier_thresh;
-    //     data[i].dont_show = dont_show;
-    //     data[i].ext_output = ext_output;
-    //     data[i].save_labels = save_labels;
-    //     data[i].outfile = outfile;
-    //     data[i].letter_box = letter_box;
-    //     data[i].benchmark_layers = benchmark_layers;
-    //     data[i].thread_id = i + 1;
-    //     data[i].num_thread = optimal_core;
-    //     rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-    //     if (rc) {
-    //         printf("Error: Unable to create thread, %d\n", rc);
-    //         exit(-1);
-    //     }
-    // }
+        printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
-    // for (i = 0; i < optimal_core; i++) {
-    //     pthread_join(threads[i], NULL);
-    // }
+        for (i = 0; i < optimal_core; i++) {
+            data[i].datacfg = datacfg;
+            data[i].cfgfile = cfgfile;
+            data[i].weightfile = weightfile;
+            data[i].filename = filename;
+            data[i].thresh = thresh;
+            data[i].hier_thresh = hier_thresh;
+            data[i].dont_show = dont_show;
+            data[i].ext_output = ext_output;
+            data[i].save_labels = save_labels;
+            data[i].outfile = outfile;
+            data[i].letter_box = letter_box;
+            data[i].benchmark_layers = benchmark_layers;
+            data[i].thread_id = i + 1;
+            data[i].num_thread = optimal_core;
+            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+            if (rc) {
+                printf("Error: Unable to create thread, %d\n", rc);
+                exit(-1);
+            }
+        }
+
+        for (i = 0; i < optimal_core; i++) {
+            pthread_join(threads[i], NULL);
+        }
+    }
 
 #else
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
@@ -598,8 +601,9 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
+    if (theoretical_exp) strcat(file_path, "gpu-accel_1thread/");
+    else strcat(file_path, "gpu-accel/");
 
-    strcat(file_path, "gpu-accel/");
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
@@ -625,7 +629,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 #else
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
 }

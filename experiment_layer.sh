@@ -8,7 +8,7 @@ for var in {1..11}
 
 for var in {1..305}
 	do
-    ./darknet detector gpu-accel ./cfg/imagenet1k.data ./cfg/densenet201.cfg ./weights/densenet201.weights data/dog.jpg -num_thread 1 -glayer $var -num_exp 40
+    ./darknet detector gpu-accel ./cfg/imagenet1k.data ./cfg/densenet201.cfg ./weights/densenet201.weights data/dog.jpg -num_thread 1 -glayer $var -num_exp 40 -theoretical_exp
 	done
 
 python3 gather_gpu.py
