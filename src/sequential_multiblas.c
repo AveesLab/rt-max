@@ -95,7 +95,7 @@ static int write_result(char *file_path)
         sum_measure_data[i][10] = frame_rate[i];
     }
 
-    int startIdx = 10; // Delete some ROWs
+    int startIdx = 30; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
     int newIndex = 0;
     for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {

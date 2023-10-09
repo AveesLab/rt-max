@@ -55,4 +55,4 @@ else
 fi
 
 # Sequential
-./darknet detector sequential ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -core_id 3 -num_exp 30
+./darknet detector sequential ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -core_id 3 -num_exp 100

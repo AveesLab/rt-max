@@ -171,7 +171,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 3 * optimal_core; // Delete some ROWs
+    int startIdx = 10 * optimal_core; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
