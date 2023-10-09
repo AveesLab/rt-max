@@ -81,6 +81,6 @@ if __name__ == "__main__":
         exit(1)
     
     directory = f"/home/avees/baseline/darknet/measure/gpu-accel_1thread/{args.model}/"
-    output_filename = f"./measure/gpu_inference_list_{args.model}.csv"
+    output_filename = f"./measure/layer_time/{args.model}/gpu_inference_list.csv"
 
     gather_e_gpu_infer(directory, output_filename, layer_num)

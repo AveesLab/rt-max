@@ -1,6 +1,12 @@
 mkdir measure
 cd measure
 
+## Layer time
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p layer_time/$model/
+done
+
 ## Sequential
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
