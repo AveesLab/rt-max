@@ -54,19 +54,6 @@ else
     exit 1
 fi
 
-# Sequential
-./darknet detector sequential ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -core_id 3 -num_exp 40
+# Data_parallel
+./darknet detector data-parallel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -num_exp 30
 
-# Sequential with Multi-BLAS
-for var in {1..11}
-do
-    ./darknet detector sequential-multiblas ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_blas $var -num_exp 40
-done
-
-# GPU-accelerated with 1 thread
-for var in $(seq 1 $layer_num)
-do
-    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $var -num_exp 40 -theoretical_exp
-done
-
-python3 gather_gpu.py
