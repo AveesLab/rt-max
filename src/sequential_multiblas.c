@@ -101,6 +101,7 @@ static int write_result(char *file_path)
         
         for(layer_id = 0; layer_id < layer_num; layer_id++) {
             sum_measure_data[i][10 + layer_id + 1] = layer_time[i][layer_id];
+            //printf(" %0.3f", sum_measure_data[i][10 + layer_id + 1]);
         }
     }
     int startIdx = 30; // Delete some ROWs
@@ -135,7 +136,8 @@ static int write_result(char *file_path)
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10]);
 
         for (layer_id = 0; layer_id < layer_num; layer_id++) {
-            fprintf(fp, "%0.3f", new_sum_measure_data[i][10 + layer_num + 1]);
+            fprintf(fp, "%0.3f", new_sum_measure_data[i][10 + layer_id + 1]);
+            //printf(" %0.3f", new_sum_measure_data[i][10 + layer_id + 1]);
             if(layer_id < layer_num - 1) fprintf(fp, ",");
             else fprintf(fp, "\n");
         }
@@ -275,7 +277,7 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
                 double time = get_time_in_ms();
                 l.forward(l, state);
                 layer_time[i][layer_id] = get_time_in_ms() - time;
-                //printf("%d - Predicted in %lf milli-seconds.\n", i, ((double)get_time_point() - time) / 1000);
+                //printf("%d - Predicted in %lf milli-seconds.\n", i, layer_time[i][layer_id]);
                 state.input = l.output;
 
                 /*
