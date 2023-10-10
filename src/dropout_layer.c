@@ -42,7 +42,7 @@ dropout_layer make_dropout_layer(int batch, int inputs, float probability, int d
         if(l.dropblock_size_abs) fprintf(stderr, "dropblock    p = %.3f   l.dropblock_size_abs = %d    %4d  ->   %4d\n", probability, l.dropblock_size_abs, inputs, inputs);
         else fprintf(stderr, "dropblock    p = %.3f   l.dropblock_size_rel = %.2f    %4d  ->   %4d\n", probability, l.dropblock_size_rel, inputs, inputs);
     }
-    else fprintf(stderr, "dropout    p = %.3f        %4d  ->   %4d\n", probability, inputs, inputs);
+    // else fprintf(stderr, "dropout    p = %.3f        %4d  ->   %4d\n", probability, inputs, inputs);
     return l;
 }
 

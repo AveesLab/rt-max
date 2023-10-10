@@ -157,7 +157,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = optimal_core * 10; // Delete some ROWs
+    int startIdx = optimal_core * 0; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -290,7 +290,7 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
@@ -444,9 +444,9 @@ static void threadFunc(thread_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 
-#ifndef MEASURE
+// #ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+// #endif
 
             }
         }
