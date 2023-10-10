@@ -66,9 +66,9 @@ layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes,
 
     l.forward = forward_shortcut_layer;
     l.backward = backward_shortcut_layer;
-#ifndef GPU
+
     if (l.activation == SWISH || l.activation == MISH) l.activation_input = (float*)calloc(l.batch*l.outputs, sizeof(float));
-#endif // GPU
+
 
 #ifdef GPU
     if (l.activation == SWISH || l.activation == MISH) l.activation_input_gpu = cuda_make_array(l.activation_input, l.batch*l.outputs);

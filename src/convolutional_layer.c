@@ -662,9 +662,9 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
 #endif  // not GPU
     }
 
-#ifndef GPU
+// #ifndef GPU
     if (l.activation == SWISH || l.activation == MISH || l.activation == HARD_MISH) l.activation_input = (float*)calloc(total_batch*l.outputs, sizeof(float));
-#endif  // not GPU
+// #endif  // not GPU
 
     if(adam){
         l.adam = 1;
@@ -1399,7 +1399,7 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
     }
     else {
         add_bias(l.output, l.biases, l.batch, l.n, out_h*out_w);
-    }
+    } 
 
     //activate_array(l.output, m*n*l.batch, l.activation);
     if (l.activation == SWISH) activate_array_swish(l.output, l.outputs*l.batch, l.activation_input, l.output);
