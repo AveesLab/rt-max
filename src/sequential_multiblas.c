@@ -37,10 +37,14 @@ static double e_infer[1000];
 static double start_postprocess[1000];
 static double end_postprocess[1000];
 static double e_postprocess[1000];
+
+static double layer_time[1000][1000];
 #endif
 
 static double execution_time[1000];
 static double frame_rate[1000];
+
+static int layer_num;
 
 #ifdef MEASURE
 static int write_result(char *file_path) 
@@ -79,7 +83,8 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp][11];
+    int layer_id;
+    double sum_measure_data[num_exp][layer_num + 11];
     for(i = 0; i < num_exp; i++)
     {
         sum_measure_data[i][0] = start_preprocess[i];
@@ -93,29 +98,47 @@ static int write_result(char *file_path)
         sum_measure_data[i][8] = end_postprocess[i];
         sum_measure_data[i][9] = execution_time[i];
         sum_measure_data[i][10] = frame_rate[i];
+        
+        for(layer_id = 0; layer_id < layer_num; layer_id++) {
+            sum_measure_data[i][10 + layer_id + 1] = layer_time[i][layer_id];
+        }
     }
-
     int startIdx = 30; // Delete some ROWs
-    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
+    double new_sum_measure_data[num_exp-startIdx][layer_num + 11];
     int newIndex = 0;
-    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
-        for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
+    for (int i = startIdx; i < num_exp; i++) {
+        for (int j = 0; j < layer_num + 11; j++) {
             new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
         }
         newIndex++;
     }
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,", 
             "start_preprocess",     "e_preprocess",     "end_preprocess", 
             "start_infer",          "e_infer",          "end_infer", 
             "start_postprocess",    "e_postprocess",    "end_postprocess", 
             "execution_time",       "frame_rate");
+            
 
+    char layer_name[20];
+    for(layer_id = 0; layer_id < layer_num; layer_id++) {
+        sprintf(layer_name, "layer[%d]", layer_id);
+        fprintf(fp, "%s", layer_name);
+        if(layer_id < layer_num - 1) fprintf(fp, ",");
+        else fprintf(fp, "\n");
+    }
+    
     for(i = 0; i < num_exp - startIdx; i++)
     {
-        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10]);
+
+        for (layer_id = 0; layer_id < layer_num; layer_id++) {
+            fprintf(fp, "%0.3f", new_sum_measure_data[i][10 + layer_num + 1]);
+            if(layer_id < layer_num - 1) fprintf(fp, ",");
+            else fprintf(fp, "\n");
+        }
     }
     
     fclose(fp);
@@ -169,6 +192,7 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
 
     network net = parse_network_cfg_custom(cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
+    layer_num = net.n;
 
     if (weightfile) {
         load_weights(&net, weightfile);
@@ -229,7 +253,51 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
         }
         
         if (device) predictions = network_predict(net, X);
-        else predictions = network_predict_cpu(net, X);
+        else {
+            extern int gpu_yolo;
+            gpu_yolo = 0;
+
+            network_state state = {0};
+            state.net = net;
+            state.index = 0;
+            state.input = X;
+            state.truth = 0;
+            state.train = 0;
+            state.delta = 0;
+            state.workspace = net.workspace;
+            int layer_id;
+            for(layer_id = 0; layer_id < net.n; ++layer_id){
+                state.index = layer_id;
+                layer l = net.layers[layer_id];
+                if(l.delta && state.train && l.train){
+                    scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+                }
+                double time = get_time_in_ms();
+                l.forward(l, state);
+                layer_time[i][layer_id] = get_time_in_ms() - time;
+                //printf("%d - Predicted in %lf milli-seconds.\n", i, ((double)get_time_point() - time) / 1000);
+                state.input = l.output;
+
+                /*
+                float avg_val = 0;
+                int k;
+                for (k = 0; k < l.outputs; ++k) avg_val += l.output[k];
+                printf(" i: %d - avg_val = %f \n", i, avg_val / l.outputs);
+                */
+            }
+#ifdef GPU
+            if (device) {
+                if (gpu_index >= 0) predictions = get_network_output_gpu(net);
+            }
+            int i;
+            for(i = net.n-1; i > 0; --i) if(net.layers[i].type != COST) break;
+            predictions =  net.layers[i].output;
+#else   
+            int i;
+            for(i = net.n-1; i > 0; --i) if(net.layers[i].type != COST) break;
+            predictions = net.layers[i].output;
+#endif
+        }
 
 #ifdef MEASURE
         end_infer[i] = get_time_in_ms();
