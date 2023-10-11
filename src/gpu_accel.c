@@ -444,9 +444,9 @@ static void threadFunc(thread_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 
-// #ifndef MEASURE
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
-// #endif
+#endif
 
             }
         }
