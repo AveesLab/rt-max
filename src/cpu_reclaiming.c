@@ -613,7 +613,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
     printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_reclaim_infer), average(e_cpu_infer), optimal_core, average(e_cpu_infer)/optimal_core);
 
-    printf("\n\nCPU-Reclaiming with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+    printf("\n\nCPU-Reclaiming with %d threads with %d gpu-layer with %d reclaim-layer\n", optimal_core, gLayer, rLayer);
 
     for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
