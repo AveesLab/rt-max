@@ -642,7 +642,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     }
 
 #else
-    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+    printf("\n\nGPU-Accel with %d threads with %d gpu-layer with %d reclaim-layer\n", num_thread, gLayer, rLayer);
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;

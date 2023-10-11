@@ -107,6 +107,9 @@ static image im, resized, cropped;
 static float *X, *predictions;
 static detection *dets;
 
+static int barrier_signal = 0;
+pthread_barrier_t barrier;
+
 #ifdef MEASURE
 static int write_result(char *file_path) 
 {
@@ -159,7 +162,6 @@ static int write_result(char *file_path)
         sum_measure_data[i][9] = e_stall[i];
         sum_measure_data[i][10] = execution_time[i];
         sum_measure_data[i][11] = frame_rate[i];
-        printf("aa : %0.2f \n", start_preprocess_array[i]);
     }
 
     int startIdx = 0; // Delete some ROWs
@@ -226,8 +228,14 @@ static void *preprocess(void *ptr)
     pthread_t current_thread = pthread_self();
     pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset); 
     
+    if(barrier_signal) pthread_barrier_wait(&barrier);
 #ifdef MEASURE
     start_preprocess[preprocess_index] = get_time_in_ms();
+#endif
+
+#ifdef NVTX
+    nvtxRangeId_t nvtx_preprocess;
+    nvtx_preprocess = nvtxRangeStartA("Preprocess");
 #endif
 
     im = load_image(input, 0, 0, net.c);
@@ -235,28 +243,43 @@ static void *preprocess(void *ptr)
     cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
     X = cropped.data;
 
+#ifdef NVTX
+    nvtxRangeEnd(nvtx_preprocess);
+#endif
+
 #ifdef MEASURE
     end_preprocess[preprocess_index] = get_time_in_ms();
-    // printf("e_preprocess : %0.2f \n", end_preprocess[preprocess_index] - start_preprocess[preprocess_index]);
 #endif
 
 }
+
 static void *inference(void *ptr)
 {
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(2, &cpuset);
+    CPU_SET(5, &cpuset);
 
     pthread_t current_thread = pthread_self();
     pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset); 
+
+    if(barrier_signal) pthread_barrier_wait(&barrier);
 
 #ifdef MEASURE
     start_infer[inference_index] = get_time_in_ms();
 #endif
 
+#ifdef NVTX
+        nvtxRangeId_t nvtx_inference;
+        nvtx_inference = nvtxRangeStartA("inference");
+#endif
+
     if (device) predictions = network_predict(net, X);
     else predictions = network_predict_cpu(net, X);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_inference);
+#endif
 
 #ifdef MEASURE
     end_infer[inference_index] = get_time_in_ms();
@@ -269,15 +292,21 @@ static void *postprocess(void *ptr)
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(3, &cpuset);
+    CPU_SET(9, &cpuset);
 
     pthread_t current_thread = pthread_self();
     pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset); 
+
+    if(barrier_signal) pthread_barrier_wait(&barrier);
 
 #ifdef MEASURE
         start_postprocess[postprocess_index] = get_time_in_ms();
 #endif
 
+#ifdef NVTX
+        nvtxRangeId_t nvtx_postprocess;
+        nvtx_postprocess = nvtxRangeStartA("Postprocess");
+#endif
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, demo_thresh, demo_hier_thresh, 0, 1, &nboxes, demo_letterbox);
@@ -305,6 +334,11 @@ static void *postprocess(void *ptr)
         //     show_image(im, "predictions");
         //     wait_key_cv(1);
         // }
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_postprocess);
+#endif
+    // usleep(15 * 1000);
 
 #ifdef MEASURE
         end_postprocess[postprocess_index] = get_time_in_ms();
@@ -384,6 +418,8 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
     pthread_t inference_thread;
     pthread_t postprocess_thread;
 
+    barrier_signal = 1;
+
     for (int i = 0; i < num_exp; i++) {
 
         preprocess_index = thread_index;
@@ -401,6 +437,8 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
         printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
 #endif
 
+	    pthread_barrier_init(&barrier, NULL, 3);
+
         // __Preprocess__
         pthread_create(&preprocess_thread, NULL, preprocess, &preprocess_index);
 
@@ -413,6 +451,12 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
         pthread_join(preprocess_thread, NULL);
         pthread_join(inference_thread, NULL);
         pthread_join(postprocess_thread, NULL);
+
+        pthread_barrier_destroy(&barrier);
+
+        // preprocess(&i);
+        // inference(&i);
+        // postprocess(&i);
 
         push_data(i);
         thread_index = (thread_index + 1) % 3;

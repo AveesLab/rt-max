@@ -290,7 +290,7 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
