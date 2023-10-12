@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <math.h>
+
 #include "darknet.h"
 #include "network.h"
 #include "parser.h"
@@ -26,6 +28,7 @@
 static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static int current_thread = 1;
 
@@ -53,15 +56,19 @@ static double end_preprocess[1000];
 static double e_preprocess[1000];
 
 static double start_infer[1000];
+static double start_reclaim_infer[1000];
+static double end_reclaim_infer[1000];
+static double start_cpu_infer[1000];
+static double end_cpu_infer[1000];
 static double start_gpu_waiting[1000];
 static double start_gpu_infer[1000];
-static double end_cpu_infer[1000];
-static double start_cpu_infer[1000];
 static double end_infer[1000];
 
 static double waiting_gpu[1000];
-static double e_gpu_infer[1000];
+double waiting_reclaim[1000];
+static double e_reclaim_infer[1000];
 static double e_cpu_infer[1000];
+static double e_gpu_infer[1000];
 static double e_infer[1000];
 
 static double start_postprocess[1000];
@@ -129,34 +136,38 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][20];
+    double sum_measure_data[num_exp * optimal_core][24];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
-        sum_measure_data[i][1] = start_preprocess[i];
-        sum_measure_data[i][2] = e_preprocess[i];
+        sum_measure_data[i][1] = start_preprocess[i];     
+        sum_measure_data[i][2] = e_preprocess[i];       
         sum_measure_data[i][3] = end_preprocess[i];
-        sum_measure_data[i][4] = start_infer[i]; 
-        sum_measure_data[i][5] = start_cpu_infer[i];
-        sum_measure_data[i][6] = e_cpu_infer[i];
-        sum_measure_data[i][7] = end_cpu_infer[i];
-        sum_measure_data[i][8] = start_gpu_waiting[i];
-        sum_measure_data[i][9] = waiting_gpu[i];
-        sum_measure_data[i][10] = start_gpu_infer[i];
-        sum_measure_data[i][11] = e_gpu_infer[i];
-        sum_measure_data[i][12] = end_infer[i];
-        sum_measure_data[i][13] = e_infer[i];
-        sum_measure_data[i][14] = start_postprocess[i];
-        sum_measure_data[i][15] = e_postprocess[i];
-        sum_measure_data[i][16] = end_postprocess[i];
-        sum_measure_data[i][17] = execution_time[i];
-        sum_measure_data[i][18] = 0.0;
-        sum_measure_data[i][19] = 0.0;
+        sum_measure_data[i][4] = start_infer[i];
+        sum_measure_data[i][5] = waiting_reclaim[i];
+        sum_measure_data[i][6] = start_reclaim_infer[i];    
+        sum_measure_data[i][7] = e_reclaim_infer[i];    
+        sum_measure_data[i][8] = end_reclaim_infer[i];
+        sum_measure_data[i][9] = start_cpu_infer[i];     
+        sum_measure_data[i][10] = e_cpu_infer[i];      
+        sum_measure_data[i][11] = end_cpu_infer[i];   
+        sum_measure_data[i][12] = start_gpu_waiting[i];    
+        sum_measure_data[i][13] = waiting_gpu[i];
+        sum_measure_data[i][14] = start_gpu_infer[i];       
+        sum_measure_data[i][15] = e_gpu_infer[i];    
+        sum_measure_data[i][16] = end_infer[i];
+        sum_measure_data[i][17] = e_infer[i];
+        sum_measure_data[i][18] = start_postprocess[i];     
+        sum_measure_data[i][19] = e_postprocess[i];      
+        sum_measure_data[i][20] = end_postprocess[i];
+        sum_measure_data[i][21] = execution_time[i];          
+        sum_measure_data[i][22] = 0.0;      
+        sum_measure_data[i][23] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = optimal_core * 0; // Delete some ROWs
+    int startIdx = 10 * optimal_core; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -167,31 +178,35 @@ static int write_result(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
-            "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "end_cpu_infer", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", 
+            "waiting_reclaim",
+            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate",
-            "optimal_core");
+            "execution_time", "frame_rate", "optimal_core");
 
-    double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][16]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
+    double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][20]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
 
     for(i = 0; i < num_exp * optimal_core - startIdx; i++)
     {
-        new_sum_measure_data[i][18] = frame_rate;
-        new_sum_measure_data[i][19] = (double)optimal_core;
+        new_sum_measure_data[i][22] = frame_rate;
+        new_sum_measure_data[i][23] = (double)optimal_core;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
-                new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
-                new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
-                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
-                new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
-                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19]);
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
+                new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
+                new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
+                new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
+                new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11],
+                new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], 
+                new_sum_measure_data[i][15], new_sum_measure_data[i][16], new_sum_measure_data[i][17], 
+                new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
+                new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23]);
     }
     
     fclose(fp);
@@ -308,7 +323,7 @@ static void threadFunc(thread_data_t data)
         end_preprocess[count] = get_time_in_ms();
         e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
 #endif
-
+        
         // __Inference__
         // if (device) predictions = network_predict(net, X);
         // else predictions = network_predict_cpu(net, X);
@@ -328,8 +343,56 @@ static void threadFunc(thread_data_t data)
         state.train = 0;
         state.delta = 0;
 
-        // CPU Inference
+        // Reclaiming Inference
+#ifdef NVTX
+        char task_reclaiming[100];
+        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.thread_id);
+        nvtxRangeId_t nvtx_task_reclaiming;
+        nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
+#endif
 
+        pthread_mutex_lock(&mutex_reclaim);
+
+#ifdef MEASURE
+        start_reclaim_infer[count] = get_time_in_ms();
+#endif
+        openblas_set_num_threads(3);
+
+        CPU_ZERO(&cpuset);
+        CPU_SET(data.thread_id, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+        CPU_ZERO(&cpuset);
+        CPU_SET(6, &cpuset);
+        openblas_setaffinity(0, sizeof(cpuset), &cpuset);
+        
+        CPU_ZERO(&cpuset);
+        CPU_SET(7, &cpuset);
+        openblas_setaffinity(1, sizeof(cpuset), &cpuset);
+
+        state.workspace = net.workspace_cpu;
+        gpu_yolo = 0;
+        for(j = 0; j < rLayer; ++j){
+            state.index = j;
+            l = net.layers[j];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
+
+#ifdef MEASURE
+        end_reclaim_infer[count] = get_time_in_ms();
+#endif
+
+        pthread_mutex_unlock(&mutex_reclaim);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_reclaiming);
+#endif
+
+        // CPU Inference
 #ifdef NVTX
         char task_cpu[100];
         sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", data.thread_id);
@@ -340,8 +403,8 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         start_cpu_infer[count] = get_time_in_ms();
 #endif
-        state.workspace = net.workspace_cpu;
-        for(j = 0; j < gLayer; ++j){
+        openblas_set_num_threads(1);
+        for(j = rLayer; j < gLayer; ++j){
             state.index = j;
             l = net.layers[j];
             if(l.delta && state.train && l.train){
@@ -422,6 +485,8 @@ static void threadFunc(thread_data_t data)
 
 #ifdef MEASURE
         end_infer[count] = get_time_in_ms();
+        waiting_reclaim[count] = start_reclaim_infer[count] - start_infer[count];
+        e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
         e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
         waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
         e_gpu_infer[count] = end_infer[count] - start_gpu_infer[count];
@@ -432,7 +497,6 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         start_postprocess[count] = get_time_in_ms();
 #endif
-
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
@@ -449,9 +513,9 @@ static void threadFunc(thread_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 
-#ifndef MEASURE
+// #ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+// #endif
 
             }
         }
@@ -473,7 +537,6 @@ static void threadFunc(thread_data_t data)
         frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
-
         // free memory
         free_image(im);
         free_image(resized);
@@ -490,15 +553,16 @@ static void threadFunc(thread_data_t data)
     free_list_contents_kvp(options);
     free_list(options);
     free_alphabet(alphabet);
-    // free_network(net); // Error occur
+    // free_network(net);
+
     pthread_exit(NULL);
 
 }
 
-void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+void cpu_reclaiming_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-
+    
     pthread_t threads[MAXCORES - 1];
     int rc;
     int i;
@@ -506,8 +570,8 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     thread_data_t data[MAXCORES - 1];
 
 #ifdef MEASURE
-    printf("\n\nFinding Optimal Core when GPU-Accel-Reverse with 1 thread with %d gpu-layer\n", gLayer);
-    optimal_core = 1;
+    printf("\n\nFinding Optimal Core when CPU-Reclaiming-Reverse with 1 thread with %d reclaim-layer %d gpu-layer\n", rLayer, gLayer);
+
     for (i = 0; i < 1; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -530,49 +594,48 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
         }
     }
 
-
     for (i = 0; i < 1; i++) {
         pthread_join(threads[i], NULL);
         pthread_detach(threads[i]);
     }
 
-    if (!theoretical_exp) {
-        optimal_core = (int)ceil(average(execution_time) / (average(e_gpu_infer)+average(e_preprocess)));
-        if(optimal_core > MAXCORES - 1) optimal_core = MAXCORES - 1;
+    if ( is_GPU_larger(average(e_gpu_infer),average(e_reclaim_infer)) )
+    {
+    optimal_core = (int)ceil(average(e_infer) / MAX((average(e_gpu_infer)+average(e_preprocess)),average(e_reclaim_infer)));
+    if(optimal_core > 11) optimal_core = 11;
 
-        printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_cpu_infer), optimal_core,average(e_cpu_infer)/optimal_core);
+    printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_reclaim_infer), average(e_cpu_infer), optimal_core, average(e_cpu_infer)/optimal_core);
 
-        printf("\n\nGPU-Accel-Reverse with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+    printf("\n\nCPU-Reclaiming-Reverse with %d threads with %d reclaim-layer with %d gpu-layer\n", optimal_core, rLayer, gLayer);
 
-        for (i = 0; i < optimal_core; i++) {
-            data[i].datacfg = datacfg;
-            data[i].cfgfile = cfgfile;
-            data[i].weightfile = weightfile;
-            data[i].filename = filename;
-            data[i].thresh = thresh;
-            data[i].hier_thresh = hier_thresh;
-            data[i].dont_show = dont_show;
-            data[i].ext_output = ext_output;
-            data[i].save_labels = save_labels;
-            data[i].outfile = outfile;
-            data[i].letter_box = letter_box;
-            data[i].benchmark_layers = benchmark_layers;
-            data[i].thread_id = i + 1;
-            data[i].num_thread = optimal_core;
-            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-            if (rc) {
-                printf("Error: Unable to create thread, %d\n", rc);
-                exit(-1);
-            }
-        }
-
-        for (i = 0; i < optimal_core; i++) {
-            pthread_join(threads[i], NULL);
+    for (i = 0; i < optimal_core; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = optimal_core;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
         }
     }
 
+    for (i = 0; i < optimal_core; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
 #else
-    printf("\n\nGPU-Accel-Reverse with %d threads with %d gpu-layer\n", num_thread, gLayer);
+    printf("\n\nCPU-Reclaiming-Reverse with %d threads with %d reclaim-layer with %d gpu-layer\n", optimal_core, rLayer, gLayer);
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -599,6 +662,7 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 #endif
 
+
 #ifdef MEASURE
     char file_path[256] = "measure/";
 
@@ -606,17 +670,20 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
-    if (theoretical_exp) strcat(file_path, "gpu-accel-reverse_1thread/");
-    else strcat(file_path, "gpu-accel-reverse/");
 
+    strcat(file_path, "cpu-reclaiming-reverse/");
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "gpu-accel-reverse_");
-
     char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
+    sprintf(gpu_portion, "%dglayer/", gLayer);
     strcat(file_path, gpu_portion);
+
+    strcat(file_path, "cpu-reclaiming-reverse_");
+
+    char reclaim_portion[20];
+    sprintf(reclaim_portion, "%03drlayer", rLayer);
+    strcat(file_path, reclaim_portion);
 
     strcat(file_path, ".csv");
     if(write_result(file_path) == -1) {
@@ -627,14 +694,20 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     // pthread_mutex_destroy(&mutex);
     // pthread_cond_destroy(&cond);
+    }
+    else
+    {
+        printf("\n\ne_infer : %0.02f,e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f\n", average(e_infer), average(e_gpu_infer), average(e_reclaim_infer), average(e_cpu_infer));
+        printf("\nError: Reclaiming inference time exceeds GPU inference time. Please check your configurations.\n\n");
+    }
 
     return 0;
 
 }
 #else
 
-void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+void cpu_reclaiming_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
 }

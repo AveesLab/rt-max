@@ -21,30 +21,39 @@ done
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
+    layer_start=40
     layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
+    layer_start=0
     layer_num=206
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
+    layer_start=0
     layer_num=136
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
+    layer_start=0
     layer_num=81
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
+    layer_start=0
     layer_num=50
 elif [ "$model" == "yolov7" ]; then
     data_file="coco"
+    layer_start=0
     layer_num=143
 elif [ "$model" == "yolov7-tiny" ]; then
     data_file="coco"
+    layer_start=50
     layer_num=99
 elif [ "$model" == "yolov4" ]; then
     data_file="coco"
+    layer_start=0
     layer_num=162
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
+    layer_start=0
     layer_num=38
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
@@ -55,7 +64,8 @@ else
 fi
 
 # GPU-accelerated with optimal_core
-for var in $(seq 1 $layer_num)
-do
-    ./darknet detector gpu-accel-reverse ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $var -num_exp 30 
+for rlayer in $(seq $layer_start $layer_num); do
+    for ((glayer = rlayer + 1; glayer < $layer_num; glayer++)); do
+        ./darknet detector cpu-reclaiming-reverse ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $glayer -rlayer $rlayer -num_exp 30
+    done
 done

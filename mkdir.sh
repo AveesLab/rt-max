@@ -143,6 +143,52 @@ for var in {1..138}
 	done
 
 
+## CPU-Reclaiming-Reverse
+for var in {1..305}
+	do
+	mkdir -p cpu-reclaiming-reverse-reverse/densenet201/${var}glayer/
+	done
+
+for var in {1..37}
+	do
+	mkdir -p cpu-reclaiming-reverse/yolov4-tiny/${var}glayer/
+	done
+
+for var in {1..162}
+	do
+	mkdir -p cpu-reclaiming-reverse/yolov4/${var}glayer/
+	done
+
+for var in {1..100}
+	do
+	mkdir -p cpu-reclaiming-reverse/yolov7-tiny/${var}glayer/
+	done
+
+for var in {1..144}
+	do
+	mkdir -p cpu-reclaiming-reverse/yolov7/${var}glayer/
+	done
+
+for var in {1..207}
+	do
+	mkdir -p cpu-reclaiming-reverse/resnet152/${var}glayer/
+	done
+
+for var in {1..81}
+	do
+	mkdir -p cpu-reclaiming-reverse/csmobilenet/${var}glayer/
+	done
+
+for var in {1..51}
+	do
+	mkdir -p cpu-reclaiming-reverse/squeezenet/${var}glayer/
+	done
+
+for var in {1..138}
+	do
+	mkdir -p cpu-reclaiming-reverse/enetb0/${var}glayer/
+	done
+
 
 ## CPU-Reclaiming-mp
 for var in {1..305}
