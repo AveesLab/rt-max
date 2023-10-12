@@ -502,8 +502,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
 #ifdef MEASURE
     printf("\n\nFinding Optimal Core when GPU-Accel with 1 thread with %d gpu-layer\n", gLayer);
-    optimal_core = 1;
-    for (i = 0; i < 1; i++) {
+    optimal_core = 2;
+    for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -517,7 +517,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
-        data[i].num_thread = 1;
+        data[i].num_thread = optimal_core;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
@@ -525,10 +525,9 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         }
     }
 
-
-    for (i = 0; i < 1; i++) {
+    for (i = 0; i < optimal_core; i++) {
+        printf("%d\n", i);
         pthread_join(threads[i], NULL);
-        pthread_detach(threads[i]);
     }
 
     if (!theoretical_exp) {
