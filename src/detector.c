@@ -1937,6 +1937,7 @@ void run_detector(int argc, char **argv)
     rLayer = find_int_arg(argc, argv, "-rlayer", 1);
     int dont_show = find_arg(argc, argv, "-dont_show");
     int theoretical_exp = find_arg(argc, argv, "-theoretical_exp");
+    int theo_thread = find_int_arg(argc, argv, "-theo_thread", 1);
     int benchmark = find_arg(argc, argv, "-benchmark");
     int benchmark_layers = find_arg(argc, argv, "-benchmark_layers");
     //if (benchmark_layers) benchmark = 1;
@@ -2015,8 +2016,8 @@ void run_detector(int argc, char **argv)
     else if (0 == strcmp(argv[2], "data-parallel")) data_parallel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel-mp")) data_parallel_mp(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
 #ifdef GPU
-    else if (0 == strcmp(argv[2], "gpu-accel")) gpu_accel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, ext_output, save_labels, outfile, letter_box, benchmark_layers);
-    else if (0 == strcmp(argv[2], "gpu-accel-reverse")) gpu_accel_reverse(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "gpu-accel")) gpu_accel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "gpu-accel-reverse")) gpu_accel_reverse(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel-mp")) gpu_accel_mp(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "cpu-reclaiming")) cpu_reclaiming(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "cpu-reclaiming-reverse")) cpu_reclaiming_reverse(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
