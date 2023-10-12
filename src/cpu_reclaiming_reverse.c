@@ -81,6 +81,10 @@ static int optimal_core;
 static double execution_time[1000];
 static double frame_rate[1000];
 
+static int is_GPU_larger(double a, double b) {
+    return (a - b) >= 2 ? 1 : 0; // Check 2ms differnce
+}
+
 static double average(double arr[]){
     double sum;
     int i;
