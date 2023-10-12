@@ -502,7 +502,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
 #ifdef MEASURE
     printf("\n\nFinding Optimal Core when GPU-Accel with 1 thread with %d gpu-layer\n", gLayer);
-    optimal_core = 2;
+    optimal_core = 4;
     for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -526,8 +526,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     }
 
     for (i = 0; i < optimal_core; i++) {
-        printf("%d\n", i);
         pthread_join(threads[i], NULL);
+        pthread_detach(threads[i]);
     }
 
     if (!theoretical_exp) {
