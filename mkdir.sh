@@ -146,7 +146,7 @@ for var in {1..138}
 ## CPU-Reclaiming-Reverse
 for var in {1..305}
 	do
-	mkdir -p cpu-reclaiming-reverse-reverse/densenet201/${var}glayer/
+	mkdir -p cpu-reclaiming-reverse/densenet201/${var}glayer/
 	done
 
 for var in {1..37}
