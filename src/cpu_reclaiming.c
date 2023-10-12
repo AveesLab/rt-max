@@ -308,7 +308,7 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
@@ -411,6 +411,9 @@ static void threadFunc(thread_data_t data)
         pthread_mutex_unlock(&mutex_gpu);
 
         // Reclaiming Inference
+
+        pthread_mutex_lock(&mutex_reclaim);
+
 #ifdef NVTX
         char task_reclaiming[100];
         sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.thread_id);
@@ -418,23 +421,26 @@ static void threadFunc(thread_data_t data)
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
 
-        pthread_mutex_lock(&mutex_reclaim);
-
 #ifdef MEASURE
         start_reclaim_infer[count] = get_time_in_ms();
 #endif
-        openblas_set_num_threads(3);
-        CPU_ZERO(&cpuset);
-        CPU_SET(data.thread_id, &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        if(data.num_thread == 1) {
+            openblas_set_num_threads(1);
+        }
+        else {
+            openblas_set_num_threads(11 - optimal_core + 1);
 
-        CPU_ZERO(&cpuset);
-        CPU_SET(6, &cpuset);
-        openblas_setaffinity(0, sizeof(cpuset), &cpuset);
-        
-        CPU_ZERO(&cpuset);
-        CPU_SET(7, &cpuset);
-        openblas_setaffinity(1, sizeof(cpuset), &cpuset);
+            CPU_ZERO(&cpuset);
+            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+            for(int i = optimal_core; i < 11; i++){
+                CPU_ZERO(&cpuset);
+                CPU_SET(coreIDOrder[i], &cpuset);
+                openblas_setaffinity(i - optimal_core, sizeof(cpuset), &cpuset);
+            }
+
+        }
 
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
@@ -498,6 +504,7 @@ static void threadFunc(thread_data_t data)
         e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
         e_cpu_infer[count] = end_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
+        printf("gpu : %0.2f, reclaim : %0.2f, cpu : %0.2f \n\n", e_gpu_infer[count], e_reclaim_infer[count], e_cpu_infer[count]);
 #endif
 
         // __Postprecess__
