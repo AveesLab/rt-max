@@ -496,7 +496,7 @@ static void threadFunc(thread_data_t data)
 }
 
 void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+    float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
     pthread_t threads[MAXCORES - 1];
@@ -506,9 +506,9 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     thread_data_t data[MAXCORES - 1];
 
 #ifdef MEASURE
-    printf("\n\nFinding Optimal Core when GPU-Accel-Reverse with 1 thread with %d gpu-layer\n", gLayer);
-    optimal_core = 1;
-    for (i = 0; i < 1; i++) {
+    printf("\n\nFinding Optimal Core when GPU-Accel-Reverse with %d thread with %d gpu-layer\n", theo_thread, gLayer);
+    optimal_core = theo_thread;
+    for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -522,7 +522,7 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
-        data[i].num_thread = 1;
+        data[i].num_thread = optimal_core;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
@@ -530,8 +530,7 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
         }
     }
 
-
-    for (i = 0; i < 1; i++) {
+    for (i = 0; i < optimal_core; i++) {
         pthread_join(threads[i], NULL);
         pthread_detach(threads[i]);
     }
@@ -606,7 +605,11 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
-    if (theoretical_exp) strcat(file_path, "gpu-accel-reverse_1thread/");
+    if (theoretical_exp) {
+        if (theo_thread == 1) strcat(file_path, "gpu-accel-reverse_1thread/");
+        else if (theo_thread > 1) strcat(file_path, "gpu-accel-reverse_multi-thread/");
+        else printf("\nError: Please set -theo_thread {thread_num}\n");
+    }
     else strcat(file_path, "gpu-accel-reverse/");
 
     strcat(file_path, model_name);
@@ -615,7 +618,8 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     strcat(file_path, "gpu-accel-reverse_");
 
     char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
+    if (theoretical_exp && (theo_thread > 1)) sprintf(gpu_portion, "%03dglayer_%02dthread", gLayer, theo_thread);
+    else sprintf(gpu_portion, "%03dglayer", gLayer);
     strcat(file_path, gpu_portion);
 
     strcat(file_path, ".csv");
@@ -634,7 +638,7 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
 #else
 
 void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+    float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
 }

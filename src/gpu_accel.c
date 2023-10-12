@@ -491,7 +491,7 @@ static void threadFunc(thread_data_t data)
 }
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+    float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
     pthread_t threads[MAXCORES - 1];
@@ -501,8 +501,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     thread_data_t data[MAXCORES - 1];
 
 #ifdef MEASURE
-    printf("\n\nFinding Optimal Core when GPU-Accel with 1 thread with %d gpu-layer\n", gLayer);
-    optimal_core = 4;
+    printf("\n\nFinding Optimal Core when GPU-Accel with %d thread with %d gpu-layer\n", theo_thread, gLayer);
+    optimal_core = theo_thread;
     for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -600,7 +600,11 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
-    if (theoretical_exp) strcat(file_path, "gpu-accel_1thread/");
+    if (theoretical_exp) {
+        if (theo_thread == 1) strcat(file_path, "gpu-accel_1thread/");
+        else if (theo_thread > 1) strcat(file_path, "gpu-accel_multi-thread/");
+        else printf("\nError: Please set -theo_thread {thread_num}\n");
+    }
     else strcat(file_path, "gpu-accel/");
 
     strcat(file_path, model_name);
@@ -609,7 +613,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     strcat(file_path, "gpu-accel_");
 
     char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
+    if (theoretical_exp && (theo_thread > 1)) sprintf(gpu_portion, "%03dglayer_%02dthread", gLayer, theo_thread);
+    else sprintf(gpu_portion, "%03dglayer", gLayer);
     strcat(file_path, gpu_portion);
 
     strcat(file_path, ".csv");
@@ -628,7 +633,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 #else
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
-    float hier_thresh, int dont_show, int theoretical_exp, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+    float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
 }
