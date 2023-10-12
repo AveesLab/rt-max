@@ -65,7 +65,7 @@ static double start_gpu_infer[1000];
 static double end_infer[1000];
 
 static double waiting_gpu[1000];
-double waiting_reclaim[1000];
+static double waiting_reclaim[1000];
 static double e_reclaim_infer[1000];
 static double e_cpu_infer[1000];
 static double e_gpu_infer[1000];
