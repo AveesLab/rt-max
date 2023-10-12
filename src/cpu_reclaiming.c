@@ -437,6 +437,24 @@ static void threadFunc(thread_data_t data)
         CPU_SET(11, &cpuset);
         openblas_setaffinity(1, sizeof(cpuset), &cpuset);
 
+        // if(data.num_thread == 1) {
+        //     openblas_set_num_threads(1);
+        // }
+        // else {
+        //     openblas_set_num_threads(11 - optimal_core + 1);
+
+        //     CPU_ZERO(&cpuset);
+        //     CPU_SET(coreIDOrder[data.thread_id], &cpuset);
+        //     pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+
+        //     for(int i = optimal_core; i < 11; i++){
+        //         CPU_ZERO(&cpuset);
+        //         CPU_SET(coreIDOrder[i], &cpuset);
+        //         openblas_setaffinity(i - optimal_core, sizeof(cpuset), &cpuset);
+        //     }
+
+        // }
+        
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
         for(j = gLayer; j < rLayer; ++j){
@@ -581,6 +599,71 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
     thread_data_t data[MAXCORES - 1];
 
+#ifdef MEASURE
+    printf("\n\nFinding Optimal Core when CPU-Reclaiming with 1 thread with %d gpu-layer\n", gLayer);
+
+    for (i = 0; i < 1; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = 1;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < 1; i++) {
+        pthread_join(threads[i], NULL);
+        pthread_detach(threads[i]);
+    }
+
+    if ( is_GPU_larger(average(e_gpu_infer),average(e_reclaim_infer)) )
+    {
+        optimal_core = (int)ceil(average(e_infer) / MAX((average(e_gpu_infer)+average(e_preprocess)),average(e_reclaim_infer)));
+        if(optimal_core > 11) optimal_core = 11;
+
+        printf("e_pre+e_infer : %0.02f, e_pre+e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f, Optimal Core : %d, CPU/N: %0.02f \n", average(e_infer)+average(e_preprocess), average(e_gpu_infer)+average(e_preprocess), average(e_reclaim_infer), average(e_cpu_infer), optimal_core, average(e_cpu_infer)/optimal_core);
+
+        printf("\n\nCPU-Reclaiming with %d threads with %d gpu-layer with %d reclaim-layer\n", optimal_core, gLayer, rLayer);
+        
+        for (i = 0; i < optimal_core; i++) {
+            data[i].datacfg = datacfg;
+            data[i].cfgfile = cfgfile;
+            data[i].weightfile = weightfile;
+            data[i].filename = filename;
+            data[i].thresh = thresh;
+            data[i].hier_thresh = hier_thresh;
+            data[i].dont_show = dont_show;
+            data[i].ext_output = ext_output;
+            data[i].save_labels = save_labels;
+            data[i].outfile = outfile;
+            data[i].letter_box = letter_box;
+            data[i].benchmark_layers = benchmark_layers;
+            data[i].thread_id = i + 1;
+            data[i].num_thread = optimal_core;
+            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+            if (rc) {
+                printf("Error: Unable to create thread, %d\n", rc);
+                exit(-1);
+            }
+        }
+
+        for (i = 0; i < optimal_core; i++) {
+            pthread_join(threads[i], NULL);
+        }
+#else
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -606,39 +689,46 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
+#endif
 
 #ifdef MEASURE
-    char file_path[256] = "measure/";
+        char file_path[256] = "measure/";
 
-    char* model_name = malloc(strlen(cfgfile) + 1);
-    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
-    model_name[strlen(cfgfile)-10] = '\0';
-    
+        char* model_name = malloc(strlen(cfgfile) + 1);
+        strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+        model_name[strlen(cfgfile)-10] = '\0';
+        
 
-    strcat(file_path, "cpu-reclaiming/");
-    strcat(file_path, model_name);
-    strcat(file_path, "/");
+        strcat(file_path, "cpu-reclaiming/");
+        strcat(file_path, model_name);
+        strcat(file_path, "/");
 
-    char gpu_portion[20];
-    sprintf(gpu_portion, "%dglayer/", gLayer);
-    strcat(file_path, gpu_portion);
+        char gpu_portion[20];
+        sprintf(gpu_portion, "%dglayer/", gLayer);
+        strcat(file_path, gpu_portion);
 
-    strcat(file_path, "cpu-reclaiming_");
+        strcat(file_path, "cpu-reclaiming_");
 
-    char reclaim_portion[20];
-    sprintf(reclaim_portion, "%03drlayer", rLayer);
-    strcat(file_path, reclaim_portion);
+        char reclaim_portion[20];
+        sprintf(reclaim_portion, "%03drlayer", rLayer);
+        strcat(file_path, reclaim_portion);
 
-    strcat(file_path, ".csv");
-    if(write_result(file_path) == -1) {
-        /* return error */
-        exit(0);
-    }
+        strcat(file_path, ".csv");
+        if(write_result(file_path) == -1) {
+            /* return error */
+            exit(0);
+        }
 #endif
 
     // pthread_mutex_destroy(&mutex);
     // pthread_cond_destroy(&cond);
 
+    }
+    else
+    {
+        printf("\n\ne_infer : %0.02f,e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f\n", average(e_infer), average(e_gpu_infer), average(e_reclaim_infer), average(e_cpu_infer));
+        printf("\nError: Reclaiming inference time exceeds GPU inference time. Please check your configurations.\n\n");
+    }
     return 0;
 
 }
