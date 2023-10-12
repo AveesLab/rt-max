@@ -602,7 +602,16 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     
     if (theoretical_exp) {
         if (theo_thread == 1) strcat(file_path, "gpu-accel_1thread/");
-        else if (theo_thread > 1) strcat(file_path, "gpu-accel_multi-thread/");
+        else if (theo_thread == 2) strcat(file_path, "gpu-accel_2thread/");
+        else if (theo_thread == 3) strcat(file_path, "gpu-accel_3thread/");
+        else if (theo_thread == 4) strcat(file_path, "gpu-accel_4thread/");
+        else if (theo_thread == 5) strcat(file_path, "gpu-accel_5thread/");
+        else if (theo_thread == 6) strcat(file_path, "gpu-accel_6thread/");
+        else if (theo_thread == 7) strcat(file_path, "gpu-accel_7thread/");
+        else if (theo_thread == 8) strcat(file_path, "gpu-accel_8thread/");
+        else if (theo_thread == 9) strcat(file_path, "gpu-accel_9thread/");
+        else if (theo_thread == 10) strcat(file_path, "gpu-accel_10thread/");
+        else if (theo_thread == 11) strcat(file_path, "gpu-accel_11thread/");
         else printf("\nError: Please set -theo_thread {thread_num}\n");
     }
     else strcat(file_path, "gpu-accel/");
@@ -613,7 +622,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     strcat(file_path, "gpu-accel_");
 
     char gpu_portion[20];
-    if (theoretical_exp && (theo_thread > 1)) sprintf(gpu_portion, "%03dglayer_%02dthread", gLayer, theo_thread);
+    if (theoretical_exp && (theo_thread > 1)) sprintf(gpu_portion, "%03dglayer", gLayer);
     else sprintf(gpu_portion, "%03dglayer", gLayer);
     strcat(file_path, gpu_portion);
 
