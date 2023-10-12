@@ -359,7 +359,7 @@ static void threadFunc(thread_data_t data)
         openblas_set_num_threads(3);
 
         CPU_ZERO(&cpuset);
-        CPU_SET(data.thread_id, &cpuset);
+        CPU_SET(coreIDOrder[data.thread_id], &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
 
         CPU_ZERO(&cpuset);
