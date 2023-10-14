@@ -54,13 +54,15 @@ else
     exit 1
 fi
 
-# GPU-accel (GPU 100%)
-for var in $(seq 1 $layer_num)
-do
-    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -glayer $var -num_exp 30 -theoretical_exp -theo_thread 1
+
+for thread in $(seq 1 12); do
+    for var in $(seq 1 $layer_num); do
+        ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -glayer $var -num_exp 30 -theoretical_exp -theo_thread $thread
+    done
 done
+
 
 for var in $(seq 1 $layer_num)
 do
-    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -glayer $var -num_exp 30 -theoretical_exp -theo_thread 11
+    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -glayer $var -num_exp 30
 done
