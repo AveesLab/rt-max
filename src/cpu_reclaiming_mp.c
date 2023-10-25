@@ -435,11 +435,11 @@ static void processFunc(process_data_t data)
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
 
         CPU_ZERO(&cpuset);
-        CPU_SET(6, &cpuset);
+        CPU_SET(10, &cpuset);
         openblas_setaffinity(0, sizeof(cpuset), &cpuset);
         
         CPU_ZERO(&cpuset);
-        CPU_SET(7, &cpuset);
+        CPU_SET(11, &cpuset);
         openblas_setaffinity(1, sizeof(cpuset), &cpuset);
 
         state.workspace = net.workspace_cpu;
@@ -469,9 +469,12 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         measure_data.start_cpu_infer[i] = get_time_in_ms();
 #endif
-
         openblas_set_num_threads(1);
+        CPU_ZERO(&cpuset);
+        CPU_SET(data.process_id, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for(j = rLayer; j < net.n; ++j){
+            printf("get num threads : %d \n", openblas_get_num_threads());
             state.index = j;
             l = net.layers[j];
             if(l.delta && state.train && l.train){
@@ -574,11 +577,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     int i;
 
-    pid_t pids[num_process];
+    pid_t pids[MAXCORES-1];
     int status;
 
 #ifdef MEASURE
-    int fd[num_process][2];
+    int fd[MAXCORES-1][2];
 #endif
 
     // Create semaphore set with NUM_PROCESSES semaphores
@@ -598,7 +601,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     arg.array = values;
     semctl(sem_id, 0, SETALL, arg);
 
-    process_data_t data[num_process];
+    process_data_t data[MAXCORES-1];
 
     for (i = 0; i < num_process; i++) {
         data[i].datacfg = datacfg;
