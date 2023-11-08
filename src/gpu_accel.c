@@ -65,6 +65,7 @@ static double end_infer[1000];
 
 static double waiting_gpu[1000];
 static double e_gpu_infer[1000];
+static double e_gpu_infer_max[1000];
 static double e_cpu_infer[1000];
 static double e_infer[1000];
 
@@ -76,7 +77,7 @@ static int optimal_core;
 #endif
 
 static double execution_time[1000];
-static double frame_rate[1000];
+static double execution_time_max[1000];
 
 static float avg_execution_time;
 static float avg_gpu_infer_time;
@@ -141,7 +142,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][20];
+    double sum_measure_data[num_exp * optimal_core][25];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -154,16 +155,21 @@ static int write_result(char *file_path)
         sum_measure_data[i][7] = start_gpu_infer[i];
         sum_measure_data[i][8] = e_gpu_infer[i];
         sum_measure_data[i][9] = end_gpu_infer[i];
-        sum_measure_data[i][10] = start_cpu_infer[i];
-        sum_measure_data[i][11] = e_cpu_infer[i];
-        sum_measure_data[i][12] = end_infer[i];
-        sum_measure_data[i][13] = e_infer[i];
-        sum_measure_data[i][14] = start_postprocess[i];
-        sum_measure_data[i][15] = e_postprocess[i];
-        sum_measure_data[i][16] = end_postprocess[i];
-        sum_measure_data[i][17] = execution_time[i];
-        sum_measure_data[i][18] = 0.0;
-        sum_measure_data[i][19] = 0.0;
+        sum_measure_data[i][10] = e_gpu_infer_max[i];
+        sum_measure_data[i][11] = max_gpu_infer_time;
+        sum_measure_data[i][12] = start_cpu_infer[i];
+        sum_measure_data[i][13] = e_cpu_infer[i];
+        sum_measure_data[i][14] = end_infer[i];
+        sum_measure_data[i][15] = e_infer[i];
+        sum_measure_data[i][16] = start_postprocess[i];
+        sum_measure_data[i][17] = e_postprocess[i];
+        sum_measure_data[i][18] = end_postprocess[i];
+        sum_measure_data[i][19] = execution_time[i];
+        sum_measure_data[i][20] = execution_time_max[i];
+        sum_measure_data[i][21] = max_execution_time;
+        sum_measure_data[i][22] = 0.0;
+        sum_measure_data[i][23] = 0.0;
+        sum_measure_data[i][24] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -179,31 +185,41 @@ static int write_result(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate",
+            "execution_time", "execution_time_max", "execution_time_max_value",
+            "cycle_time", "frame_rate",
             "optimal_core");
 
-    double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][16]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
+    double frame_rate = 0.0;
+    double cycle_time = 0.0;
 
     for(i = 0; i < num_exp * optimal_core - startIdx; i++)
     {
-        new_sum_measure_data[i][18] = frame_rate;
-        new_sum_measure_data[i][19] = (double)optimal_core;
+        if (i == 0) cycle_time = NAN;
+        else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
+        if (i == 0) frame_rate = NAN;
+        else frame_rate = 1000/cycle_time;
+
+        new_sum_measure_data[i][22] = cycle_time;
+        new_sum_measure_data[i][23] = frame_rate;
+        new_sum_measure_data[i][24] = (double)optimal_core;
+
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
-                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19]);
+                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
+                new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], new_sum_measure_data[i][24]);
     }
     
     fclose(fp);
@@ -414,6 +430,8 @@ static void threadFunc(thread_data_t data)
             } while(work_time < remaining_time);
         }
 
+        e_gpu_infer_max[count] = get_time_in_ms() - start_preprocess[count];
+
         if (data.thread_id == data.num_thread) {
             current_thread = 1;
         } else {
@@ -498,8 +516,7 @@ static void threadFunc(thread_data_t data)
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
-        frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
-        printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, execution_time[i]);
 #endif
 
         // Busy wait for the remaining time
@@ -514,6 +531,8 @@ static void threadFunc(thread_data_t data)
                 work_time = wait_end - wait_start;
             } while(work_time < remaining_time);
         }
+
+        execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
         // Sleep
         usleep(sleep_time * 1000);
