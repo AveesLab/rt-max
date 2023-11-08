@@ -168,7 +168,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = optimal_core * 0; // Delete some ROWs
+    int startIdx = optimal_core * 5; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -401,14 +401,29 @@ static void threadFunc(thread_data_t data)
         end_gpu_infer[count] = get_time_in_ms();
 #endif
 
+        // Busy wait for the remaining time
+        double remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_preprocess[count]);
+        double wait_start, wait_end, work_time;
+        
+        if (remaining_time > 0) {
+            wait_start = get_time_in_ms();
+            wait_end;
+            do {
+                wait_end = get_time_in_ms();
+                work_time = wait_end - wait_start;
+            } while(work_time < remaining_time);
+        }
+
         if (data.thread_id == data.num_thread) {
             current_thread = 1;
         } else {
             current_thread++;
         }
-        
+
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
+
+
 
         // CPU Inference
 
@@ -486,6 +501,23 @@ static void threadFunc(thread_data_t data)
         frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
+
+        // Busy wait for the remaining time
+        remaining_time = max_execution_time - (get_time_in_ms() - start_preprocess[count]);
+        wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+        
+        if (remaining_time > 0) {
+            wait_start = get_time_in_ms();
+            wait_end;
+            do {
+                wait_end = get_time_in_ms();
+                work_time = wait_end - wait_start;
+            } while(work_time < remaining_time);
+        }
+
+        // Sleep
+        usleep(sleep_time * 1000);
+
 
         // free memory
         free_image(im);
@@ -575,13 +607,14 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
         max_execution_time = max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
 
-        printf("\navg gpu inference time (max) : %0.2f (%0.2f) \n", avg_gpu_infer_time, max_gpu_infer_time);
-        printf("avg execution time (max) : %0.2f (%0.2f) \n", avg_execution_time, max_execution_time);
+        printf("\navg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
+        printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 
         R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
         sleep_time = R * optimal_core - max_execution_time;
-        printf("R : %0.2f \n", R);
-        printf("sleep_time : %0.2f \n", sleep_time);
+        if (sleep_time < 0) sleep_time = 0.0;
+        printf("R : %0.2lf \n", R);
+        printf("sleep_time : %lf \n", sleep_time);
 
         printf("\n\n::EXP:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
