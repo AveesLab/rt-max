@@ -267,7 +267,6 @@ static void threadFunc(thread_data_t data)
     image **alphabet = load_alphabet();
 
     float nms = .45;    // 0.4F
-    double time;
 
     int top = 5;
     int index, i, j, k = 0;
@@ -302,17 +301,38 @@ static void threadFunc(thread_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
+    double remaining_time = 0.0;
+    double wait_start = 0.0;
+    double wait_end = 0.0;
+    double work_time = 0.0;
+
+    double start_task_time = 0.0;
+
     for (i = 0; i < num_exp; i++) {
 
-        if (i == 5) {
-            if (!data.isTest) {
+        if (!data.isTest) {
+            if (i == 5) {
                 pthread_barrier_wait(&barrier);
-                usleep(R * (data.thread_id - 1) * 1000);
+                // usleep(R * (data.thread_id - 1) * 1000);
+
+                // Busy wait for the remaining time
+                remaining_time = R * (data.thread_id - 1);
+                wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+
+                if (remaining_time > 0) {
+                    wait_start = get_time_in_ms();
+                    wait_end;
+                    do {
+                        wait_end = get_time_in_ms();
+                        work_time = wait_end - wait_start;
+                    } while(work_time < remaining_time);
+                }
+
             }
         }
 
 #ifdef MEASURE
-        int count = i * data.num_thread + data.thread_id - 1;
+
 #endif
 
 #ifdef NVTX
@@ -323,7 +343,7 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        // printf("\nThread %d is set to CPU core %d (%d)\n\n", data.thread_id, sched_getcpu(), data.thread_id);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
@@ -334,10 +354,11 @@ static void threadFunc(thread_data_t data)
             pthread_cond_wait(&cond, &mutex_gpu);
         }
         
-        time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
-        start_preprocess[count] = get_time_in_ms();
+        start_task_time = get_time_in_ms();
+        int count = i * data.num_thread + data.thread_id - 1;
+        start_preprocess[count] = start_task_time;
 #endif
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -417,16 +438,18 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // Busy wait for the remaining time
-        double remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_preprocess[count]);
-        double wait_start, wait_end, work_time;
-        
-        if (remaining_time > 0) {
-            wait_start = get_time_in_ms();
-            wait_end;
-            do {
-                wait_end = get_time_in_ms();
-                work_time = wait_end - wait_start;
-            } while(work_time < remaining_time);
+        if (!data.isTest) {
+            remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_preprocess[count]);
+            wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+            
+            if (remaining_time > 0) {
+                wait_start = get_time_in_ms();
+                wait_end;
+                do {
+                    wait_end = get_time_in_ms();
+                    work_time = wait_end - wait_start;
+                } while(work_time < remaining_time);
+            }
         }
 
         e_gpu_infer_max[count] = get_time_in_ms() - start_preprocess[count];
@@ -507,40 +530,38 @@ static void threadFunc(thread_data_t data)
         //     wait_key_cv(1);
         // }
 
+        // free memory
+        free_image(im);
+        free_image(resized);
+        free_image(cropped);
+
 #ifdef MEASURE
         end_postprocess[count] = get_time_in_ms();
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
         core_id_list[count] = (double)sched_getcpu();
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
-#else
-        execution_time[i] = get_time_in_ms() - time;
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, execution_time[i]);
 #endif
 
         // Busy wait for the remaining time
-        remaining_time = max_execution_time - (get_time_in_ms() - start_preprocess[count]);
-        wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-        
-        if (remaining_time > 0) {
-            wait_start = get_time_in_ms();
-            wait_end;
-            do {
-                wait_end = get_time_in_ms();
-                work_time = wait_end - wait_start;
-            } while(work_time < remaining_time);
+        if (!data.isTest) {
+            remaining_time = R * optimal_core - (get_time_in_ms() - start_preprocess[count]);
+            wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+
+            if (remaining_time > 0) {
+                wait_start = get_time_in_ms();
+                wait_end;
+                do {
+                    wait_end = get_time_in_ms();
+                    work_time = wait_end - wait_start;
+                } while(work_time < remaining_time);
+            }
         }
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
         // Sleep
-        usleep(sleep_time * 1000);
-
-
-        // free memory
-        free_image(im);
-        free_image(resized);
-        free_image(cropped);
+        // usleep(sleep_time * 1000);
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
@@ -622,7 +643,7 @@ void gpu_accel_pre_gpu(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
         double wcet_ratio = 1.05;
         max_gpu_infer_time = max_gpu_infer_time * wcet_ratio; // Pre + GPU_infer
-        max_execution_time = max_execution_time * wcet_ratio; // CPU_infer + Post
+        max_execution_time = max_execution_time * 1.02; // CPU_infer + Post
 
         max_execution_time = max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
 
@@ -632,8 +653,8 @@ void gpu_accel_pre_gpu(char *datacfg, char *cfgfile, char *weightfile, char *fil
         R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
         sleep_time = R * optimal_core - max_execution_time;
         if (sleep_time < 0) sleep_time = 0.0;
-        printf("R : %0.2lf \n", R);
-        printf("sleep_time : %lf \n", sleep_time);
+        printf("R : %lf \n", R);
+        printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
 
         printf("\n\n::EXP:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
