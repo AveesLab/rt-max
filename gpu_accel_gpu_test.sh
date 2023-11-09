@@ -54,11 +54,8 @@ else
     exit 1
 fi
 
-
-numbers=(300)
-
 # GPU-accelerated with optimal_core
-for var in "${numbers[@]}"
+for var in $(seq 1 $layer_num)
 do
     ./darknet detector gpu-accel_gpu ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $var -num_exp 30 
 done
