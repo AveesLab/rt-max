@@ -147,7 +147,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp][12];
+    double sum_measure_data[num_exp][13];
     for(i = 0; i < num_exp; i++)
     {
         sum_measure_data[i][0] = start_preprocess_array[i];
@@ -161,7 +161,8 @@ static int write_result(char *file_path)
         sum_measure_data[i][8] = end_postprocess_array[i];
         sum_measure_data[i][9] = e_stall[i];
         sum_measure_data[i][10] = execution_time[i];
-        sum_measure_data[i][11] = frame_rate[i];
+        sum_measure_data[i][11] = 0.0;
+        sum_measure_data[i][12] = 0.0;
     }
 
     int startIdx = 30; // Delete some ROWs
@@ -173,18 +174,30 @@ static int write_result(char *file_path)
         }
         newIndex++;
     }
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "start_preprocess",     "e_preprocess",     "end_preprocess", 
             "start_infer",          "e_infer",          "end_infer", 
             "start_postprocess",    "e_postprocess",    "end_postprocess", 
-            "e_stall",              "execution_time",       "frame_rate");
+            "e_stall",              "execution_time",      "cycle_time",       "frame_rate");
+
+    double frame_rate = 0.0;
+    double cycle_time = 0.0;
 
     for(i = 0; i < num_exp - startIdx; i++)
     {
-        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        if (i == 0) cycle_time = NAN;
+        else cycle_time = new_sum_measure_data[i][0] - new_sum_measure_data[i-1][0];
+
+        if (i == 0) frame_rate = NAN;
+        else frame_rate = 1000/cycle_time;
+
+        new_sum_measure_data[i][11] = cycle_time;
+        new_sum_measure_data[i][12] = frame_rate;
+
+        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
-                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11]);
+                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], new_sum_measure_data[i][12]);
     }
     
     return 1;
