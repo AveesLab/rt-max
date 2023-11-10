@@ -623,7 +623,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
         double wcet_ratio = 1.05;
         max_gpu_infer_time = max_gpu_infer_time * wcet_ratio; // Pre + GPU_infer
-        max_execution_time = max_execution_time * wcet_ratio; // CPU_infer + Post
+        max_execution_time = max_execution_time * 1.02; // CPU_infer + Post
 
         max_execution_time = max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
 
