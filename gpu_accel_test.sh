@@ -58,6 +58,6 @@ fi
 for var in $(seq 1 $layer_num)
 do
     sleep 3s
-    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $var -num_exp 30
+    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $var -num_exp 20
     sleep 3s
 done
