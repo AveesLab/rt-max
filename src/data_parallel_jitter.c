@@ -244,7 +244,7 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
 
-        if (i ==0) pthread_barrier_wait(&barrier);
+        if (i == 0) pthread_barrier_wait(&barrier);
 
         if (!data.isTest) {
             if (i == 5) {
