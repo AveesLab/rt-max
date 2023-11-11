@@ -310,6 +310,8 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
 
+        if (i == 0) pthread_barrier_wait(&barrier);
+        
         if (!data.isTest) {
             if (i == 5) {
                 pthread_barrier_wait(&barrier);
@@ -603,6 +605,8 @@ void gpu_accel_pre_gpu(char *datacfg, char *cfgfile, char *weightfile, char *fil
         printf("\n\nGPU-accelerated with Jitter Compensation (CS: \"Pre + GPU\")\n");
         printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
+        pthread_barrier_init(&barrier, NULL, optimal_core);
+
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;
@@ -658,7 +662,6 @@ void gpu_accel_pre_gpu(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
         printf("\n\n::EXP:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
 
-        pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;

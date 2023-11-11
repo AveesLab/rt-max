@@ -244,7 +244,7 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
 
-        if (i ==0) pthread_barrier_wait(&barrier);
+        if (i == 0) pthread_barrier_wait(&barrier);
 
         if (!data.isTest) {
             if (i == 5) {
@@ -400,7 +400,7 @@ static void threadFunc(thread_data_t data)
     
 }
 
-void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void data_parallel_jitter(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
@@ -416,8 +416,8 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     max_execution_time = 0.0;
     avg_execution_time = 0.0;
 
-    printf("\n\nData-parallel with \"No\" Jitter Compensation\n");
-    printf("\n::EXP:: Data-parallel with %d threads\n", num_thread);
+    printf("\n\nData-parallel with Jitter Compensation\n");
+    printf("\n::TEST:: Data-parallel with %d threads\n", num_thread);
 
     pthread_barrier_init(&barrier, NULL, num_thread);
     for (i = 0; i < num_thread; i++) {
@@ -462,33 +462,33 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     printf("R : %0.2lf \n", R);
 
 
-    // printf("\n\n::EXP:: Data-parallel with %d threads\n", num_thread);
+    printf("\n\n::EXP:: Data-parallel with %d threads\n", num_thread);
 
-    // for (i = 0; i < num_thread; i++) {
-    //     data[i].datacfg = datacfg;
-    //     data[i].cfgfile = cfgfile;
-    //     data[i].weightfile = weightfile;
-    //     data[i].filename = filename;
-    //     data[i].thresh = thresh;
-    //     data[i].hier_thresh = hier_thresh;
-    //     data[i].dont_show = dont_show;
-    //     data[i].ext_output = ext_output;
-    //     data[i].save_labels = save_labels;
-    //     data[i].outfile = outfile;
-    //     data[i].letter_box = letter_box;
-    //     data[i].benchmark_layers = benchmark_layers;
-    //     data[i].thread_id = i + 1;
-    //     data[i].isTest = false;
-    //     rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-    //     if (rc) {
-    //         printf("Error: Unable to create thread, %d\n", rc);
-    //         exit(-1);
-    //     }
-    // }
+    for (i = 0; i < num_thread; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].isTest = false;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
 
-    // for (i = 0; i < num_thread; i++) {
-    //     pthread_join(threads[i], NULL);
-    // }
+    for (i = 0; i < num_thread; i++) {
+        pthread_join(threads[i], NULL);
+    }
 
 #ifdef MEASURE
     char file_path[256] = "measure/";
@@ -502,7 +502,7 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "data-parallel_");
+    strcat(file_path, "data-parallel_jitter_");
 
     char thread[20];
     sprintf(thread, "%dthread", num_thread);
