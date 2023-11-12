@@ -46,6 +46,20 @@ do
 done
 rm pipeline_cpu_utilization.csv
 
+
+## Data-Parallel
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_r_test/$model/
+done
+
+## Data-Parallel
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_r_test_jitter/$model/
+done
+
+
 ## Data-Parallel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do

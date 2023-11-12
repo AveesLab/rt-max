@@ -36,6 +36,7 @@ int num_exp;
 int core_id;
 int num_blas;
 int num_thread;
+int r_time;
 int num_process;
 int gLayer;
 int rLayer;
@@ -1932,6 +1933,7 @@ void run_detector(int argc, char **argv)
     core_id = find_int_arg(argc, argv, "-core_id", 1);
     num_blas = find_int_arg(argc, argv, "-num_blas", 1);
     num_thread = find_int_arg(argc, argv, "-num_thread", 1);
+    r_time = find_int_arg(argc, argv, "-r_time", 1);
     num_process = find_int_arg(argc, argv, "-num_process", 1);
     gLayer = find_int_arg(argc, argv, "-glayer", 1);
     rLayer = find_int_arg(argc, argv, "-rlayer", 1);
@@ -2014,6 +2016,8 @@ void run_detector(int argc, char **argv)
     else if (0 == strcmp(argv[2], "sequential")) sequential(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "sequential-multiblas")) sequential_multiblas(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel")) data_parallel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "data-parallel_r_test")) data_parallel_r_test(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "data-parallel_r_test_jitter")) data_parallel_r_test_jitter(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel_sleep")) data_parallel_sleep(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel_jitter")) data_parallel_jitter(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel-mp")) data_parallel_mp(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
