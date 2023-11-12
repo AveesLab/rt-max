@@ -303,6 +303,11 @@ static void threadFunc(thread_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
+    double remaining_time = 0.0;
+    double wait_start = 0.0;
+    double wait_end = 0.0;
+    double work_time = 0.0;
+
     for (i = 0; i < num_exp; i++) {
 
         if (i == 0) pthread_barrier_wait(&barrier);
@@ -310,7 +315,20 @@ static void threadFunc(thread_data_t data)
         if (i == 5) {
             if (!data.isTest) {
                 pthread_barrier_wait(&barrier);
-                usleep(R * (data.thread_id - 1) * 1000);
+                // usleep(R * (data.thread_id - 1) * 1000);
+
+                // Busy wait for the remaining time
+                remaining_time = R * (data.thread_id - 1);
+                wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+                
+                if (remaining_time > 0) {
+                    wait_start = get_time_in_ms();
+                    wait_end;
+                    do {
+                        wait_end = get_time_in_ms();
+                        work_time = wait_end - wait_start;
+                    } while(work_time < remaining_time);
+                }
             }
         }
 
