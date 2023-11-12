@@ -18,10 +18,11 @@
 # sleep 3
 
 
-./data_parallel_r_test_test.sh -model densenet201
-sleep 3
-./data_parallel_r_test_jitter_test.sh -model densenet201
-sleep 3
+#./data_parallel_r_test_test.sh -model densenet201
+#sleep 3
+#./data_parallel_r_test_jitter_test.sh -model densenet201
+#sleep 3
 
 
 # ./layer_time_test.sh -model densenet201
+./gpu_layer_test.sh -model densenet201
