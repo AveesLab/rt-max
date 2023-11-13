@@ -310,7 +310,7 @@ static void *inference(void *ptr)
 
     // Busy wait for the remaining time
     if (device == 0) remaining_time = 490 - (end_infer[inference_index] - start_infer[inference_index]);
-    else remaining_time = 30 - (end_infer[inference_index] - start_infer[inference_index]);
+    else remaining_time = 18.91 - (end_infer[inference_index] - start_infer[inference_index]);
 
     wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
     
@@ -525,8 +525,8 @@ void pipeline_jitter(char *datacfg, char *cfgfile, char *weightfile, char *filen
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    if (device == 0) strcat(file_path, "pipeline_cpu");
-    else strcat(file_path, "pipeline_gpu");
+    if (device == 0) strcat(file_path, "pipeline_jitter_cpu");
+    else strcat(file_path, "pipeline_jitter_gpu");
 
     strcat(file_path, ".csv");
     if(write_result(file_path) == -1) {
