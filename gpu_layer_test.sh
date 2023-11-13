@@ -55,4 +55,4 @@ else
 fi
 
 # GPU-accelerated with optimal_core
-./darknet detector gpu-layer-test ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $layer_num -num_exp 300
+./darknet detector gpu-layer-test ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer 306 -num_exp 300

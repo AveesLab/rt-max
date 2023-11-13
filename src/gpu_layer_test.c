@@ -24,6 +24,7 @@
 #endif
 
 pthread_barrier_t barrier;
+int skip_layer[1000][10] = {0};
 
 static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
@@ -303,7 +304,7 @@ static void threadFunc(thread_data_t data)
     int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 1; // Choose CPU or GPU
-    extern int skip_layers[1000];
+    extern int skip_layer[1000][10];
     extern gpu_yolo;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
@@ -317,6 +318,19 @@ static void threadFunc(thread_data_t data)
     net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
+
+    int skipped_layers[1000] = {0, };
+
+    for(i = gLayer; i < net.n; i++) {
+        for(j = 0; j < 2; j++) {
+            if((skip_layer[i][j] < gLayer)&&(skip_layer[i][j] != 0)) {
+                skipped_layers[skip_layer[i][j]] = 1;
+                printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layer[i][j]);
+            }
+        }
+    }
+
+    printf("===============");
 
     srand(2222222);
 
@@ -413,23 +427,23 @@ static void threadFunc(thread_data_t data)
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
         for(j = 0; j < gLayer; ++j){
-            double start_layer_time = get_time_in_ms();
             state.index = j;
             l = net.layers[j];
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
 
-
+            double start_layer_time = get_time_in_ms();
             l.forward_gpu(l, state);
 
-            if (skip_layers[j]){
+            CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+            layers_time[count][j] = get_time_in_ms() - start_layer_time;
+            if (skipped_layers[j]){
+                // printf("skip layer : %d\n", j);
                 cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output_gpu;
-            CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
-            layers_time[count][j] = get_time_in_ms() - start_layer_time;
         }
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
@@ -468,8 +482,6 @@ static void threadFunc(thread_data_t data)
 
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
-
-
 
         // CPU Inference
 
@@ -522,10 +534,9 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+// #ifndef MEASURE
+                // else printf("%s: %f\n",names[index], predictions[index]);
+// #endif
 
             }
         }

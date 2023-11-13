@@ -85,7 +85,6 @@ void forward_network_gpu(network net, network_state state)
         }
 
         l.forward_gpu(l, state);
-        if (i == 19) printf("l.output_gpu[0] : %0.3lf \n\n", l.output_gpu[0]);
 
         if (net.benchmark_layers) {
             CHECK_CUDA(cudaDeviceSynchronize());
@@ -714,7 +713,6 @@ float *network_predict_gpu(network net, float *input)
         if (net.use_cuda_graph == 1) {
             int i;
             for (i = 0; i < 16; ++i) switch_stream(i);
-
             cudaStream_t stream0 = switch_stream(0);
             CHECK_CUDA(cudaDeviceSynchronize());
             printf("Try to capture graph... \n");

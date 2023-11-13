@@ -47,6 +47,8 @@
     static int device = 0;
 #endif
 
+extern int skip_layer[1000][10];
+
 void empty_func(dropout_layer l, network_state state) {
     //l.output_gpu = state.input;
 }
@@ -1508,6 +1510,7 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
             l = parse_route(options, params);
             int k;
             for (k = 0; k < l.n; ++k) {
+                skip_layer[count][k] = l.input_layers[k];
                 net.layers[l.input_layers[k]].use_bin_output = 0;
                 if (count >= last_stop_backward)
                     net.layers[l.input_layers[k]].keep_delta_gpu = 1;

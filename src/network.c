@@ -775,7 +775,7 @@ float *network_predict_ptr(network *net, float *input)
 float *network_predict(network net, float *input)
 {
     if (device) {
-        printf("network_predict with gpu \n");
+        // printf("network_predict with gpu \n");
         if(gpu_index >= 0)  return network_predict_gpu(net, input);
     }
 
