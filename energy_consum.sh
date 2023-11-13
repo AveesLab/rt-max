@@ -18,7 +18,7 @@ done) &
 TEGRASTATS_PID=$!
 
 # 여기에 다른 명령이나 스크립트를 실행할 수 있습니다.
-# 예: bash "$INFER_SCRIPT"
+./sequential_test.sh -model densenet201
 
 # 스크립트 실행이 완료되면 tegrastats 프로세스 종료
 kill $TEGRASTATS_PID
