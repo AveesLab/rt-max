@@ -8,7 +8,7 @@ echo "Timestamp,CPU Power Consumption (mW)" > "$output_file"
 # tegrastats 실행 및 CPU 전력 소모량 추출
 (sudo tegrastats --interval 1000 | while read line; do
   timestamp=$(date +%s%3N)  # 밀리초 단위 타임스탬프
-  cpu_power=$(echo $line | grep -oP 'VDD_CPU_CV \K\d+' | awk '{print $1}')  # CPU 전력 소모량 추출
+  cpu_power=$(echo $line | grep -oP 'VDD_CPU_CV \K\d+mW')  # CPU 전력 소모량 추출
   
   # CSV 파일에 측정값 추가
   echo "$timestamp,$cpu_power" >> "$output_file"
