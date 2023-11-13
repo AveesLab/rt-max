@@ -309,7 +309,7 @@ static void threadFunc(thread_data_t data)
         for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
-                printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
+                // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
             }
         }
     }
@@ -550,7 +550,7 @@ static void threadFunc(thread_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 // #ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
+                // else printf("%s: %f\n",names[index], predictions[index]);
 // #endif
 
             }
