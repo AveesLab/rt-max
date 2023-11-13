@@ -37,6 +37,8 @@ static double start_infer[1000];
 static double start_infer_array[1000];
 static double end_infer[1000];
 static double e_infer[1000];
+static double e_infer_max[1000];
+static double end_infer_max[1000];
 static double end_infer_array[1000];
 
 static double start_postprocess[1000];
@@ -47,6 +49,11 @@ static double end_postprocess_array[1000];
 
 static double e_stall[1000];
 #endif
+
+double remaining_time = 0.0;
+double wait_start = 0.0;
+double wait_end = 0.0;
+double work_time = 0.0;
 
 static double execution_time[1000];
 static double frame_rate[1000];
@@ -147,7 +154,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp][13];
+    double sum_measure_data[num_exp][14];
     for(i = 0; i < num_exp; i++)
     {
         sum_measure_data[i][0] = start_preprocess_array[i];
@@ -155,14 +162,17 @@ static int write_result(char *file_path)
         sum_measure_data[i][2] = end_preprocess_array[i];
         sum_measure_data[i][3] = start_infer_array[i];
         sum_measure_data[i][4] = e_infer[i];
-        sum_measure_data[i][5] = end_infer_array[i];
-        sum_measure_data[i][6] = start_postprocess_array[i];
-        sum_measure_data[i][7] = e_postprocess[i];
-        sum_measure_data[i][8] = end_postprocess_array[i];
-        sum_measure_data[i][9] = e_stall[i];
-        sum_measure_data[i][10] = execution_time[i];
-        sum_measure_data[i][11] = 0.0;
+        sum_measure_data[i][5] = e_infer_max[i];
+        sum_measure_data[i][6] = end_infer_array[i];
+        sum_measure_data[i][7] = start_postprocess_array[i];
+        sum_measure_data[i][8] = e_postprocess[i];
+        sum_measure_data[i][9] = end_postprocess_array[i];
+        sum_measure_data[i][10] = e_stall[i];
+        sum_measure_data[i][11] = execution_time[i];
         sum_measure_data[i][12] = 0.0;
+        sum_measure_data[i][13] = 0.0;
+        // printf("e_infer : %0.2f \n",e_infer_max[i]);
+
     }
 
     int startIdx = 30; // Delete some ROWs
@@ -174,9 +184,9 @@ static int write_result(char *file_path)
         }
         newIndex++;
     }
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "start_preprocess",     "e_preprocess",     "end_preprocess", 
-            "start_infer",          "e_infer",          "end_infer", 
+            "start_infer",          "e_infer",          "e_infer_max",           "end_infer", 
             "start_postprocess",    "e_postprocess",    "end_postprocess", 
             "e_stall",              "execution_time",      "cycle_time",       "frame_rate");
 
@@ -191,13 +201,13 @@ static int write_result(char *file_path)
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
-        new_sum_measure_data[i][11] = cycle_time;
-        new_sum_measure_data[i][12] = frame_rate;
+        new_sum_measure_data[i][12] = cycle_time;
+        new_sum_measure_data[i][13] = frame_rate;
 
-        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
-                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], new_sum_measure_data[i][12]);
+                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], new_sum_measure_data[i][12], new_sum_measure_data[i][13]);
     }
     
     return 1;
@@ -214,6 +224,7 @@ static void push_data(int i)
 
     start_infer_array[i] = start_infer[inference_index];
     e_infer[i] = end_infer[inference_index] - start_infer[inference_index];
+    e_infer_max[i] = end_infer_max[inference_index] - start_infer[inference_index];
     end_infer_array[i] = end_infer[inference_index];
 
     start_postprocess_array[i] = start_postprocess[postprocess_index];
@@ -296,7 +307,25 @@ static void *inference(void *ptr)
 
 #ifdef MEASURE
     end_infer[inference_index] = get_time_in_ms();
-    // printf("e_infer : %0.2f \n", end_infer[inference_index] - start_infer[inference_index]);
+
+    // Busy wait for the remaining time
+    if (device == 0) remaining_time = 490 - (end_infer[inference_index] - start_infer[inference_index]);
+    else remaining_time = 30 - (end_infer[inference_index] - start_infer[inference_index]);
+
+    wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+    
+    if (remaining_time > 0) {
+        wait_start = get_time_in_ms();
+        wait_end;
+        do {
+            wait_end = get_time_in_ms();
+            work_time = wait_end - wait_start;
+        } while(work_time < remaining_time);
+    }
+
+    end_infer_max[inference_index] = get_time_in_ms();
+    // printf("end_infer_max : %0.2f \n", end_infer_max[inference_index]);
+
 #endif
 }
 
@@ -358,15 +387,14 @@ static void *postprocess(void *ptr)
 #endif
 }
 
-void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void pipeline_jitter(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
-    device = 0; // Choose CPU or GPU
+    device = 1; // Choose CPU or GPU
 
-    if (device == 0) printf("\n\nPipeline Architectiure with \"CPU\"\n");
-    else printf("\n\nPipeline Architectiure with \"GPU\"\n");
-    
+    if (device == 0) printf("\n\nPipeline Architectiure (Jitter Compensation) with \"CPU\"\n");
+    else printf("\n\nPipeline Architectiure (Jitter Compensation) with \"GPU\"\n");
 
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
