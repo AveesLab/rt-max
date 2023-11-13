@@ -1,6 +1,8 @@
 # ./gpu_accel_pre_gpu_test.sh -model densenet201
-./gpu_accel_gpu_test.sh -model densenet201
-# ./gpu_accel_test.sh -model densenet201
+#./gpu_accel_gpu_test.sh -model densenet201
+
+./gpu_accel_sleep_test.sh -model densenet201
+./gpu_accel_test.sh -model densenet201
 
 
 # sleep 3
