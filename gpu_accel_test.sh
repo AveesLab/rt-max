@@ -55,7 +55,7 @@ else
 fi
 
 # GPU-accelerated with optimal_core
-for var in $(seq 1 $layer_num)
+for var in $(seq 1 5 $layer_num)
 do
     sleep 3s
     ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $var -num_exp 20
