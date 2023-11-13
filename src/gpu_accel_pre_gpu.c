@@ -299,15 +299,13 @@ static void threadFunc(thread_data_t data)
     int skipped_layers[1000] = {0, };
 
     for(i = gLayer; i < net.n; i++) {
-        for(j = 0; j < 2; j++) {
+        for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
-                printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
+                // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
             }
         }
     }
-
-    printf("===============");
 
     srand(2222222);
 
@@ -433,13 +431,15 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
-            // if (skip_layers[j] == 1){
-            //     printf("skip layers : %d \n", j);
-            //     cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-            // }
-            state.input = l.output_gpu;
-        }
 
+            if (skipped_layers[j] == 1){
+                // printf("skip layer : %d,  \n", j);
+                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            }
+
+            state.input = l.output_gpu;
+
+        }
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
 
@@ -532,7 +532,7 @@ static void threadFunc(thread_data_t data)
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 
 // #ifndef MEASURE
-                // else printf("%s: %f\n",names[index], predictions[index]);
+                else printf("%s: %f\n",names[index], predictions[index]);
 // #endif
 
             }

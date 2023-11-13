@@ -306,15 +306,13 @@ static void threadFunc(thread_data_t data)
     int skipped_layers[1000] = {0, };
 
     for(i = gLayer; i < net.n; i++) {
-        for(j = 0; j < 2; j++) {
+        for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
                 printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
             }
         }
     }
-
-    printf("===============");
 
     srand(2222222);
 
@@ -347,7 +345,6 @@ static void threadFunc(thread_data_t data)
                         work_time = wait_end - wait_start;
                     } while(work_time < remaining_time);
                 }
-
 
             }
         }
@@ -441,6 +438,7 @@ static void threadFunc(thread_data_t data)
         start_gpu_infer[count] = get_time_in_ms();
 #endif
 
+
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
         for(j = 0; j < gLayer; ++j){
@@ -451,11 +449,14 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
-            // if (skip_layers[j] == 1){
-            //     printf("skip layer : %d \n", j);
-            //     cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-            // }
+
+            if (skipped_layers[j] == 1){
+                // printf("skip layer : %d,  \n", j);
+                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            }
+
             state.input = l.output_gpu;
+
         }
 
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
@@ -549,7 +550,7 @@ static void threadFunc(thread_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 // #ifndef MEASURE
-                // else printf("%s: %f\n",names[index], predictions[index]);
+                else printf("%s: %f\n",names[index], predictions[index]);
 // #endif
 
             }
