@@ -24,7 +24,6 @@
 #endif
 
 pthread_barrier_t barrier;
-int skip_layer[1000][10] = {0};
 
 static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
@@ -304,7 +303,6 @@ static void threadFunc(thread_data_t data)
     int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 1; // Choose CPU or GPU
-    extern int skip_layer[1000][10];
     extern gpu_yolo;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
@@ -319,13 +317,14 @@ static void threadFunc(thread_data_t data)
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
+    extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
 
     for(i = gLayer; i < net.n; i++) {
         for(j = 0; j < 2; j++) {
-            if((skip_layer[i][j] < gLayer)&&(skip_layer[i][j] != 0)) {
-                skipped_layers[skip_layer[i][j]] = 1;
-                printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layer[i][j]);
+            if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
+                skipped_layers[skip_layers[i][j]] = 1;
+                printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
             }
         }
     }

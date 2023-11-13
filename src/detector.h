@@ -82,7 +82,7 @@ extern int num_thread;
 extern int num_process;
 extern int gLayer;
 extern int rLayer;
-extern int skip_layers[1000];
+extern int skip_layers[1000][10];
 
 #ifdef __cplusplus
 }
