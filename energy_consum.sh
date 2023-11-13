@@ -7,14 +7,14 @@ echo "Timestamp,CPU Power Consumption (mW)" > "$output_file"
 
 # tegrastats 실행 및 CPU 전력 소모량 추출
 (stdbuf -oL sudo tegrastats --interval 1000 | while read line; do
-  timestamp=$(date +%s%3N)  # 밀리초 단위 타임스탬프
   cpu_power=$(echo $line | grep -oP 'VDD_CPU_CV \K\d+mW')  # CPU 전력 소모량 추출
-  
-  # 데이터 기록 전 확인
-  if [ ! -z "$timestamp" ] && [ ! -z "$cpu_power" ]; then
+
+  if [ ! -z "$cpu_power" ]; then
+    timestamp=$(date +%s%3N)  # 밀리초 단위 타임스탬프
     echo "$timestamp,$cpu_power" >> "$output_file"
   fi
 done) &
+
 
 
 # 배경에서 tegrastats를 실행하기 위해 프로세스 ID를 저장합니다.
