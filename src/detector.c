@@ -32,6 +32,7 @@ typedef __compar_fn_t comparison_fn_t;
 #endif
 
 int check_mistakes = 0;
+int isGPU;
 int num_exp;
 int core_id;
 int num_blas;
@@ -1933,6 +1934,7 @@ void run_detector(int argc, char **argv)
     core_id = find_int_arg(argc, argv, "-core_id", 1);
     num_blas = find_int_arg(argc, argv, "-num_blas", 1);
     num_thread = find_int_arg(argc, argv, "-num_thread", 1);
+    isGPU = find_int_arg(argc, argv, "-isGPU", 0);
     r_time = find_int_arg(argc, argv, "-r_time", 1);
     num_process = find_int_arg(argc, argv, "-num_process", 1);
     gLayer = find_int_arg(argc, argv, "-glayer", 1);
@@ -2015,6 +2017,7 @@ void run_detector(int argc, char **argv)
     else if (0 == strcmp(argv[2], "pipeline")) pipeline(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "pipeline_jitter")) pipeline_jitter(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "sequential")) sequential(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "sequential_jitter")) sequential_jitter(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "sequential-multiblas")) sequential_multiblas(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel")) data_parallel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "data-parallel_r_test")) data_parallel_r_test(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);

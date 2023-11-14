@@ -35,19 +35,18 @@ static double e_infer[1000];
 static double start_postprocess[1000];
 static double end_postprocess[1000];
 static double e_postprocess[1000];
+
+static double execution_time_max[1000];
+
 #endif
 
 static double execution_time[1000];
 static double frame_rate[1000];
 
-
-/* Timestamp in ms */
-double get_time_in_ms(void)
-{
-    struct timespec time_after_boot;
-    clock_gettime(CLOCK_MONOTONIC,&time_after_boot);
-    return (time_after_boot.tv_sec*1000+time_after_boot.tv_nsec*0.000001);
-}
+static double remaining_time = 0.0;
+static double wait_start = 0.0;
+static double wait_end = 0.0;
+static double work_time = 0.0;
 
 #ifdef MEASURE
 static int write_result(char *file_path) 
@@ -86,7 +85,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp][12];
+    double sum_measure_data[num_exp][13];
     for(i = 0; i < num_exp; i++)
     {
         sum_measure_data[i][0] = start_preprocess[i];
@@ -99,8 +98,9 @@ static int write_result(char *file_path)
         sum_measure_data[i][7] = e_postprocess[i];
         sum_measure_data[i][8] = end_postprocess[i];
         sum_measure_data[i][9] = execution_time[i];
-        sum_measure_data[i][10] = 0.0;
+        sum_measure_data[i][10] = execution_time_max[i];
         sum_measure_data[i][11] = 0.0;
+        sum_measure_data[i][12] = 0.0;
     }
 
     int startIdx = 30; // Delete some ROWs
@@ -112,11 +112,11 @@ static int write_result(char *file_path)
         }
         newIndex++;
     }
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "start_preprocess",     "e_preprocess",     "end_preprocess", 
             "start_infer",          "e_infer",          "end_infer", 
             "start_postprocess",    "e_postprocess",    "end_postprocess", 
-            "execution_time", "cycle_time", "frame_rate");
+            "execution_time", "execution_time_max", "cycle_time", "frame_rate");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
@@ -129,27 +129,27 @@ static int write_result(char *file_path)
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
-        new_sum_measure_data[i][10] = cycle_time;
-        new_sum_measure_data[i][11] = frame_rate;
+        new_sum_measure_data[i][11] = cycle_time;
+        new_sum_measure_data[i][12] = frame_rate;
 
-        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
-                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11]);
+                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], new_sum_measure_data[i][12]);
     }
     
     return 1;
 }
 #endif
 
-void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void sequential_jitter(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
     int device = isGPU; // Choose CPU or GPU
 
-    if (device == 0) printf("\n\nSequential(%dth core) Architectiure with \"CPU\"\n", core_id);
-    else printf("\n\nSequential(%dth core) Architectiure with \"GPU\"\n", core_id);
+    if (device == 0) printf("\n\nSequential(%dth core) Architectiure (Jitter Compensation) with \"CPU\"\n", core_id);
+    else printf("\n\nSequential(%dth core) Architectiure (Jitter Compensation) with \"GPU\"\n", core_id);
 
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
@@ -276,6 +276,11 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         //     wait_key_cv(1);
         // }
 
+        // free memory
+        free_image(im);
+        free_image(resized);
+        free_image(cropped);
+
 #ifdef MEASURE
         end_postprocess[i] = get_time_in_ms();
         e_postprocess[i] = end_postprocess[i] - start_postprocess[i];
@@ -287,10 +292,26 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         frame_rate[i] = 1000.0 / (execution_time[i] / 1); // 1 single thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
-        // free memory
-        free_image(im);
-        free_image(resized);
-        free_image(cropped);
+
+#ifdef MEASURE
+    // Busy wait for the remaining time
+    if (device == 0) remaining_time = 500 - (end_postprocess[i] - start_preprocess[i]);
+    else remaining_time = 30 - (end_postprocess[i] - start_preprocess[i]);
+
+    wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+    
+    if (remaining_time > 0) {
+        wait_start = get_time_in_ms();
+        wait_end;
+        do {
+            wait_end = get_time_in_ms();
+            work_time = wait_end - wait_start;
+        } while(work_time < remaining_time);
+    }
+
+    execution_time_max[i] = get_time_in_ms() - start_preprocess[i];
+    // printf("end_infer_max : %0.2f \n", end_infer_max[inference_index]);
+#endif
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
@@ -311,8 +332,8 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    if (device == 0) strcat(file_path, "sequential_cpu_");
-    else strcat(file_path, "sequential_gpu_");
+    if (device == 0) strcat(file_path, "sequential_jitter_cpu_");
+    else strcat(file_path, "sequential_jitter_gpu_");
 
     strcat(file_path, core_idx);
 

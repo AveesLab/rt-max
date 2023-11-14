@@ -362,7 +362,7 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
-    device = 0; // Choose CPU or GPU
+    device = isGPU; // Choose CPU or GPU
 
     if (device == 0) printf("\n\nPipeline Architectiure with \"CPU\"\n");
     else printf("\n\nPipeline Architectiure with \"GPU\"\n");

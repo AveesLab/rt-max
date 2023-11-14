@@ -50,10 +50,10 @@ static double end_postprocess_array[1000];
 static double e_stall[1000];
 #endif
 
-double remaining_time = 0.0;
-double wait_start = 0.0;
-double wait_end = 0.0;
-double work_time = 0.0;
+static double remaining_time = 0.0;
+static double wait_start = 0.0;
+static double wait_end = 0.0;
+static double work_time = 0.0;
 
 static double execution_time[1000];
 static double frame_rate[1000];
@@ -310,7 +310,7 @@ static void *inference(void *ptr)
 
     // Busy wait for the remaining time
     if (device == 0) remaining_time = 490 - (end_infer[inference_index] - start_infer[inference_index]);
-    else remaining_time = 18.91 - (end_infer[inference_index] - start_infer[inference_index]);
+    else remaining_time = 18.9 - (end_infer[inference_index] - start_infer[inference_index]);
 
     wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
     
@@ -391,7 +391,7 @@ void pipeline_jitter(char *datacfg, char *cfgfile, char *weightfile, char *filen
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
-    device = 1; // Choose CPU or GPU
+    device = isGPU; // Choose CPU or GPU
 
     if (device == 0) printf("\n\nPipeline Architectiure (Jitter Compensation) with \"CPU\"\n");
     else printf("\n\nPipeline Architectiure (Jitter Compensation) with \"GPU\"\n");

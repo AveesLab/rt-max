@@ -2,7 +2,7 @@
 
 # 기본값 설정
 model=""
-gap=1  # 기본 gap 값 설정
+isGPU=""
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -11,8 +11,8 @@ while [[ "$#" -gt 0 ]]; do
             model="$2"
             shift
             ;;
-        -gap)
-            gap="$2"
+        -isGPU)
+            isGPU="$2"
             shift
             ;;
         *)
@@ -23,34 +23,40 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+# isGPU 값이 설정되지 않았을 경우 오류 처리
+if [ -z "$isGPU" ]; then
+    echo "Error: -isGPU parameter not specified"
+    exit 1
+fi
+
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
-    layer_num=305
+    layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
-    layer_num=205
+    layer_num=206
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
-    layer_num=135
+    layer_num=136
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
-    layer_num=80
+    layer_num=81
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
-    layer_num=49
+    layer_num=50
 elif [ "$model" == "yolov7" ]; then
     data_file="coco"
-    layer_num=142
+    layer_num=143
 elif [ "$model" == "yolov7-tiny" ]; then
     data_file="coco"
-    layer_num=98
+    layer_num=99
 elif [ "$model" == "yolov4" ]; then
     data_file="coco"
-    layer_num=161
+    layer_num=162
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
-    layer_num=37
+    layer_num=38
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
     exit 1
@@ -59,22 +65,7 @@ else
     exit 1
 fi
 
-# gap 값이 유효한지 확인
-if ! [[ "$gap" =~ ^[0-9]+$ ]]; then
-    echo "Error: Gap value must be an integer"
-    exit 1
-fi
-
-# gap 값이 layer_num을 초과하지 않는지 확인
-if [ "$gap" -gt "$layer_num" ]; then
-    echo "Error: Gap value must not exceed layer number ($layer_num)"
-    exit 1
-fi
-
-# GPU-accelerated with optimal_core
-for var in $(seq 1 $gap $layer_num)
-do
-    sleep 3s
-    ./darknet detector gpu-accel_gpu ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer 305 -num_exp 20 
-    sleep 3s
-done
+# Sequential
+./darknet detector sequential_jitter ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -core_id 3 -num_exp 100  -isGPU $isGPU
+# Test detector
+# ./darknet detector test ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg 
