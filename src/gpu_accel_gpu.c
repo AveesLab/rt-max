@@ -384,19 +384,19 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // Busy wait for the remaining time
-        if (!data.isTest) {
-            remaining_time = max_preprocess_time - (get_time_in_ms() - start_preprocess[count]);
-            wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+        // if (!data.isTest) {
+        //     remaining_time = max_preprocess_time - (get_time_in_ms() - start_preprocess[count]);
+        //     wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
             
-            if (remaining_time > 0) {
-                wait_start = get_time_in_ms();
-                wait_end;
-                do {
-                    wait_end = get_time_in_ms();
-                    work_time = wait_end - wait_start;
-                } while(work_time < remaining_time);
-            }
-        }
+        //     if (remaining_time > 0) {
+        //         wait_start = get_time_in_ms();
+        //         wait_end;
+        //         do {
+        //             wait_end = get_time_in_ms();
+        //             work_time = wait_end - wait_start;
+        //         } while(work_time < remaining_time);
+        //     }
+        // }
         e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         // __Inference__
@@ -473,19 +473,19 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // Busy wait for the remaining time
-        if (!data.isTest) {
-            remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time
-            wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+        // if (!data.isTest) {
+        //     remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time
+        //     wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
             
-            if (remaining_time > 0) {
-                wait_start = get_time_in_ms();
-                wait_end;
-                do {
-                    wait_end = get_time_in_ms();
-                    work_time = wait_end - wait_start;
-                } while(work_time < remaining_time);
-            }
-        }
+        //     if (remaining_time > 0) {
+        //         wait_start = get_time_in_ms();
+        //         wait_end;
+        //         do {
+        //             wait_end = get_time_in_ms();
+        //             work_time = wait_end - wait_start;
+        //         } while(work_time < remaining_time);
+        //     }
+        // }
 
         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
 
@@ -667,27 +667,27 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
         int startIdx = 5 * optimal_core;
         for (i = startIdx; i < optimal_core * num_exp; i++) {
-            max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
+            // max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
             max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
-            max_execution_time = MAX(max_execution_time, (e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
+            max_execution_time = MAX(max_execution_time, (e_preprocess[i]+e_gpu_infer[i]+e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
 
-            avg_preprocess_time += e_preprocess[i];
+            // avg_preprocess_time += e_preprocess[i];
             avg_gpu_infer_time += e_gpu_infer[i];
             avg_execution_time += (execution_time[i]-waiting_gpu[i]);
         }
 
-        avg_preprocess_time = avg_preprocess_time / (optimal_core * num_exp - startIdx + 1);
+        // avg_preprocess_time = avg_preprocess_time / (optimal_core * num_exp - startIdx + 1);
         avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
         avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
 
         double wcet_ratio = 1.05;
-        max_preprocess_time = max_preprocess_time * wcet_ratio; // Pre
-        max_gpu_infer_time = max_gpu_infer_time * wcet_ratio; // GPU_infer
-        max_execution_time = max_execution_time * 1.02; // CPU_infer + Post
+        // max_preprocess_time = max_preprocess_time * wcet_ratio; // Pre
+        max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
+        max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
 
-        max_execution_time = max_preprocess_time + max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
+        // max_execution_time = max_preprocess_time + max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
 
-        printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
+        // printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
         printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
         printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 

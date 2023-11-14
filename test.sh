@@ -20,23 +20,23 @@ if [ -z "$model" ]; then
 fi
 
 
-./sequential_test.sh -isGPU 0 -model $model 
-./sequential_test.sh -isGPU 1 -model $model 
-./sequential_jitter_test.sh -isGPU 0 -model $model
-./sequential_jitter_test.sh -isGPU 1 -model $model
+#./sequential_test.sh -isGPU 0 -model $model 
+#./sequential_test.sh -isGPU 1 -model $model 
+#./sequential_jitter_test.sh -isGPU 0 -model $model
+#./sequential_jitter_test.sh -isGPU 1 -model $model
 
-./pipeline_test.sh -isGPU 0 -model $model
-./pipeline_test.sh -isGPU 1 -model $model
-./pipeline_jitter_test.sh -isGPU 0 -model $model
-./pipeline_jitter_test.sh -isGPU 1 -model $model
+#./pipeline_test.sh -isGPU 0 -model $model
+#./pipeline_test.sh -isGPU 1 -model $model
+#./pipeline_jitter_test.sh -isGPU 0 -model $model
+#./pipeline_jitter_test.sh -isGPU 1 -model $model
 
-./data_parallel_sleep_test.sh -model $model
-./data_parallel_jitter_test.sh -model $model
+#./data_parallel_sleep_test.sh -model $model
+#./data_parallel_jitter_test.sh -model $model
 
 if [ "$model" == "densenet201" ]; then
-    ./gpu_accel_gpu_test.sh -model $model -gap 5
+    ./gpu_accel_gpu_test.sh -model $model -gap 10
 elif [ "$model" == "yolov7-tiny" ]; then
-    ./gpu_accel_gpu_test.sh -model $model -gap 2
+    ./gpu_accel_gpu_test.sh -model $model -gap 10
 else
     echo "Error: Unsupported model '$model'"
     exit 1
