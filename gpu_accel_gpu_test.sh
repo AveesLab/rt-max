@@ -71,8 +71,14 @@ if [ "$gap" -gt "$layer_num" ]; then
     exit 1
 fi
 
+if [ "$model" = "densenet201" ]; then
+    start=166  # model이 "densenet201"인 경우 시작 숫자를 166으로 설정
+else
+    start=1    # 그렇지 않은 경우 시작 숫자를 1로 설정
+fi
+
 # GPU-accelerated with optimal_core
-for var in $(seq 1 $gap $layer_num)
+for var in $(seq $start $gap $layer_num)
 do
     sleep 3s
     ./darknet detector gpu-accel_gpu ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $var -num_exp 20 

@@ -33,7 +33,7 @@ fi
 # ./data_parallel_sleep_test.sh -model $model
 # ./data_parallel_jitter_test.sh -model $model
 
-./data_parallel_test.sh -model $model
+#./data_parallel_test.sh -model $model
 
 if [ "$model" == "densenet201" ]; then
     ./gpu_accel_gpu_test.sh -model $model -gap 5
