@@ -117,7 +117,7 @@ We partially accelerate (only **front *k***) layers to balance frame rate and pe
 
 ### Evaluation of Our Data-parallel Architecture
 
-<img src="img/delay_graph.svg" alt="Delay Graph" width="31%"/> 
+<img src="img/delay_graph.svg" alt="Delay Graph" width="30%"/> 
 <img src="img/frame_rate_graph.svg" alt="Frame Rate Graph" width="30%"/> 
 <img src="img/energy_graph.svg" alt="Energy Graph" width="30%"/>
 
@@ -127,8 +127,8 @@ We partially accelerate (only **front *k***) layers to balance frame rate and pe
 
 ### Frame Rate Optimization by Partial GPU Acceleration
 
-<img src="img/gpu-accel_densenet201_frame_rate.svg" alt="Delay Graph" width="45%"/> 
-<img src="img/gpu-accel_densenet201_cycle_time.svg" alt="Frame Rate Graph" width="45%"/> 
+<img src="img/gpu-accel_densenet201_frame_rate.svg" alt="Delay Graph" width="40%"/> 
+<img src="img/gpu-accel_densenet201_cycle_time.svg" alt="Frame Rate Graph" width="40%"/> 
 
  - Increasing the number of accelerated layers (𝑘) continually reduces perception delay.
  - Frame rate increases until reaching the optimal frame rate (73.97 FPS) with 𝑘=169.
