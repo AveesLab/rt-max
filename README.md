@@ -69,6 +69,8 @@ $ ./setup.sh
 ./sequential_test.sh -model {model} -isGPU 0
 ```
 
+---
+
 ## Pipeline Architecture
 
 <img src =./img/pipeline.SVG/> 
@@ -84,6 +86,8 @@ $ ./setup.sh
 ./pipeline_test.sh -model {model} -isGPU 0
 ```
 
+---
+
 ## Data-Parallel Architecture
 
 <img src =./img/data-parallel.SVG/>
@@ -94,6 +98,8 @@ $ ./setup.sh
 ```
 ./data_parallel_test.sh -model {model}
 ```
+
+---
 
 ## Partial DNN Acceleration Architecture
 
@@ -115,6 +121,8 @@ We partially accelerate (only **front *k***) layers to balance frame rate and pe
 - **Dpa(Full)** : Data-parallel Architecture with Full GPU Acceleration
 - **Dpa(Partial)** : Data-parallel Architecture with Partial GPU Acceleration
 
+---
+
 ### Evaluation of Our Data-parallel Architecture
 
 <img src="img/delay_graph.svg" alt="Delay Graph" width="31%"/> <img src="img/frame_rate_graph.svg" alt="Frame Rate Graph" width="30%"/> <img src="img/energy_graph.svg" alt="Energy Graph" width="30%"/>
@@ -131,6 +139,7 @@ We partially accelerate (only **front *k***) layers to balance frame rate and pe
  - Frame rate increases until reaching the optimal frame rate (73.97 FPS) with 𝑘=169.
  - Then the frame rate decreases as the GPU becomes more and more serious bottleneck.
 
+---
 
 ### Data-parallel Architecture with Partial GPU Acceleration
 
@@ -141,6 +150,7 @@ We partially accelerate (only **front *k***) layers to balance frame rate and pe
  - Dpa (Partial) consumes more energy by making both CPU and GPU fully busy.
  - Two choices ( Dpa (Full) – delay optimal or Dpa (Partial) – frame rate optimal). 
 
+---
 
 ## Citaion
 ```
