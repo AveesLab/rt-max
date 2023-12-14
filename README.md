@@ -96,3 +96,15 @@ We partially accelerate (only front *k*) layers to balance frame rate and percep
 ```
 ./gpu_accel_test.sh -model {model}
 ```
+
+### Citaion
+```
+@InProceedings{Ahn_2023_ML4AD,
+    author    = {Sol Ahn, Seungha Kim, Ho Kang,Jong-Chan Kim},
+    title     = {Data-parallel Real-Time Perception System with Partial GPU Acceleration for Autonomous Driving},
+    booktitle = {Proceedings of the Machine Learning for Autonomous Driving (ML4AD)},
+    month     = {December},
+    year      = {2023},
+    pages     = {}
+}
+```
