@@ -1,7 +1,7 @@
 # Data-parallel Framework
 Darknet frame rate & delay optimization 
 
-### ※ We use NVIDIA Jetson AGX Orin 64GB which has 12 CPU cores, and our code is based on this hardware platform. 
+### ※ We use NVIDIA Jetson AGX Orin 32GB which has 12 CPU cores, and our code is based on this hardware platform. 
 
 # Setup
 ## Power Mode Setting
@@ -56,6 +56,7 @@ $ ./setup.sh
 
 ## Sequential Architecture
 
+<img src =./img/sequential.SVG>
 - **Perception Delay** : Optimal, with no additional delay
 - **Frame Rate** : Worst, by a single CPU core's performance
 
@@ -69,6 +70,7 @@ $ ./setup.sh
 
 ## Pipeline Architecture
 
+<img src =./img/pipeline.SVG>
 - **Perception Delay** : Worst, additionally delayed due to pipleine stalls
 - **Frame Rate** : Enhanced, however, limited by the performance of three CPU cores
 
@@ -82,6 +84,7 @@ $ ./setup.sh
 
 ## Data-Parallel Architecture
 
+<img src =./img/data-parallel.SVG>
 - **Perception Delay** : Nerar-optimal, despite minor memory contention delay
 - **Frame Rate** : Optimal, by maximally utilizing all the CPU cores (*M* cores)
 
@@ -91,13 +94,45 @@ $ ./setup.sh
 
 ## Partial DNN Acceleration Architecture
 
+<img src =./img/data-parallel_partial_accel.SVG>
 We partially accelerate (only front *k*) layers to balance frame rate and perception delay. So you can find delay optimal & frame rate optimal
 
 ```
 ./gpu_accel_test.sh -model {model}
 ```
 
-### Citaion
+## Evaluation
+### Evaluation of Our Data-parallel Architecture
+
+<img src="img/delay_graph.svg" alt="Delay Graph" width="31%"/> 
+<img src="img/frame_rate_graph.svg" alt="Frame Rate Graph" width="30%"/> 
+<img src="img/energy_graph.svg" alt="Energy Graph" width="30%"/>
+
+- Dpa achieves the highest frame rate of 19.05 FPS, outperforming Seq and Tpa.
+- Dpa exhibits slightly increased perception delay from Seq due to memory contention. 
+- Dpa shows the best energy efficiency by utilizing all the given CPU cores.
+
+### Frame Rate Optimization by Partial GPU Acceleration
+
+<img src="img/gpu-accel_densenet201_frame_rate.svg" alt="Delay Graph" width="45%"/> 
+<img src="img/gpu-accel_densenet201_cycle_time.svg" alt="Frame Rate Graph" width="45%"/> 
+
+ - Increasing the number of accelerated layers (𝑘) continually reduces perception delay.
+ - Frame rate increases until reaching the optimal frame rate (73.97 FPS) with 𝑘=169.
+ - Then the frame rate decreases as the GPU becomes more and more serious bottleneck.
+
+
+### Data-parallel Architecture with Partial GPU Acceleration
+
+<img src="img/delay_gpu.svg" alt="Delay Graph" width="30%"/> <img src="img/frame_rate_gpu.svg" alt="Frame Rate Graph" width="30%"/> <img src="img/energy_gpu.svg" alt="Energy Graph" width="30%"/>
+
+ - Dpa (Partial) achieves the optimal frame rate, however, with limited delay reduction.
+ - Dpa (Full) shows near-optimal perception delay, but suboptimal frame rate.
+ - Dpa (Partial) consumes more energy by making both CPU and GPU fully busy.
+ - Two choices ( Dpa (Full) – delay optimal or Dpa (Partial) – frame rate optimal). 
+
+
+## Citaion
 ```
 @InProceedings{Ahn_2023_ML4AD,
     author    = {Sol Ahn, Seungha Kim, Ho Kang,Jong-Chan Kim},
