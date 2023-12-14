@@ -1,7 +1,7 @@
 # Data-parallel Framework
 Darknet frame rate & delay optimization 
 
-### ※ We use NVIDIA Jetson AGX Orin 64GB, and our code is based on this hardware platform. 
+### ※ We use NVIDIA Jetson AGX Orin 64GB which has 12 CPU cores, and our code is based on this hardware platform. 
 
 # Setup
 ## Power Mode Setting
@@ -55,6 +55,10 @@ $ ./setup.sh
 # Implementation
 
 ## Sequential Architecture
+
+- **Perception Delay** : Optimal, with no additional delay
+- **Frame Rate** : Worst, by a single CPU core's performance
+
 ```
 # use GPU as Inference
 ./sequential_test.sh -model {model} -isGPU 1
@@ -64,6 +68,10 @@ $ ./setup.sh
 ```
 
 ## Pipeline Architecture
+
+- **Perception Delay** : Worst, additionally delayed due to pipleine stalls
+- **Frame Rate** : Enhanced, however, limited by the performance of three CPU cores
+
 ```
 # use GPU as Inference
 ./pipeline_test.sh -model {model} -isGPU 1
@@ -73,11 +81,18 @@ $ ./setup.sh
 ```
 
 ## Data-Parallel Architecture
+
+- **Perception Delay** : Nerar-optimal, despite minor memory contention delay
+- **Frame Rate** : Optimal, by maximally utilizing all the CPU cores (*M* cores)
+
 ```
 ./data_parallel_test.sh -model {model}
 ```
 
 ## Partial DNN Acceleration Architecture
+
+We partially accelerate (only front *k*) layers to balance frame rate and perception delay. So you can find delay optimal & frame rate optimal
+
 ```
 ./gpu_accel_test.sh -model {model}
 ```
