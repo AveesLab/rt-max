@@ -3,6 +3,8 @@ Darknet frame rate & delay optimization
 
 ### ※ We use NVIDIA Jetson AGX Orin 32GB which has 12 CPU cores, and our code is based on this hardware platform. 
 
+---
+
 # Setup
 ## Power Mode Setting
 ```
@@ -44,6 +46,8 @@ DLA1_FALCON MAX_FREQ -1
 PVA0_VPS MAX_FREQ -1
 PVA0_AXI MAX_FREQ -1
 ```
+
+---
 
 ## OpenBLAS
 ```
@@ -130,6 +134,8 @@ We partially accelerate (only **front *k***) layers to balance frame rate and pe
 - Dpa achieves the highest frame rate of 19.05 FPS, outperforming Seq and Tpa.
 - Dpa exhibits slightly increased perception delay from Seq due to memory contention. 
 - Dpa shows the best energy efficiency by utilizing all the given CPU cores.
+
+---
 
 ### Frame Rate Optimization by Partial GPU Acceleration
 
