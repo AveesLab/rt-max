@@ -56,9 +56,10 @@ $ ./setup.sh
 
 ## Sequential Architecture
 
-<img src =./img/sequential.SVG>
-- **Perception Delay** : Optimal, with no additional delay
-- **Frame Rate** : Worst, by a single CPU core's performance
+<img src =./img/sequential.SVG/>
+
+- **Perception Delay** : **Optimal**, with no additional delay
+- **Frame Rate** : **Worst**, by a single CPU core's performance
 
 ```
 # use GPU as Inference
@@ -70,9 +71,10 @@ $ ./setup.sh
 
 ## Pipeline Architecture
 
-<img src =./img/pipeline.SVG>
-- **Perception Delay** : Worst, additionally delayed due to pipleine stalls
-- **Frame Rate** : Enhanced, however, limited by the performance of three CPU cores
+<img src =./img/pipeline.SVG/> 
+
+- **Perception Delay** : **Worst**, additionally delayed due to pipleine stalls
+- **Frame Rate** : **Enhanced**, however, limited by the performance of three CPU cores
 
 ```
 # use GPU as Inference
@@ -84,9 +86,10 @@ $ ./setup.sh
 
 ## Data-Parallel Architecture
 
-<img src =./img/data-parallel.SVG>
-- **Perception Delay** : Nerar-optimal, despite minor memory contention delay
-- **Frame Rate** : Optimal, by maximally utilizing all the CPU cores (*M* cores)
+<img src =./img/data-parallel.SVG/>
+
+- **Perception Delay** : **Nerar-optimal**, despite minor memory contention delay
+- **Frame Rate** : **Optimal**, by maximally utilizing all the CPU cores (*M* cores)
 
 ```
 ./data_parallel_test.sh -model {model}
@@ -94,14 +97,24 @@ $ ./setup.sh
 
 ## Partial DNN Acceleration Architecture
 
-<img src =./img/data-parallel_partial_accel.SVG>
-We partially accelerate (only front *k*) layers to balance frame rate and perception delay. So you can find delay optimal & frame rate optimal
+<img src =./img/data-parallel_partial_accel.SVG/>
+
+We partially accelerate (only **front *k***) layers to balance frame rate and perception delay. So you can find delay optimal & frame rate optimal
 
 ```
 ./gpu_accel_test.sh -model {model}
 ```
 
 ## Evaluation
+
+- **Seq** : Sequential Architecture
+- **Tpa** : Task-parallel Architecture
+- **Dpa** : Data-parallel Architecture
+- **Seq(Full)** : Sequential Architecture with Full GPU Acceleration
+- **Tpa(Full)** : Task-parallel Architecture with Full GPU Acceleration
+- **Dpa(Full)** : Data-parallel Architecture with Full GPU Acceleration
+- **Dpa(Partial)** : Data-parallel Architecture with Partial GPU Acceleration
+
 ### Evaluation of Our Data-parallel Architecture
 
 <img src="img/delay_graph.svg" alt="Delay Graph" width="31%"/> 
