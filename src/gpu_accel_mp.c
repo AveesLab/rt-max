@@ -296,6 +296,18 @@ static void processFunc(process_data_t data)
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
+    extern int skip_layers[1000][10];
+    int skipped_layers[1000] = {0, };
+
+    for(i = gLayer; i < net.n; i++) {
+        for(j = 0; j < 10; j++) {
+            if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
+                skipped_layers[skip_layers[i][j]] = 1;
+                // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
+            }
+        }
+    }
+
     srand(2222222);
 
     if (data.filename) strncpy(input, data.filename, 256);
@@ -380,7 +392,7 @@ static void processFunc(process_data_t data)
             }
 
             l.forward_gpu(l, state);
-            if (skip_layers[j]){
+            if (skipped_layers[j]){
                 cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output_gpu;
