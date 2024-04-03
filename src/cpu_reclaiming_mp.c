@@ -373,10 +373,10 @@ static void processFunc(process_data_t data)
         // __Inference__
         // if (device) predictions = network_predict(net, X);
         // else predictions = network_predict_cpu(net, X);
-        lock_resource(0);
 #ifdef MEASURE
         measure_data.start_infer[i] = get_time_in_ms();
 #endif
+        lock_resource(0);
 
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
@@ -430,10 +430,13 @@ static void processFunc(process_data_t data)
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
         measure_data.end_gpu_infer[i] = get_time_in_ms();
-        if(max_gpu_infer_time > 0) {
+        /*if(max_gpu_infer_time > 0) {
             if((max_gpu_infer_time- (measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i]))>0){
                 usleep((max_gpu_infer_time- (measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i])) * 1000);
             }
+        }*/
+        if((R - (measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i])) > 0) {
+            usleep((R - (measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i])) * 1000);
         }
 
         unlock_resource(0);
@@ -486,10 +489,8 @@ static void processFunc(process_data_t data)
         }
 
         measure_data.end_reclaim_infer[i] = get_time_in_ms();
-        if(max_reclaiming_infer_time > 0) {
-            if((max_reclaiming_infer_time - (measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i]))>0){
-                usleep((max_reclaiming_infer_time - (measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i])) * 1000);
-            }
+        if((R - (measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i])) > 0) {
+            usleep((R - (measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i])) * 1000);
         }
 
         unlock_resource(1);
@@ -529,6 +530,7 @@ static void processFunc(process_data_t data)
 
 #ifdef MEASURE
         measure_data.end_infer[i] = get_time_in_ms();
+        //measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
         measure_data.waiting_reclaim[i] = measure_data.start_reclaim_infer[i] - measure_data.end_gpu_infer[i];
@@ -578,8 +580,8 @@ static void processFunc(process_data_t data)
         measure_data.frame_rate[i] = 1000.0 / measure_data.execution_time[i];
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
         if(max_execution_time > 0) {
-            if((max_execution_time - (measure_data.execution_time[i]))>0){
-                usleep(max_execution_time - (measure_data.execution_time[i]) * 1000);
+            if(((R * optimal_core) - (measure_data.execution_time[i]))>0){
+                usleep((R * optimal_core) - (measure_data.execution_time[i]) * 1000);
             }
         }
         measure_data.execution_time[i] = get_time_in_ms()- measure_data.start_preprocess[i];
@@ -723,7 +725,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     avg_execution_time /= num_process * num_exp - startIdx;
     avg_reclaiming_infer_time /= num_process * num_exp - startIdx;
 
-    double wcet_ratio = 1.07;
+    double wcet_ratio = 1.5;
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
     max_reclaiming_infer_time = avg_reclaiming_infer_time * wcet_ratio; // Reclaiming_infer
