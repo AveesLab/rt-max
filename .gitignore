@@ -18,6 +18,8 @@ caffe/
 grasp/
 images/
 opencv/
+weights/
+measure/
 convnet/
 decaf/
 submission/
