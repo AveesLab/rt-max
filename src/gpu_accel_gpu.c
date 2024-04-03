@@ -619,9 +619,8 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     pthread_t threads[MAXCORES - 1];
     int rc;
     int i;
-
+    
     thread_data_t data[MAXCORES - 1];
-
 #ifdef MEASURE
 
         optimal_core = 11;
