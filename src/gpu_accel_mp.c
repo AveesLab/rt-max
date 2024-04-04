@@ -174,10 +174,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][17] = measure_data[core_id - 1].execution_time[count];
         sum_measure_data[i][18] = measure_data[core_id - 1].frame_rate[count];
         sum_measure_data[i][19] = measure_data[core_id - 1].cycle_time[count];
-        // sum_measure_data[i][20] = measure_data[core_id - 1].start_gap[count]; // start_gap
-        if (i == 0) sum_measure_data[i][20] = 0.0;
-        else if (i == num_exp * num_process - 1) sum_measure_data[i][20] = 0.0;
-        else sum_measure_data[i][20] = sum_measure_data[i][1] - sum_measure_data[i-1][1]; // start_gap
+        sum_measure_data[i][20] = measure_data[core_id - 1].start_gap[count]; // start_gap
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -196,14 +193,16 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
     for(i = 0; i < num_exp * num_process; i++)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
-        int count = i / num_process;
+        double gap = i / num_process;
+        if (i == 0) gap = 0.0;
+        else gap = sum_measure_data[i][1] - sum_measure_data[i-1][1]; // start_gap
 
         fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 sum_measure_data[i][0], sum_measure_data[i][1], sum_measure_data[i][2], sum_measure_data[i][3], 
                 sum_measure_data[i][4], sum_measure_data[i][5], sum_measure_data[i][6], sum_measure_data[i][7], 
                 sum_measure_data[i][8], sum_measure_data[i][9], sum_measure_data[i][10], sum_measure_data[i][11], 
                 sum_measure_data[i][12], sum_measure_data[i][13], sum_measure_data[i][14], sum_measure_data[i][15],
-                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18], sum_measure_data[i][19], sum_measure_data[i][20]);
+                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18], sum_measure_data[i][19], gap);
     }
 
     fclose(fp);
@@ -338,10 +337,10 @@ static void processFunc(process_data_t data)
     for (i = 0; i < num_exp; i++) {
         if (data.start_time != 0){
             if (i == 0) usleep ((data.process_id-1) * 100 * 1000);
-            // if (i == 5) {
-            //     printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
-            //     usleep ((data.start_time - get_time_in_ms()) * 1000);
-            // }
+            if (i == 5) {
+                printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
+                usleep ((data.start_time - get_time_in_ms()) * 1000);
+            }
             if (i == 5) {
                 //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R);
                 usleep (data.R * 1000);
