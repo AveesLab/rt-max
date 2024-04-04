@@ -32,7 +32,7 @@
 #endif
 
 #ifdef MULTI_PROCESSOR
-#define NUM_TEST 5
+#define NUM_TEST 3
 
 static int sem_id;
 static key_t key = 1234;
