@@ -50,6 +50,7 @@ typedef struct process_data_t{
     int benchmark_layers;
     int process_id;
     double start_time;
+    double R;
 
 #ifndef MEASURE
     double execution_time[200];
@@ -93,7 +94,7 @@ typedef struct measure_data_t{
 // double avg_reclaiming_infer_time = 0.0f;
 
 // int optimal_core = 11;
-// double R = 0.0f;
+// double R_ = 0.0f;
 
 #endif
 
@@ -107,7 +108,7 @@ static int compare(const void *a, const void *b) {
     return 0;
 }
 
-static int write_result(char *file_path, measure_data_t *measure_data) 
+static int write_result(char *file_path, measure_data_t *measure_data, int num_exp, int num_process) 
 {
     static int exist=0;
     FILE *fp;
@@ -331,6 +332,10 @@ static void processFunc(process_data_t data)
             if (i == 5) {
                 printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
                 usleep ((data.start_time - get_time_in_ms()) * 1000);
+            }
+            if (i == 5) {
+                //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R);
+                usleep (data.R * 1000);
             }
         }
 
@@ -652,16 +657,33 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
 
+    int fd2[num_process][2];
+    process_data_t data2[num_process];
 
     double start = get_time_in_ms();
-    for (i = 0; i < num_process; i++) {
-        data[i].start_time = start + 15000;
+    for (i = 0; i < optimal_core; i++) {
+        data2[i].datacfg = datacfg;
+        data2[i].cfgfile = cfgfile;
+        data2[i].weightfile = weightfile;
+        data2[i].filename = filename;
+        data2[i].thresh = thresh;
+        data2[i].hier_thresh = hier_thresh;
+        data2[i].dont_show = dont_show;
+        data2[i].ext_output = ext_output;
+        data2[i].save_labels = save_labels;
+        data2[i].outfile = outfile;
+        data2[i].letter_box = letter_box;
+        data2[i].benchmark_layers = benchmark_layers;
+        data2[i].process_id = i + 1;
+        data2[i].start_time = start + 15000;
+        data2[i].R = R;
+        //printf("R = %.3f\n", data2[i].R);
     }
 
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
 
 #ifdef MEASURE
-        if (pipe(fd[i]) == -1) {
+        if (pipe(fd2[i]) == -1) {
             perror("pipe");
             exit(1);
         }
@@ -671,11 +693,11 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         if (pids[i] == 0) { // child process
 
 #ifdef MEASURE
-            close(fd[i][0]); // close reading end in the child
-            processFunc(data[i], fd[i][1]);
-            close(fd[i][1]);
+            close(fd2[i][0]); // close reading end in the child
+            processFunc(data2[i], fd2[i][1]);
+            close(fd2[i][1]);
 #else
-            processFunc(data[i]);
+            processFunc(data2[i]);
 #endif
 
             exit(0);
@@ -686,18 +708,18 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     }
 
 #ifdef MEASURE
-    //measure_data_t receivedData[num_process];
+    measure_data_t receivedData2[num_process];
 
     // In the parent process, read data from all child processes
-    for (i = 0; i < num_process; i++) {
-        close(fd[i][1]); // close writing end in the parent
-        read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+    for (i = 0; i < optimal_core; i++) {
+        close(fd2[i][1]); // close writing end in the parent
+        read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
         // data[i] = receivedData[i];
-        close(fd[i][0]);
+        close(fd2[i][0]);
     }
 #endif
 
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
         wait(&status);
     }
 
@@ -722,7 +744,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     strcat(file_path, gpu_portion);
 
     strcat(file_path, ".csv");
-    if(write_result(file_path, receivedData) == -1) {
+    if(write_result(file_path, receivedData2, num_exp, optimal_core) == -1) {
         /* return error */
         exit(0);
     }
