@@ -794,10 +794,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
+    // double R = MAX(max_gpu_infer_time, max_execution_time/num_process);
     double R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, max_execution_time/num_process);
 
-    int optimal_core = 11;
     // int optimal_core = ceil(max_execution_time / R);
+    int optimal_core = 11;
 
     printf("\n\n::Test 1:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
     printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
@@ -898,7 +899,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     avg_reclaim_infer_time /= optimal_core * num_exp - startIdx;
     avg_execution_time /= optimal_core * num_exp - startIdx;
 
-    wcet_ratio = 1.1;
+    wcet_ratio = 1.3;
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
