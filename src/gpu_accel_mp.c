@@ -49,6 +49,7 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
+    double start_time;
 
 #ifndef MEASURE
     double execution_time[200];
@@ -314,6 +315,11 @@ static void processFunc(process_data_t data)
     else printf("Error! File is not exist.");
 
     for (i = 0; i < num_exp; i++) {
+        if (i == 0) usleep ((data.process_id-1) * 100 * 1000);
+        if (i == 5) {
+            printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
+            usleep ((data.start_time - get_time_in_ms()) * 1000);
+        }
 
 #ifdef NVTX
         char task[100];
@@ -330,7 +336,6 @@ static void processFunc(process_data_t data)
 
         time = get_time_in_ms();
         // __Preprocess__
-        lock_resource(0);
 #ifdef MEASURE
         measure_data.start_preprocess[i] = get_time_in_ms();
 #endif
@@ -370,7 +375,7 @@ static void processFunc(process_data_t data)
 #endif
 
         // GPU Inference
-
+        lock_resource(0);
 #ifdef NVTX
         char task_gpu[100];
         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
@@ -544,6 +549,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 
     process_data_t data[num_process];
 
+    double start = get_time_in_ms();
+
     for (i = 0; i < num_process; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -558,6 +565,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
+        data[i].start_time = start + 15000;
     }
 
     for (i = 0; i < num_process; i++) {
