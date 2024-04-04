@@ -35,6 +35,7 @@
 #define NUM_TEST 4
 
 static int sem_id;
+static int sem_id2;
 static key_t key = 1234;
 int *start_counter;
 
@@ -76,36 +77,31 @@ typedef struct measure_data_t{
     double start_gpu_waiting[200];
     double start_gpu_infer[200];
     double end_gpu_infer[200];
+    double start_reclaim_infer[1000];
+    double end_reclaim_infer[1000];
     double start_cpu_infer[200];
     double end_infer[200];
 
     double waiting_gpu[200];
     double e_gpu_infer[200];
+    double waiting_reclaim[1000];
+    double e_reclaim_infer[1000];
     double e_cpu_infer[200];
     double e_infer[200];
-
-    double e_gpu_infer_max[200];
 
     double start_postprocess[200];
     double end_postprocess[200];
     double e_postprocess[200];
-
     double execution_time[200];
+
+    double e_gpu_infer_max[200];
+    double e_gpu_infer_max[200];
     double execution_time_max[200];
+
     double frame_rate[200];
     double cycle_time[200];
     double start_gap[200];
 } measure_data_t;
-
-// double max_gpu_infer_time = 0.0f;
-// double max_execution_time = 0.0f;
-// double max_reclaiming_infer_time = 0.0f;
-// double avg_gpu_infer_time = 0.0f;
-// double avg_execution_time = 0.0f;
-// double avg_reclaiming_infer_time = 0.0f;
-
-// int optimal_core = 11;
-// double R_ = 0.0f;
 
 #endif
 
@@ -451,9 +447,6 @@ static void processFunc(process_data_t data)
         measure_data.end_gpu_infer[i] = get_time_in_ms();
 #endif
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_gpu);
-#endif
         // if (data.isTest) {
         //     //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
         //     usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
@@ -461,6 +454,10 @@ static void processFunc(process_data_t data)
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
         //printf("Process %d is GPU unlock\n", data.process_id);
         unlock_resource(0);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_gpu);
+#endif
 
         // CPU Inference
 #ifdef MEASURE

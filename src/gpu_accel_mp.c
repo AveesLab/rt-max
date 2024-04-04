@@ -451,9 +451,6 @@ static void processFunc(process_data_t data)
         measure_data.end_gpu_infer[i] = get_time_in_ms();
 #endif
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_gpu);
-#endif
         // if (data.isTest) {
         //     //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
         //     usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
@@ -461,6 +458,10 @@ static void processFunc(process_data_t data)
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
         //printf("Process %d is GPU unlock\n", data.process_id);
         unlock_resource(0);
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_gpu);
+#endif
 
         // CPU Inference
 #ifdef MEASURE
