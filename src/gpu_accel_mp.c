@@ -32,7 +32,7 @@
 #endif
 
 #ifdef MULTI_PROCESSOR
-#define NUM_TEST 3
+#define NUM_TEST 4
 
 static int sem_id;
 static key_t key = 1234;
@@ -412,7 +412,7 @@ static void processFunc(process_data_t data)
 #endif
 
         // GPU Inference
-        lock_resource(0);
+        lock_resource(0); // 0.2s
         //printf("Process %d is GPU lock\n", data.process_id);
 #ifdef NVTX
         char task_gpu[100];
@@ -453,10 +453,10 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
-        if (data.max_gpu_infer > 0) {
-            //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
-            usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
-        }
+        // if (data.max_gpu_infer > 0) {
+        //     //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
+        //     usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
+        // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
         //printf("Process %d is GPU unlock\n", data.process_id);
         unlock_resource(0);
