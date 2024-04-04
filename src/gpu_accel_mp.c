@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
 
 #ifdef OPENBLAS
 #include <cblas.h>
@@ -31,9 +32,11 @@
 #endif
 
 #ifdef MULTI_PROCESSOR
-#define SKIP_ 3
+#define NUM_TEST 5
+
 static int sem_id;
 static key_t key = 1234;
+int *start_counter;
 
 typedef struct process_data_t{
     char *datacfg;
@@ -342,7 +345,14 @@ static void processFunc(process_data_t data)
     for (i = 0; i < num_exp; i++) {
         if (data.start_time != 0){
             if (i == 0) usleep ((data.process_id) * 100 * 1000);
-            if (i == SKIP_) {
+            if (i == NUM_TEST) {
+
+                //printf("counter = %d\n", *start_counter);
+                while(!(*start_counter == data.num_process)) {
+                    usleep(1);
+                    //printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
+                }
+
                 usleep (data.R * (data.process_id-1) * 1000);
                 //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
             }
@@ -540,11 +550,13 @@ static void processFunc(process_data_t data)
             //printf("data.max_execution: %.3f (%.3f)\n", data.max_execution, data.R * data.num_process);
             if (reamin_time > 0) usleep(reamin_time * 1000);
         }
-        if (i == SKIP_-1 && data.max_execution > 0) {
-            printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
-            usleep ((data.start_time - get_time_in_ms()) * 1000);
-        }
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
+
+        if(data.max_execution > 0) {
+            if(i == NUM_TEST-1) {
+                (*start_counter)++;
+            }
+        }
 
     }
 
@@ -573,6 +585,22 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 
     pid_t pids[num_process];
     int status;
+
+    key_t key = ftok("shmfile", 65);
+    int shm_id;
+
+    shm_id = shmget(key, sizeof(int), 0666 | IPC_CREAT);
+    if (shm_id == -1) {
+        perror("shmget failed");
+        exit(1);
+    }
+
+    start_counter = (int*) shmat(shm_id, NULL, 0);
+    if (start_counter == (int*)(-1)) {
+        perror("shmat failed");
+        exit(1);
+    }
+    *start_counter = 0;
 
 #ifdef MEASURE
     int fd[num_process][2];
@@ -782,6 +810,15 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         exit(0);
     }
 #endif
+
+   if (shmdt(start_counter) == -1) {
+        perror("shmdt failed");
+        exit(1);
+    }
+    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+        perror("shmctl IPC_RMID failed");
+        exit(1);
+    }
 
     return 0;
 
