@@ -443,30 +443,88 @@ static void processFunc(process_data_t data)
 
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
-#ifdef MEASURE
-        measure_data.end_gpu_infer[i] = get_time_in_ms();
-#endif
-
         // if (data.isTest) {
         //     //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
         //     usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
         // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
         //printf("Process %d is GPU unlock\n", data.process_id);
+
         unlock_resource(0);
+
+#ifdef MEASURE
+        measure_data.end_gpu_infer[i] = get_time_in_ms();
+#endif
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
+#endif
+
+        // Reclaiming Inference
+#ifdef NVTX
+        char task_reclaiming[100];
+        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.process_id);
+        nvtxRangeId_t nvtx_task_reclaiming;
+        nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
+#endif
+        lock_resource(1);
+
+#ifdef MEASURE
+        measure_data.start_reclaim_infer[i] = get_time_in_ms();
+#endif
+        // Openblas set num threads for Reclaiming inference
+        // when cpu reclaim over gpu, exit() okay??????????????????????
+        num_thread = num_process - optimal_core + 1;
+        openblas_set_num_threads(num_thread);
+        CPU_ZERO(&cpuset);
+        CPU_SET(data.process_id, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        for (int k = 0; k < num_thread - 1; k++) {
+            CPU_ZERO(&cpuset);
+            CPU_SET(num_process - k, &cpuset);
+            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+        }
+
+        state.workspace = net.workspace_cpu;
+        gpu_yolo = 0;
+
+        for(j = gLayer; j < rLayer; ++j){
+            state.index = j;
+            l = net.layers[j];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
+
+        // if (data.isTest) {
+        //     //printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
+        //     usleep((data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_infer[i])) * 1000);
+        // }
+        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
+        //printf("Process %d is Reclaiming unlock\n", data.process_id);
+
+        unlock_resource(1);
+
+#ifdef MEASURE
+        measure_data.end_reclaim_infer[i] = get_time_in_ms();
+#endif
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_reclaiming);
 #endif
 
         // CPU Inference
 #ifdef MEASURE
         measure_data.start_cpu_infer[i] = get_time_in_ms();
 #endif
-
-        state.workspace = net.workspace_cpu;
-        gpu_yolo = 0;
-        for(j = gLayer; j < net.n; ++j){
+        openblas_set_num_threads(1);
+        CPU_ZERO(&cpuset);
+        CPU_SET(data.process_id, &cpuset);
+        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        for(j = rLayer; j < net.n; ++j){
+            //printf("get num threads : %d \n", openblas_get_num_threads());
             state.index = j;
             l = net.layers[j];
             if(l.delta && state.train && l.train){
@@ -483,8 +541,11 @@ static void processFunc(process_data_t data)
 
 #ifdef MEASURE
         measure_data.end_infer[i] = get_time_in_ms();
+        //measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
+        measure_data.waiting_reclaim[i] = measure_data.start_reclaim_infer[i] - measure_data.end_gpu_infer[i];
+        measure_data.e_reclaim_infer[i] = measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i];
         measure_data.e_cpu_infer[i] = measure_data.end_infer[i] - measure_data.start_cpu_infer[i];
         measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
 #endif
