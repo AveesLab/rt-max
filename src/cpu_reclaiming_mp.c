@@ -53,9 +53,9 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
-    double start_time;
     double R;
     double max_gpu_infer;
+    double max_reclaim_infer;
     double max_execution;
     int num_process;
     bool isTest;
@@ -95,7 +95,7 @@ typedef struct measure_data_t{
     double execution_time[200];
 
     double e_gpu_infer_max[200];
-    double e_gpu_infer_max[200];
+    double e_reclaim_infer_max[200];
     double execution_time_max[200];
 
     double frame_rate[200];
@@ -163,7 +163,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_process][23];
+    double sum_measure_data[num_exp * num_process][27];
     for(i = 0; i < num_exp * num_process; i++)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
@@ -180,28 +180,34 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][8] = measure_data[core_id - 1].e_gpu_infer[count];
         sum_measure_data[i][9] = measure_data[core_id - 1].e_gpu_infer_max[count];
         sum_measure_data[i][10] = measure_data[core_id - 1].end_gpu_infer[count];
-        sum_measure_data[i][11] = measure_data[core_id - 1].start_cpu_infer[count];
-        sum_measure_data[i][12] = measure_data[core_id - 1].e_cpu_infer[count];
-        sum_measure_data[i][13] = measure_data[core_id - 1].end_infer[count];
-        sum_measure_data[i][14] = measure_data[core_id - 1].e_infer[count];
-        sum_measure_data[i][15] = measure_data[core_id - 1].start_postprocess[count];
-        sum_measure_data[i][16] = measure_data[core_id - 1].e_postprocess[count];
-        sum_measure_data[i][17] = measure_data[core_id - 1].end_postprocess[count];
-        sum_measure_data[i][18] = measure_data[core_id - 1].execution_time[count];
-        sum_measure_data[i][19] = measure_data[core_id - 1].execution_time_max[count];
-        sum_measure_data[i][20] = measure_data[core_id - 1].frame_rate[count];
-        sum_measure_data[i][21] = measure_data[core_id - 1].cycle_time[count];
-        sum_measure_data[i][22] = measure_data[core_id - 1].start_gap[count]; // start_gap
+        sum_measure_data[i][11] = measure_data[core_id - 1].waiting_reclaim[count];
+        sum_measure_data[i][12] = measure_data[core_id - 1].start_reclaim_infer[count];    
+        sum_measure_data[i][13] = measure_data[core_id - 1].e_reclaim_infer[count];    
+        sum_measure_data[i][14] = measure_data[core_id - 1].end_reclaim_infer[count];
+        sum_measure_data[i][15] = measure_data[core_id - 1].start_cpu_infer[count];
+        sum_measure_data[i][16] = measure_data[core_id - 1].e_cpu_infer[count];
+        sum_measure_data[i][17] = measure_data[core_id - 1].end_infer[count];
+        sum_measure_data[i][18] = measure_data[core_id - 1].e_infer[count];
+        sum_measure_data[i][19] = measure_data[core_id - 1].start_postprocess[count];
+        sum_measure_data[i][20] = measure_data[core_id - 1].e_postprocess[count];
+        sum_measure_data[i][21] = measure_data[core_id - 1].end_postprocess[count];
+        sum_measure_data[i][22] = measure_data[core_id - 1].execution_time[count];
+        sum_measure_data[i][23] = measure_data[core_id - 1].execution_time_max[count];
+        sum_measure_data[i][24] = measure_data[core_id - 1].frame_rate[count];
+        sum_measure_data[i][25] = measure_data[core_id - 1].cycle_time[count];
+        sum_measure_data[i][26] = measure_data[core_id - 1].start_gap[count]; // start_gap
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
             "start_gpu_infer", "e_gpu_infer", "e_gpu_infer_max", "end_gpu_infer", 
+            "waiting_reclaim",
+            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
@@ -219,7 +225,8 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
                 sum_measure_data[i][4], sum_measure_data[i][5], sum_measure_data[i][6], sum_measure_data[i][7], 
                 sum_measure_data[i][8], sum_measure_data[i][9], sum_measure_data[i][10], sum_measure_data[i][11], 
                 sum_measure_data[i][12], sum_measure_data[i][13], sum_measure_data[i][14], sum_measure_data[i][15],
-                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18], sum_measure_data[i][19], sum_measure_data[i][20], sum_measure_data[i][21], gap);
+                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18], sum_measure_data[i][19], sum_measure_data[i][20], sum_measure_data[i][21],
+                sum_measure_data[i][22], sum_measure_data[i][23], sum_measure_data[i][24], sum_measure_data[i][25], gap);
     }
 
     fclose(fp);
@@ -707,8 +714,8 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
-        data[i].start_time = 0;
         data[i].max_gpu_infer = 0;
+        data[i].max_reclaim_infer = 0;
         data[i].max_execution = 0;
         data[i].num_process = num_process;
         data[i].isTest = false;
@@ -812,9 +819,9 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data2[i].letter_box = letter_box;
         data2[i].benchmark_layers = benchmark_layers;
         data2[i].process_id = i + 1;
-        data2[i].start_time = start + 7000;
         data2[i].R = R;
         data2[i].max_gpu_infer = max_gpu_infer_time;
+        data2[i].max_reclaim_infer = max_reclaim_infer_time;
         data2[i].max_execution = max_execution_time;
         data2[i].num_process = optimal_core;
         data2[i].isTest = true;
@@ -874,17 +881,22 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
     model_name[strlen(cfgfile)-10] = '\0';
     
-    strcat(file_path, "gpu-accel-mp/");
+    strcat(file_path, "cpu-reclaiming-mp/");
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "gpu-accel-mp_");
-
     char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
+    sprintf(gpu_portion, "%dglayer/", gLayer);
     strcat(file_path, gpu_portion);
 
+    strcat(file_path, "cpu-reclaiming-mp_");
+
+    char reclaim_portion[20];
+    sprintf(reclaim_portion, "%03drlayer", rLayer);
+    strcat(file_path, reclaim_portion);
+
     strcat(file_path, ".csv");
+    // here! receivedData, receivedData2, receivedData3 ...
     if(write_result(file_path, receivedData2, num_exp, optimal_core) == -1) {
         /* return error */
         exit(0);

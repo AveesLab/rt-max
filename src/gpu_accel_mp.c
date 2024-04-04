@@ -52,7 +52,6 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
-    double start_time;
     double R;
     double max_gpu_infer;
     double max_execution;
@@ -637,7 +636,6 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
-        data[i].start_time = 0;
         data[i].max_gpu_infer = 0;
         data[i].max_execution = 0;
         data[i].num_process = num_process;
@@ -735,7 +733,6 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data2[i].letter_box = letter_box;
         data2[i].benchmark_layers = benchmark_layers;
         data2[i].process_id = i + 1;
-        data2[i].start_time = start + 7000;
         data2[i].R = R;
         data2[i].max_gpu_infer = max_gpu_infer_time;
         data2[i].max_execution = max_execution_time;
