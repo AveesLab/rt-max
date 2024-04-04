@@ -194,7 +194,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][22] = measure_data[core_id - 1].execution_time[count];
         sum_measure_data[i][23] = measure_data[core_id - 1].execution_time_max[count];
         sum_measure_data[i][24] = measure_data[core_id - 1].frame_rate[count];
-        sum_measure_data[i][25] = measure_data[core_id - 1].cycle_time[count];
+        sum_measure_data[i][25] = 1000/measure_data[core_id - 1].frame_rate[count];
         sum_measure_data[i][26] = measure_data[core_id - 1].start_gap[count]; // start_gap
     }
 
@@ -607,7 +607,7 @@ static void processFunc(process_data_t data)
         measure_data.end_postprocess[i] = get_time_in_ms();
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
-        measure_data.cycle_time[i] = data.R;
+        measure_data.cycle_time[i] = 1000 / data.R;
         // if (data.isTest) printf("measure_data.cycle_time[i]: %.3f \n",measure_data.cycle_time[i]);
         measure_data.frame_rate[i] = 1000 / data.R;
         measure_data.start_gap[i] = 0;
@@ -898,7 +898,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     avg_reclaim_infer_time /= optimal_core * num_exp - startIdx;
     avg_execution_time /= optimal_core * num_exp - startIdx;
 
-    wcet_ratio = 1.5;
+    wcet_ratio = 1.1;
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
