@@ -537,7 +537,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 
     printf("\n\nGPU-Accel-MP with %d processes with %d gpu-layer\n", num_process, gLayer);
 
-    int i;
+    int i, j;
 
     pid_t pids[num_process];
     int status;
@@ -625,30 +625,32 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     // EXP 1
     printf("\n\n::EXP 1::\n");
 
-    // int startIdx = 10 * num_process;
-    // for (i = 10; i < num_exp; i++) {
-    //     for (j = 0; j < num_process; j++) {
-    //         max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
-    //         //max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].waiting_gpu[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].waiting_reclaim[i]+receivedData[j].e_reclaim_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
-    //         max_reclaiming_infer_time = MAX(max_reclaiming_infer_time, receivedData[j].e_reclaim_infer[i]);
-    //         max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_reclaim_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
-    //         avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
-    //         avg_reclaiming_infer_time += receivedData[j].e_reclaim_infer[i];
-    //         avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_reclaim_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
-    //     }        
-    // }
-    // avg_gpu_infer_time /= num_process * num_exp - startIdx;
-    // avg_execution_time /= num_process * num_exp - startIdx;
-    // avg_reclaiming_infer_time /= num_process * num_exp - startIdx;
+    double max_gpu_infer_time = 0;
+    double max_execution_time = 0;
+    double avg_gpu_infer_time = 0;
+    double avg_execution_time = 0;
 
-    // double wcet_ratio = 1.5;
-    // max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    // max_execution_time = avg_execution_time * wcet_ratio; // total
-    // max_reclaiming_infer_time = avg_reclaiming_infer_time * wcet_ratio; // Reclaiming_infer
+    int startIdx = 5 * num_process;
+    for (i = 5; i < num_exp; i++) {
+        for (j = 0; j < num_process; j++) {
+            avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
+            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
+            avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
+            max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
+        }        
+    }
+    avg_gpu_infer_time /= num_process * num_exp - startIdx;
+    avg_execution_time /= num_process * num_exp - startIdx;
 
-    // R = MAX(max_gpu_infer_time, max_reclaiming_infer_time);
-    // optimal_core = ceil(max_execution_time / R);
-    // printf("\n\nOptimal core = %d (R:%.3f)\n\n", optimal_core, R);
+    double wcet_ratio = 1.1;
+    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
+    max_execution_time = avg_execution_time * wcet_ratio; // total
+
+    double R = MAX(max_gpu_infer_time, max_execution_time/num_process);
+    int optimal_core = ceil(max_execution_time / R);
+    printf("\n\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
+    printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
+    printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
 
 
     double start = get_time_in_ms();
