@@ -115,6 +115,18 @@ static int compare(const void *a, const void *b) {
     return 0;
 }
 
+double maxOfThree(double a, double b, double c) {
+    double max = a;
+
+    if (b > max) {
+        max = b;
+    }
+    if (c > max) { 
+        max = c;
+    }
+    return max; 
+}
+
 static int write_result(char *file_path, measure_data_t *measure_data, int num_exp, int num_process) 
 {
     static int exist=0;
@@ -310,6 +322,7 @@ static void processFunc(process_data_t data)
 
     int device = 1; // Choose CPU or GPU
     extern gpu_yolo;
+    int openblas_thread;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
@@ -474,12 +487,12 @@ static void processFunc(process_data_t data)
 #endif
         // Openblas set num threads for Reclaiming inference
         // when cpu reclaim over gpu, exit() okay??????????????????????
-        num_thread = num_process - optimal_core + 1;
-        openblas_set_num_threads(num_thread);
+        openblas_thread = (MAXCORES-1) - data.num_process + 1;
+        openblas_set_num_threads(openblas_thread);
         CPU_ZERO(&cpuset);
         CPU_SET(data.process_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < num_thread - 1; k++) {
+        for (int k = 0; k < openblas_thread - 1; k++) {
             CPU_ZERO(&cpuset);
             CPU_SET(num_process - k, &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
@@ -634,11 +647,11 @@ static void processFunc(process_data_t data)
 }
 
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     // Pre-test
-    printf("\n\n::Pre-test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", num_process, gLayer);
+    printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", num_process, gLayer, rLayer);
     int i, j;
 
     pid_t pids[num_process];
@@ -746,8 +759,10 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 
     // TEST 1
     double max_gpu_infer_time = 0;
+    double max_reclaim_infer_time = 0;
     double max_execution_time = 0;
     double avg_gpu_infer_time = 0;
+    double avg_reclaim_infer_time = 0;
     double avg_execution_time = 0;
 
     int startIdx = 5 * num_process;
@@ -755,27 +770,32 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         for (j = 0; j < num_process; j++) {
             avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
             max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
+            avg_reclaim_infer_time += receivedData[j].e_reclaim_infer[i];
+            max_reclaim_infer_time = MAX(max_reclaim_infer_time, receivedData[j].e_reclaim_infer[i]);
             avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
             max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
         }        
     }
     avg_gpu_infer_time /= num_process * num_exp - startIdx;
+    avg_reclaim_infer_time /= num_process * num_exp - startIdx;
     avg_execution_time /= num_process * num_exp - startIdx;
 
     double wcet_ratio = 1.5;
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
+    max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
-    double R = MAX(max_gpu_infer_time, max_execution_time/num_process);
+    double R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, max_execution_time/num_process);
     int optimal_core = ceil(max_execution_time / R);
 
-    printf("\n\n::Test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
+    printf("\n\n::Test 1:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", num_process, gLayer, rLayer);
     printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
     printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
+    printf("Reclaiming inference time : %.3f (%.3f)\n", avg_reclaim_infer_time, max_reclaim_infer_time);
     printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
 
-    int fd2[num_process][2];
-    process_data_t data2[num_process];
+    int fd2[optimal_core][2];
+    process_data_t data2[optimal_core];
 
     double start = get_time_in_ms();
     for (i = 0; i < optimal_core; i++) {
@@ -885,7 +905,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 }
 #else
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
@@ -893,7 +913,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 #endif  // GPU
 #else
 
-void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! MULTI_PROCESSOR = 0 \n");

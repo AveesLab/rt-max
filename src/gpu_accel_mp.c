@@ -717,8 +717,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
 
-    int fd2[num_process][2];
-    process_data_t data2[num_process];
+    int fd2[optimal_core][2];
+    process_data_t data2[optimal_core];
 
     double start = get_time_in_ms();
     for (i = 0; i < optimal_core; i++) {
