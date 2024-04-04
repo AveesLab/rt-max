@@ -608,7 +608,7 @@ static void processFunc(process_data_t data)
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
         measure_data.cycle_time[i] = data.R;
-        // if (data.isTest) printf("data.R: %.3f \n",data.R);
+        // if (data.isTest) printf("measure_data.cycle_time[i]: %.3f \n",measure_data.cycle_time[i]);
         measure_data.frame_rate[i] = 1000 / data.R;
         measure_data.start_gap[i] = 0;
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
@@ -1007,9 +1007,9 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     strcat(file_path, ".csv");
     // here! receivedData, receivedData2, receivedData3 ...
-    printf("receivedData1[0].cycle_time[0]: %.3f \n",receivedData[0].cycle_time[0]);
-    printf("receivedData2[0].cycle_time[0]: %.3f \n",receivedData2[0].cycle_time[0]);
-    printf("receivedData3[0].cycle_time[0]: %.3f \n",receivedData3[0].cycle_time[0]);
+    // printf("receivedData1[0].cycle_time[0]: %.3f \n",receivedData[0].cycle_time[0]);
+    // printf("receivedData2[0].cycle_time[0]: %.3f \n",receivedData2[0].cycle_time[0]);
+    // printf("receivedData3[0].cycle_time[0]: %.3f \n",receivedData3[0].cycle_time[0]);
 
     if(write_result(file_path, receivedData3, num_exp, optimal_core) == -1) {
         /* return error */
