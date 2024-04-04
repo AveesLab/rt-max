@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
 
 #ifdef OPENBLAS
 #include <cblas.h>
@@ -31,7 +32,7 @@
 #endif
 
 #ifdef MULTI_PROCESSOR
-
+#define NUM_TEST 5
 static int sem_id;
 static int sem_id2;
 static key_t key = 1234;
@@ -100,6 +101,8 @@ double avg_reclaiming_infer_time = 0.0f;
 #endif
 int optimal_core = 11;
 int num_thread = 0;
+int *start_counter;
+
 double R = 0.0f;
 #ifdef MEASURE
 static int compare(const void *a, const void *b) {
@@ -339,9 +342,16 @@ static void processFunc(process_data_t data)
 
     for (i = 0; i < num_exp; i++) {
         double aa = get_time_in_ms();
-        /*if(!data.isTest) {
-            lock_resource(2);
-        }*/
+        if(!data.isTest) {
+            if(i == NUM_TEST) {
+                printf("counter = %d\n", *start_counter);
+                while(!(*start_counter == optimal_core)) {
+                    usleep(1);
+                    //printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
+                }
+            }
+            printf("%d core start time = %f\n", sched_getcpu(), get_time_in_ms());
+        }
 #ifdef NVTX
         char task[100];
         sprintf(task, "Task (cpu: %d)", data.process_id);
@@ -601,6 +611,12 @@ static void processFunc(process_data_t data)
 #endif
         double bb = get_time_in_ms();
         //printf("%.3f %.3f %.3f\n", aa, bb, bb-aa);
+        if(!data.isTest) {
+            if(i == NUM_TEST-1) {
+                (*start_counter)++;
+            }
+        }
+
     }
 
 #ifdef MEASURE
@@ -628,6 +644,21 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     pid_t pids[MAXCORES-1];
     int status;
 
+    key_t key = ftok("shmfile", 65);
+    int shm_id;
+
+    shm_id = shmget(key, sizeof(int), 0666 | IPC_CREAT);
+    if (shm_id == -1) {
+        perror("shmget failed");
+        exit(1);
+    }
+
+    start_counter = (int*) shmat(shm_id, NULL, 0);
+    if (start_counter == (int*)(-1)) {
+        perror("shmat failed");
+        exit(1);
+    }
+    *start_counter = 0;
 #ifdef MEASURE
     int fd[MAXCORES-1][2];
 #endif
@@ -881,7 +912,14 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         exit(0);
     }
 #endif
-
+   if (shmdt(start_counter) == -1) {
+        perror("shmdt failed");
+        exit(1);
+    }
+    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+        perror("shmctl IPC_RMID failed");
+        exit(1);
+    }
     return 0;
 
 }
