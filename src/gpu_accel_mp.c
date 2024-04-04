@@ -83,6 +83,8 @@ typedef struct measure_data_t{
 
     double execution_time[200];
     double frame_rate[200];
+    double cycle_time[200];
+    double start_gap[200];
 
 } measure_data_t;
 
@@ -144,7 +146,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_process][19];
+    double sum_measure_data[num_exp * num_process][21];
     for(i = 0; i < num_exp * num_process; i++)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
@@ -169,11 +171,16 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][16] = measure_data[core_id - 1].end_postprocess[count];
         sum_measure_data[i][17] = measure_data[core_id - 1].execution_time[count];
         sum_measure_data[i][18] = measure_data[core_id - 1].frame_rate[count];
+        sum_measure_data[i][19] = measure_data[core_id - 1].cycle_time[count];
+        // sum_measure_data[i][20] = measure_data[core_id - 1].start_gap[count]; // start_gap
+        if (i == 0) sum_measure_data[i][20] = 0.0;
+        else if (i == num_exp * num_process - 1) sum_measure_data[i][20] = 0.0;
+        else sum_measure_data[i][20] = sum_measure_data[i][1] - sum_measure_data[i-1][1]; // start_gap
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
@@ -182,19 +189,19 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "frame_rate");
+            "execution_time", "frame_rate", "cycle_time", "start_gap");
 
     for(i = 0; i < num_exp * num_process; i++)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 sum_measure_data[i][0], sum_measure_data[i][1], sum_measure_data[i][2], sum_measure_data[i][3], 
                 sum_measure_data[i][4], sum_measure_data[i][5], sum_measure_data[i][6], sum_measure_data[i][7], 
                 sum_measure_data[i][8], sum_measure_data[i][9], sum_measure_data[i][10], sum_measure_data[i][11], 
                 sum_measure_data[i][12], sum_measure_data[i][13], sum_measure_data[i][14], sum_measure_data[i][15],
-                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18]);
+                sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18], sum_measure_data[i][19], sum_measure_data[i][20]);
     }
 
     fclose(fp);
@@ -329,10 +336,10 @@ static void processFunc(process_data_t data)
     for (i = 0; i < num_exp; i++) {
         if (data.start_time != 0){
             if (i == 0) usleep ((data.process_id-1) * 100 * 1000);
-            if (i == 5) {
-                printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
-                usleep ((data.start_time - get_time_in_ms()) * 1000);
-            }
+            // if (i == 5) {
+            //     printf("\n::Set_start:: Process %d (%d): %0.3f, %0.3f, %.3f\n", data.process_id, sched_getcpu(), data.start_time, get_time_in_ms(), data.start_time - get_time_in_ms());
+            //     usleep ((data.start_time - get_time_in_ms()) * 1000);
+            // }
             if (i == 5) {
                 //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R);
                 usleep (data.R * 1000);
@@ -503,8 +510,9 @@ static void processFunc(process_data_t data)
         measure_data.end_postprocess[i] = get_time_in_ms();
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
-        measure_data.frame_rate[i] = 1000 / measure_data.execution_time[i];
-        
+        measure_data.cycle_time[i] = data.R;
+        measure_data.frame_rate[i] = 1000 / data.R;
+        measure_data.start_gap[i] = 0;
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
 #else
         data.execution_time[i] = get_time_in_ms() - time;
