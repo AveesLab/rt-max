@@ -220,7 +220,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         if (i == 0) gap = 0.0;
         else gap = sum_measure_data[i][1] - sum_measure_data[i-1][1]; // start_gap
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 sum_measure_data[i][0], sum_measure_data[i][1], sum_measure_data[i][2], sum_measure_data[i][3], 
                 sum_measure_data[i][4], sum_measure_data[i][5], sum_measure_data[i][6], sum_measure_data[i][7], 
                 sum_measure_data[i][8], sum_measure_data[i][9], sum_measure_data[i][10], sum_measure_data[i][11], 
@@ -367,7 +367,7 @@ static void processFunc(process_data_t data)
                 //printf("counter = %d\n", *start_counter);
                 while(!(*start_counter == data.num_process)) {
                     usleep(1);
-                    //printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
+                    //printf("counter = %d(%d) -- %d\n", *start_counter, sched_getcpu(), data.num_process);
                 }
 
                 usleep (data.R * (data.process_id-1) * 1000);
@@ -608,6 +608,7 @@ static void processFunc(process_data_t data)
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
         measure_data.cycle_time[i] = data.R;
+        // if (data.isTest) printf("data.R: %.3f \n",data.R);
         measure_data.frame_rate[i] = 1000 / data.R;
         measure_data.start_gap[i] = 0;
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
@@ -765,6 +766,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
     // TEST 1
+    *start_counter = 0;
     double max_gpu_infer_time = 0;
     double max_reclaim_infer_time = 0;
     double max_execution_time = 0;
@@ -873,6 +875,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
     // TEST 2
+    *start_counter = 0;
     max_gpu_infer_time = 0;
     max_reclaim_infer_time = 0;
     max_execution_time = 0;
@@ -936,7 +939,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
     for (i = 0; i < optimal_core; i++) {
-        printf("Process %d starts \n", i);
+        // printf("Process %d starts \n", i);
 #ifdef MEASURE
         if (pipe(fd3[i]) == -1) {
             perror("pipe");
@@ -964,7 +967,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
 #ifdef MEASURE
     measure_data_t receivedData3[optimal_core];
-    printf("In the parent process, read data from all child processes \n");
+    // printf("In the parent process, read data from all child processes \n");
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd3[i][1]); // close writing end in the parent
@@ -973,11 +976,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         close(fd3[i][0]);
     }
 #endif
-    printf("Wait all process! \n");
+    // printf("Wait all process! \n");
     for (i = 0; i < optimal_core; i++) {
         wait(&status);
     }
-    printf("END all process! \n");
+    // printf("END all process! \n");
     // Remove semaphores
     semctl(sem_id, 0, IPC_RMID);
 
@@ -1004,6 +1007,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     strcat(file_path, ".csv");
     // here! receivedData, receivedData2, receivedData3 ...
+    printf("receivedData1[0].cycle_time[0]: %.3f \n",receivedData[0].cycle_time[0]);
+    printf("receivedData2[0].cycle_time[0]: %.3f \n",receivedData2[0].cycle_time[0]);
+    printf("receivedData3[0].cycle_time[0]: %.3f \n",receivedData3[0].cycle_time[0]);
+
     if(write_result(file_path, receivedData3, num_exp, optimal_core) == -1) {
         /* return error */
         exit(0);
