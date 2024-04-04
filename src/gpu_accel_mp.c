@@ -51,6 +51,8 @@ typedef struct process_data_t{
     int process_id;
     double start_time;
     double R;
+    double max_gpu_infer;
+    double max_execution;
 
 #ifndef MEASURE
     double execution_time[200];
@@ -440,7 +442,7 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
-
+        if (data.max_gpu_infer > 0) usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
         unlock_resource(0);
 
         // CPU Inference
@@ -527,6 +529,8 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
 #endif
+        if (data.max_execution > 0) usleep((data.max_execution - (get_time_in_ms() - measure_data.start_preprocess[i])) * 1000);
+
     }
 
 #ifdef MEASURE
@@ -590,6 +594,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
         data[i].start_time = 0;
+        data[i].max_gpu_infer = 0;
+        data[i].max_execution = 0;
     }
 
     for (i = 0; i < num_process; i++) {
@@ -685,6 +691,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data2[i].process_id = i + 1;
         data2[i].start_time = start + 15000;
         data2[i].R = R;
+        data[i].max_gpu_infer = max_gpu_infer_time;
+        data[i].max_execution = max_execution_time;
         //printf("R = %.3f\n", data2[i].R);
     }
 
