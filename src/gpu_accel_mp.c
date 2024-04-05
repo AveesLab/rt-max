@@ -687,6 +687,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     }
 
     // TEST 1 :: Use all process (11 process)
+    *start_counter = 0;
+
     double max_gpu_infer_time = 0;
     double max_execution_time = 0;
     double avg_gpu_infer_time = 0;
@@ -711,7 +713,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     double R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
     optimal_core = MAXCORES-1; // 11 process
 
-    printf("\n\n::Test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
+    printf("\n\n::Test 1:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
     printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
     printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
@@ -778,6 +780,107 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
         // data[i] = receivedData[i];
         close(fd2[i][0]);
+    }
+#endif
+
+    for (i = 0; i < optimal_core; i++) {
+        wait(&status);
+    }
+
+    // TEST 2 :: Use all process (11 process)
+    *start_counter = 0;
+
+    max_gpu_infer_time = 0;
+    max_execution_time = 0;
+    avg_gpu_infer_time = 0;
+    avg_execution_time = 0;
+
+    startIdx = 5 * optimal_core;
+    for (i = 5; i < num_exp; i++) {
+        for (j = 0; j < optimal_core; j++) {
+            avg_gpu_infer_time += receivedData2[j].e_gpu_infer[i];
+            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData2[j].e_gpu_infer[i]);
+            avg_execution_time += receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i];
+            max_execution_time = MAX(max_execution_time, (receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i]));
+        }        
+    }
+    avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
+    avg_execution_time /= optimal_core * num_exp - startIdx;
+
+    wcet_ratio = 1.02;
+    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
+    max_execution_time = avg_execution_time * wcet_ratio; // total
+
+    R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
+    optimal_core = MAXCORES-1; // 11 process
+
+    printf("\n\n::Test 2:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
+    printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
+    printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
+    printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
+
+    int fd3[optimal_core][2];
+    process_data_t data3[optimal_core];
+
+    start = get_time_in_ms();
+    for (i = 0; i < optimal_core; i++) {
+        data3[i].datacfg = datacfg;
+        data3[i].cfgfile = cfgfile;
+        data3[i].weightfile = weightfile;
+        data3[i].filename = filename;
+        data3[i].thresh = thresh;
+        data3[i].hier_thresh = hier_thresh;
+        data3[i].dont_show = dont_show;
+        data3[i].ext_output = ext_output;
+        data3[i].save_labels = save_labels;
+        data3[i].outfile = outfile;
+        data3[i].letter_box = letter_box;
+        data3[i].benchmark_layers = benchmark_layers;
+        data3[i].process_id = i + 1;
+        data3[i].R = R;
+        data3[i].max_gpu_infer = max_gpu_infer_time;
+        data3[i].max_execution = max_execution_time;
+        data3[i].num_process = optimal_core;
+        data3[i].isTest = true;
+        //printf("R = %.3f\n", data3[i].R);
+    }
+
+    for (i = 0; i < optimal_core; i++) {
+
+#ifdef MEASURE
+        if (pipe(fd3[i]) == -1) {
+            perror("pipe");
+            exit(1);
+        }
+#endif
+
+        pids[i] = fork();
+        if (pids[i] == 0) { // child process
+
+#ifdef MEASURE
+            close(fd3[i][0]); // close reading end in the child
+            processFunc(data3[i], fd3[i][1]);
+            close(fd3[i][1]);
+#else
+            processFunc(data3[i]);
+#endif
+
+            exit(0);
+        } else if (pids[i] < 0) {
+            perror("fork");
+            exit(1);
+        }
+    }
+
+#ifdef MEASURE
+    measure_data_t receivedData3[optimal_core];
+
+    // In the parent process, read data from all child processes
+    for (i = 0; i < optimal_core; i++) {
+        close(fd3[i][1]); // close writing end in the parent
+        read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
+        // data[i] = receivedData[i];
+        close(fd3[i][0]);
     }
 #endif
 
