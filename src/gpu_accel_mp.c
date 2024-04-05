@@ -548,7 +548,7 @@ static void processFunc(process_data_t data)
 #endif
         double reamin_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
         if (data.isTest) {
-            //printf("data.max_execution: %.3f (%.3f)\n", data.max_execution, data.R * data.num_process);
+            // if (i==10) printf("data.max_execution: %.3f (%.3f) -- %.3f\n", (get_time_in_ms() - measure_data.start_preprocess[i]), data.R * data.num_process, reamin_time);
             if (reamin_time > 0) usleep(reamin_time * 1000);
         }
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
@@ -811,8 +811,12 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
+    // R test 1
     R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
-    optimal_core = MAXCORES-1; // 11 process
+    optimal_core = ceil(max_execution_time / R); // Optimal cores
+    // R test 2
+    R = MAX(max_gpu_infer_time, max_execution_time/optimal_core); // 11 process
+    optimal_core = ceil(max_execution_time / R); // Optimal cores
 
     printf("\n\n::Test 2:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
     printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
@@ -909,7 +913,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     strcat(file_path, gpu_portion);
 
     strcat(file_path, ".csv");
-    if(write_result(file_path, receivedData2, num_exp, optimal_core) == -1) {
+    if(write_result(file_path, receivedData3, num_exp, optimal_core) == -1) {
         /* return error */
         exit(0);
     }
