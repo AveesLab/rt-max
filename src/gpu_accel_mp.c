@@ -581,7 +581,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
 {
 
     int i, j;
-
+    if (num_process > 11) num_process = 11;
     pid_t pids[num_process];
     int status;
 
@@ -770,7 +770,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     }
 
 #ifdef MEASURE
-    measure_data_t receivedData2[num_process];
+    measure_data_t receivedData2[optimal_core];
 
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
