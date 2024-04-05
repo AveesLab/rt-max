@@ -579,8 +579,7 @@ static void processFunc(process_data_t data)
 void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    // Pre-test
-    printf("\n\n::Pre-test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", num_process, gLayer);
+
     int i, j;
 
     pid_t pids[num_process];
@@ -600,11 +599,6 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         perror("shmat failed");
         exit(1);
     }
-    *start_counter = 0;
-
-#ifdef MEASURE
-    int fd[num_process][2];
-#endif
 
     // Create semaphore set with NUM_PROCESSES semaphores
     sem_id = semget(key, 2, IPC_CREAT | 0666);
@@ -620,9 +614,16 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     arg.array = values;
     semctl(sem_id, 0, SETALL, arg);
 
-    process_data_t data[num_process];
+    // Pre-test :: Only 1 process
+    int optimal_core = 1;
 
-    for (i = 0; i < num_process; i++) {
+    printf("\n\n::Pre-test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
+
+    *start_counter = 0;
+    int fd[optimal_core][2];
+    process_data_t data[optimal_core];
+
+    for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -638,11 +639,11 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].process_id = i + 1;
         data[i].max_gpu_infer = 0;
         data[i].max_execution = 0;
-        data[i].num_process = num_process;
+        data[i].num_process = optimal_core;
         data[i].isTest = false;
     }
 
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
 
 #ifdef MEASURE
         if (pipe(fd[i]) == -1) {
@@ -670,10 +671,10 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     }
 
 #ifdef MEASURE
-    measure_data_t receivedData[num_process];
+    measure_data_t receivedData[optimal_core];
 
     // In the parent process, read data from all child processes
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
         close(fd[i][1]); // close writing end in the parent
         read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
         // data[i] = receivedData[i];
@@ -681,34 +682,34 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     }
 #endif
 
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
         wait(&status);
     }
 
-    // TEST 1
+    // TEST 1 :: Use all process (11 process)
     double max_gpu_infer_time = 0;
     double max_execution_time = 0;
     double avg_gpu_infer_time = 0;
     double avg_execution_time = 0;
 
-    int startIdx = 5 * num_process;
+    int startIdx = 5 * optimal_core;
     for (i = 5; i < num_exp; i++) {
-        for (j = 0; j < num_process; j++) {
+        for (j = 0; j < optimal_core; j++) {
             avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
             max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
             avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
             max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
         }        
     }
-    avg_gpu_infer_time /= num_process * num_exp - startIdx;
-    avg_execution_time /= num_process * num_exp - startIdx;
+    avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
+    avg_execution_time /= optimal_core * num_exp - startIdx;
 
     double wcet_ratio = 1.02;
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
-    double R = MAX(max_gpu_infer_time, max_execution_time/num_process);
-    int optimal_core = ceil(max_execution_time / R);
+    double R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
+    optimal_core = MAXCORES-1; // 11 process
 
     printf("\n\n::Test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
     printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
