@@ -353,10 +353,10 @@ static void processFunc(process_data_t data)
                 //printf("counter = %d\n", *start_counter);
                 while(!(*start_counter == data.num_process)) {
                     usleep(1);
-                    printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
+                    //printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
                 }
 
-                //usleep (data.R * (data.process_id-1) * 1000);
+                usleep ((data.R * (data.process_id-1)) * 1000);
                 //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
             }
         }
