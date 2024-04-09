@@ -345,6 +345,22 @@ static void processFunc(process_data_t data)
     else printf("Error! File is not exist.");
 
     for (i = 0; i < num_exp; i++) {
+
+        if (data.isTest){
+            if (i == 0) usleep ((data.process_id) * 100 * 1000);
+            if (i == NUM_TEST) {
+
+                //printf("counter = %d\n", *start_counter);
+                while(!(*start_counter == data.num_process)) {
+                    usleep(1);
+                    printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
+                }
+
+                //usleep (data.R * (data.process_id-1) * 1000);
+                //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
+            }
+        }
+
 #ifdef NVTX
         char task[100];
         sprintf(task, "Task (cpu: %d)", data.process_id);
@@ -363,21 +379,6 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         measure_data.start_preprocess[i] = get_time_in_ms();
 #endif
-
-        if (data.isTest){
-            if (i == 0) usleep ((data.process_id) * 100 * 1000);
-            if (i == NUM_TEST) {
-
-                //printf("counter = %d\n", *start_counter);
-                while(!(*start_counter == data.num_process)) {
-                    usleep(1);
-                    printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
-                }
-
-                //usleep (data.R * (data.process_id-1) * 1000);
-                //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
-            }
-        }
 
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
