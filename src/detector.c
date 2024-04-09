@@ -2038,6 +2038,7 @@ void run_detector(int argc, char **argv)
     else if (0 == strcmp(argv[2], "cpu-reclaiming")) cpu_reclaiming(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     //else if (0 == strcmp(argv[2], "cpu-reclaiming-reverse")) cpu_reclaiming_reverse(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "cpu-reclaiming-mp")) cpu_reclaiming_mp(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "cpu-reclaiming-mp-RGC")) cpu_reclaiming_mp_RGC(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
 #endif
     else if (0 == strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear, dont_show, calc_map, thresh, iou_thresh, mjpeg_port, show_imgs, benchmark_layers, chart_path, mAP_epochs);
     else if (0 == strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights, outfile);
