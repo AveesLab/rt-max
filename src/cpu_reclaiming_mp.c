@@ -1,3 +1,4 @@
+//branch reclaim-fork
 #include <stdlib.h>
 #include "darknet.h"
 #include "network.h"
@@ -104,6 +105,12 @@ typedef struct measure_data_t{
 } measure_data_t;
 
 #endif
+
+typedef struct reclaim_data_t {
+    network_state state;
+    network net;
+    layer l;
+} reclaim_data_t;
 
 #ifdef MEASURE
 static int compare(const void *a, const void *b) {
@@ -492,31 +499,89 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         measure_data.start_reclaim_infer[i] = get_time_in_ms();
 #endif
+
+        pid_t pid;
+        int status;
+        int fd[2];
+        if (pipe(fd) == -1) {
+            perror("pipe");
+            exit(1);
+        }
+        pid = fork();
+        if(pid == 0) {
+            close(fd[0]); // close reading end in the child
+            //printf("pid = %d(%d)\n", getpid(), data.process_id);
+            //reclaiming code
+            reclaim_data_t reclaim_data;
+            openblas_thread = (MAXCORES-1) - data.num_process + 1;
+            openblas_set_num_threads(openblas_thread);
+            CPU_ZERO(&cpuset);
+            CPU_SET(data.process_id, &cpuset);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+            for (int k = 0; k < openblas_thread - 1; k++) {
+                CPU_ZERO(&cpuset);
+                CPU_SET(num_process - k, &cpuset);
+                openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+            }
+            state.workspace = net.workspace_cpu;
+            gpu_yolo = 0;   
+
+            for(j = gLayer; j < rLayer; ++j){
+                state.index = j;
+                l = net.layers[j];
+                if(l.delta && state.train && l.train){
+                    scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+                }
+                l.forward(l, state);
+                state.input = l.output;
+            }
+            reclaim_data.state = state;
+            reclaim_data.net = net;
+            reclaim_data.l = l;
+            write(fd[1], &reclaim_data, sizeof(reclaim_data_t));
+            close(fd[1]);
+
+            exit(0);
+        } else if (pid < 0) {
+            perror("fork");
+            exit(1);
+        }
+
+        reclaim_data_t reclaim_data;
+        close(fd[1]); // close writing end in the parent
+        read(fd[0], &reclaim_data, sizeof(reclaim_data_t));
+        close(fd[0]);
+
+        wait(&status);
+        state = reclaim_data.state;
+        state.input = reclaim_data.state.input;
+        net = reclaim_data.net;
+        l = reclaim_data.l;
         // Openblas set num threads for Reclaiming inference
         // when cpu reclaim over gpu, exit() okay??????????????????????
-        openblas_thread = (MAXCORES-1) - data.num_process + 1;
-        openblas_set_num_threads(openblas_thread);
-        CPU_ZERO(&cpuset);
-        CPU_SET(data.process_id, &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < openblas_thread - 1; k++) {
-            CPU_ZERO(&cpuset);
-            CPU_SET(num_process - k, &cpuset);
-            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-        }
+        // openblas_thread = (MAXCORES-1) - data.num_process + 1;
+        // openblas_set_num_threads(openblas_thread);
+        // CPU_ZERO(&cpuset);
+        // CPU_SET(data.process_id, &cpuset);
+        // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        // for (int k = 0; k < openblas_thread - 1; k++) {
+        //     CPU_ZERO(&cpuset);
+        //     CPU_SET(num_process - k, &cpuset);
+        //     openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+        // }
 
-        state.workspace = net.workspace_cpu;
-        gpu_yolo = 0;
+        // state.workspace = net.workspace_cpu;
+        // gpu_yolo = 0;
 
-        for(j = gLayer; j < rLayer; ++j){
-            state.index = j;
-            l = net.layers[j];
-            if(l.delta && state.train && l.train){
-                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-            }
-            l.forward(l, state);
-            state.input = l.output;
-        }
+        // for(j = gLayer; j < rLayer; ++j){
+        //     state.index = j;
+        //     l = net.layers[j];
+        //     if(l.delta && state.train && l.train){
+        //         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+        //     }
+        //     l.forward(l, state);
+        //     state.input = l.output;
+        // }
 
         // if (data.isTest) {
         //     //printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
@@ -543,6 +608,8 @@ static void processFunc(process_data_t data)
         CPU_ZERO(&cpuset);
         CPU_SET(data.process_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        
+        gpu_yolo = 0;
         for(j = rLayer; j < net.n; ++j){
             //printf("get num threads : %d \n", openblas_get_num_threads());
             state.index = j;
@@ -590,7 +657,7 @@ static void processFunc(process_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 
-#ifndef MEASURE
+#ifdef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
 #endif
 
@@ -789,7 +856,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     avg_reclaim_infer_time /= num_process * num_exp - startIdx;
     avg_execution_time /= num_process * num_exp - startIdx;
 
-    double wcet_ratio = 1.5;
+    double wcet_ratio = 1.05;
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
