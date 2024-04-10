@@ -1,4 +1,3 @@
-//branch reclaim-fork
 #include <stdlib.h>
 #include "darknet.h"
 #include "network.h"
