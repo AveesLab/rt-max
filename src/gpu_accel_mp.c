@@ -34,41 +34,12 @@
 #ifdef MULTI_PROCESSOR
 #define NUM_TEST 4
 #define SKIP_EXP 15
-#define WCET_RATIO 1.1
+#define WCET_RATIO_GPU 1.02
+#define WCET_RATIO_ALL 1.1
 
 static int sem_id;
 static key_t key = 1234;
 int *start_counter;
-
-char layertype[20][27] = {
-   "CONVOLUTIONAL",
-   "DECONVOLUTIONAL",
-   "CONNECTED",
-   "MAXPOOL",
-   "SOFTMAX",
-   "DETECTION",
-   "DROPOUT",
-   "CROP",
-   "ROUTE",
-   "COST",
-   "NORMALIZATION",
-   "AVGPOOL",
-   "LOCAL",
-   "SHORTCUT",
-   "ACTIVE",
-   "RNN",
-   "GRU",
-   "CRNN",
-   "BATCHNORM",
-   "NETWORK",
-   "XNOR",
-   "REGION",
-   "YOLO",
-   "REORG",
-   "UPSAMPLE",
-   "REORG_OLD",
-   "BLANK"
-};
 
 typedef struct process_data_t{
     char *datacfg;
@@ -464,8 +435,6 @@ static void processFunc(process_data_t data)
         for(j = 0; j < gLayer; ++j){
             state.index = j;
             l = net.layers[j];
-                        printf("[%s]\n", layertype[l.type]);
-
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
@@ -486,12 +455,12 @@ static void processFunc(process_data_t data)
         measure_data.end_gpu_infer[i] = get_time_in_ms();
 #endif
 
-        if (data.isTest) {
-            //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
-            usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
-        }
+        // if (data.isTest) {
+        //     printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
+        //     usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
+        // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
-        //printf("Process %d is GPU unlock\n", data.process_id);
+        // printf("data.max_gpu_infer : %.3f\n", get_time_in_ms() - measure_data.start_gpu_infer[i]);
         unlock_resource(0);
 
 
@@ -549,7 +518,7 @@ static void processFunc(process_data_t data)
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
 
-#ifdef MEASURE
+#ifndef MEASURE
                 else printf("%s: %f\n",names[index], predictions[index]);
 #endif
 
@@ -583,11 +552,12 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
 #endif
-        // double reamin_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
-        // if (data.isTest) {
-        //     // if (i==10) printf("data.max_execution: %.3f (%.3f) -- %.3f\n", (get_time_in_ms() - measure_data.start_preprocess[i]), data.R * data.num_process, reamin_time);
-        //     if (reamin_time > 0) usleep(reamin_time * 1000);
-        // }
+        double reamin_time;
+        if (data.isTest) {
+            reamin_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
+            // if (i==10) printf("data.max_execution: %.3f (%.3f) -- %.3f\n", (get_time_in_ms() - measure_data.start_preprocess[i]), data.R * data.num_process, reamin_time);
+            if (reamin_time > 0) usleep(reamin_time * 1000);
+        }
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
         if(data.isTest) {
@@ -743,9 +713,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
     avg_execution_time /= optimal_core * num_exp - startIdx;
 
-    double wcet_ratio = WCET_RATIO;
-    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    max_execution_time = avg_execution_time * wcet_ratio; // total
+    max_gpu_infer_time = avg_gpu_infer_time * WCET_RATIO_GPU; // GPU_infer
+    max_execution_time = avg_execution_time * WCET_RATIO_ALL; // total
 
     double R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
     optimal_core = MAXCORES-1; // 11 process
@@ -844,9 +813,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
     avg_execution_time /= optimal_core * num_exp - startIdx;
 
-    wcet_ratio = WCET_RATIO;
-    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    max_execution_time = avg_execution_time * wcet_ratio; // total
+    max_gpu_infer_time = avg_gpu_infer_time * WCET_RATIO_GPU; // GPU_infer
+    max_execution_time = avg_execution_time * WCET_RATIO_ALL; // total
 
     // R test 1
     R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
@@ -949,9 +917,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
     avg_execution_time /= optimal_core * num_exp - startIdx;
 
-    wcet_ratio = WCET_RATIO;
-    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    max_execution_time = avg_execution_time * wcet_ratio; // total
+    max_gpu_infer_time = avg_gpu_infer_time * WCET_RATIO_GPU; // GPU_infer
+    max_execution_time = avg_execution_time * WCET_RATIO_ALL; // total
 
     // R test 1
     R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
@@ -1034,40 +1001,39 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         wait(&status);
     }
 
-    *start_counter = 0;
+    // *start_counter = 0;
 
-    max_gpu_infer_time = 0;
-    max_execution_time = 0;
-    avg_gpu_infer_time = 0;
-    avg_execution_time = 0;
+    // max_gpu_infer_time = 0;
+    // max_execution_time = 0;
+    // avg_gpu_infer_time = 0;
+    // avg_execution_time = 0;
 
-    startIdx = SKIP_EXP * optimal_core;
-    for (i = SKIP_EXP; i < num_exp; i++) {
-        for (j = 0; j < optimal_core; j++) {
-            avg_gpu_infer_time += receivedData4[j].e_gpu_infer[i];
-            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData4[j].e_gpu_infer[i]);
-            avg_execution_time += receivedData4[j].e_preprocess[i]+receivedData4[j].e_gpu_infer[i]+receivedData4[j].e_cpu_infer[i]+receivedData4[j].e_postprocess[i];
-            max_execution_time = MAX(max_execution_time, (receivedData4[j].e_preprocess[i]+receivedData4[j].e_gpu_infer[i]+receivedData4[j].e_cpu_infer[i]+receivedData4[j].e_postprocess[i]));
-        }        
-    }
-    avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
-    avg_execution_time /= optimal_core * num_exp - startIdx;
+    // startIdx = SKIP_EXP * optimal_core;
+    // for (i = SKIP_EXP; i < num_exp; i++) {
+    //     for (j = 0; j < optimal_core; j++) {
+    //         avg_gpu_infer_time += receivedData4[j].e_gpu_infer[i];
+    //         max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData4[j].e_gpu_infer[i]);
+    //         avg_execution_time += receivedData4[j].e_preprocess[i]+receivedData4[j].e_gpu_infer[i]+receivedData4[j].e_cpu_infer[i]+receivedData4[j].e_postprocess[i];
+    //         max_execution_time = MAX(max_execution_time, (receivedData4[j].e_preprocess[i]+receivedData4[j].e_gpu_infer[i]+receivedData4[j].e_cpu_infer[i]+receivedData4[j].e_postprocess[i]));
+    //     }        
+    // }
+    // avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
+    // avg_execution_time /= optimal_core * num_exp - startIdx;
 
-    wcet_ratio = WCET_RATIO;
-    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    max_execution_time = avg_execution_time * wcet_ratio; // total
+    // max_gpu_infer_time = avg_gpu_infer_time * WCET_RATIO_GPU; // GPU_infer
+    // max_execution_time = avg_execution_time * WCET_RATIO_ALL; // total
 
-    // R test 1
-    R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
-    optimal_core = ceil(max_execution_time / R); // Optimal cores
-    // R test 2
-    R = MAX(max_gpu_infer_time, max_execution_time/optimal_core); // 11 process
-    optimal_core = ceil(max_execution_time / R); // Optimal cores
+    // // R test 1
+    // R = MAX(max_gpu_infer_time, max_execution_time/(MAXCORES-1)); // 11 process
+    // optimal_core = ceil(max_execution_time / R); // Optimal cores
+    // // R test 2
+    // R = MAX(max_gpu_infer_time, max_execution_time/optimal_core); // 11 process
+    // optimal_core = ceil(max_execution_time / R); // Optimal cores
 
-    printf("\n\n::Test 3:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
-    printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
-    printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
-    printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
+    // printf("\n\n::Test 3:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
+    // printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
+    // printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
+    // printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
 
     // Remove semaphores
     semctl(sem_id, 0, IPC_RMID);
