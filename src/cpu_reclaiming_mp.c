@@ -41,6 +41,9 @@ static int sem_id2;
 static key_t key = 1234;
 int *start_counter;
 
+//int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+
 typedef struct process_data_t{
     char *datacfg;
     char *cfgfile;
@@ -55,6 +58,7 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
+    int cpu_id;
     double R;
     double max_preprocess;
     double max_gpu_infer;
@@ -179,7 +183,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
 
-        sum_measure_data[i][0] = (double)core_id;
+        sum_measure_data[i][0] = coreIDOrder[core_id];
         sum_measure_data[i][1] = measure_data[core_id - 1].start_preprocess[count];
         sum_measure_data[i][2] = measure_data[core_id - 1].e_preprocess[count];
         sum_measure_data[i][3] = measure_data[core_id - 1].end_preprocess[count];
@@ -297,7 +301,7 @@ static void processFunc(process_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.process_id, &cpuset); // cpu core index
+    CPU_SET(data.cpu_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -377,21 +381,27 @@ static void processFunc(process_data_t data)
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
+    double remaining_time = 0.0;
+
     for (i = 0; i < num_exp; i++) {
         if (data.isTest){
             if (i == 0) usleep ((data.process_id) * 100 * 1000);
             if (i == START_SYNC) {
-
-                //printf("counter = %d\n", *start_counter);
+                // pthread_barrier_wait
                 while(!(*start_counter == data.num_process)) {
                     usleep(1);
-                    //printf("counter = %d(%d) -- %d\n", *start_counter, sched_getcpu(), data.num_process);
+                    // printf("%d -- counter = %d(%d)\n", i, *start_counter, sched_getcpu());
                 }
 
-                usleep (data.R * (data.process_id-1) * 1000);
-                //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
+                usleep ((data.R * (data.process_id-1)) * 1000);
+                // printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
             }
         }
+
+        // __Preprocess__
+#ifdef MEASURE
+        measure_data.start_preprocess[i] = get_time_in_ms();
+#endif
 
 #ifdef NVTX
         char task[100];
@@ -401,16 +411,11 @@ static void processFunc(process_data_t data)
 #endif
 
 #ifdef MEASURE
-        // printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
+        // printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
 #else
         printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
 #endif
 
-        time = get_time_in_ms();
-        // __Preprocess__
-#ifdef MEASURE
-        measure_data.start_preprocess[i] = get_time_in_ms();
-#endif
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
@@ -419,6 +424,16 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         measure_data.end_preprocess[i] = get_time_in_ms();
         measure_data.e_preprocess[i] = measure_data.end_preprocess[i] - measure_data.start_preprocess[i];
+#endif
+
+        measure_data.e_preprocess_max_value[i] = data.max_preprocess;
+        if (data.isTest) {
+            remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
+            if (remaining_time > 0) usleep(remaining_time * 1000);
+        }
+
+#ifdef MEASURE
+        measure_data.e_preprocess_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 #endif
 
         // __Inference__
@@ -733,6 +748,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
+        data[i].cpu_id = coreIDOrder[i+1];
         data[i].max_gpu_infer = 0;
         data[i].max_reclaim_infer = 0;
         data[i].max_execution = 0;
@@ -841,6 +857,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data2[i].letter_box = letter_box;
         data2[i].benchmark_layers = benchmark_layers;
         data2[i].process_id = i + 1;
+        data2[i].cpu_id = coreIDOrder[i+1];
         data2[i].R = R;
         data2[i].max_gpu_infer = max_gpu_infer_time;
         data2[i].max_reclaim_infer = max_reclaim_infer_time;
@@ -948,6 +965,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data3[i].letter_box = letter_box;
         data3[i].benchmark_layers = benchmark_layers;
         data3[i].process_id = i + 1;
+        data3[i].cpu_id = coreIDOrder[i+1];
         data3[i].R = R;
         data3[i].max_gpu_infer = max_gpu_infer_time;
         data3[i].max_reclaim_infer = max_reclaim_infer_time;
