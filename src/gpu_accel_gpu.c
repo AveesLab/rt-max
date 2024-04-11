@@ -497,11 +497,11 @@ static void threadFunc(thread_data_t data)
 
         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
 
-        if (data.thread_id == data.num_thread) {
-            current_thread = 1;
-        } else {
-            current_thread++;
-        }
+        // if (data.thread_id == data.num_thread) {
+        //     current_thread = 1;
+        // } else {
+        //     current_thread++;
+        // }
 
         // pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
