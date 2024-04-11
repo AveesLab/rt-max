@@ -745,7 +745,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // Pre-test :: 11 process with acting like gpu-accel_gpu
     int optimal_core = 11;
 
-    printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
+    printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer (like GPU-accel) \n", optimal_core, gLayer, rLayer);
 
     *start_counter = 0;
     int fd[optimal_core][2];
@@ -867,7 +867,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     printf("R : %lf \n", R);
     printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
 
-    printf("\n\n::Test 1:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
+    printf("\n\n::Test 1:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer (like GPU-accel)\n", optimal_core, gLayer, rLayer);
 
     int fd2[optimal_core][2];
     process_data_t data2[optimal_core];
@@ -990,7 +990,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     printf("optimal_core : %d \n", optimal_core);
     printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
 
-    printf("\n\n::Test 2:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
+    printf("\n\n::Test 2:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer \n", optimal_core, gLayer, rLayer);
 
     int fd3[optimal_core][2];
     process_data_t data3[optimal_core];
