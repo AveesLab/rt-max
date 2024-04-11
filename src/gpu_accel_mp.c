@@ -650,7 +650,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     arg.array = values;
     semctl(sem_id, 0, SETALL, arg);
 
-    // Pre-test :: Only 1 process
+    // Pre-test :: 11 process
     int optimal_core = 11;
 
     printf("\n\n::Pre-test:: GPU-Accel-MP with %d processes with %d gpu-layer\n", optimal_core, gLayer);
@@ -755,8 +755,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
-    printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-    printf("WCET ratio : %lf \n", wcet_ratio);
+    printf("\nWCET ratio : %lf \n", wcet_ratio);
+    printf("avg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
     printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 
@@ -851,12 +851,12 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     startIdx = START_SYNC * optimal_core;
     for (i = START_SYNC; i < num_exp; i++) {
         for (j = 0; j < optimal_core; j++) {
-            avg_preprocess_time += receivedData[j].e_preprocess[i];
-            max_preprocess_time = MAX(max_preprocess_time, receivedData[j].e_preprocess[i]);
-            avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
-            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
-            avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
-            max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
+            avg_preprocess_time += receivedData2[j].e_preprocess[i];
+            max_preprocess_time = MAX(max_preprocess_time, receivedData2[j].e_preprocess[i]);
+            avg_gpu_infer_time += receivedData2[j].e_gpu_infer[i];
+            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData2[j].e_gpu_infer[i]);
+            avg_execution_time += receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i];
+            max_execution_time = MAX(max_execution_time, (receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i]));
         }        
     }
 
@@ -869,8 +869,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
-    printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-    printf("WCET ratio : %lf \n", wcet_ratio);
+    printf("\nWCET ratio : %lf \n", wcet_ratio);
+    printf("avg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
     printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 
