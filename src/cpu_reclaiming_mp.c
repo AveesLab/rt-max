@@ -1062,7 +1062,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         wait(&status);
     }
 
-// TEST 3
+    // TEST 3
     *start_counter = 0;
 
     max_preprocess_time = 0;
@@ -1113,7 +1113,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     printf("optimal_core : %d \n", optimal_core);
     printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
 
-    printf("\n\n::Test 2:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
+    printf("\n\n::Test 3:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
 
     int fd4[optimal_core][2];
     process_data_t data4[optimal_core];
