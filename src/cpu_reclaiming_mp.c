@@ -32,7 +32,9 @@
 #endif
 
 #ifdef MULTI_PROCESSOR
-#define NUM_TEST 4
+
+#define STARTIDX 0
+#define START_SYNC 5
 
 static int sem_id;
 static int sem_id2;
@@ -54,6 +56,7 @@ typedef struct process_data_t{
     int benchmark_layers;
     int process_id;
     double R;
+    double max_preprocess;
     double max_gpu_infer;
     double max_reclaim_infer;
     double max_execution;
@@ -72,6 +75,7 @@ typedef struct measure_data_t{
     double start_preprocess[200];
     double end_preprocess[200];
     double e_preprocess[200];
+
 
     double start_infer[200];
     double start_gpu_waiting[200];
@@ -94,9 +98,15 @@ typedef struct measure_data_t{
     double e_postprocess[200];
     double execution_time[200];
 
+    double e_preprocess_max[200];
     double e_gpu_infer_max[200];
     double e_reclaim_infer_max[200];
     double execution_time_max[200];
+
+    double e_preprocess_max_value[200];
+    double e_gpu_infer_max_value[200];
+    double e_reclaim_infer_max_value[200];
+    double execution_time_max_value[200];
 
     double frame_rate[200];
     double cycle_time[200];
@@ -163,7 +173,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_process][27];
+    double sum_measure_data[num_exp * num_process][33];
     for(i = 0; i < num_exp * num_process; i++)
     {
         int core_id = (i + 1) - (i / num_process) * num_process;
@@ -173,45 +183,51 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][1] = measure_data[core_id - 1].start_preprocess[count];
         sum_measure_data[i][2] = measure_data[core_id - 1].e_preprocess[count];
         sum_measure_data[i][3] = measure_data[core_id - 1].end_preprocess[count];
-        sum_measure_data[i][4] = measure_data[core_id - 1].start_infer[count]; 
-        sum_measure_data[i][5] = measure_data[core_id - 1].start_gpu_waiting[count];
-        sum_measure_data[i][6] = measure_data[core_id - 1].waiting_gpu[count];
-        sum_measure_data[i][7] = measure_data[core_id - 1].start_gpu_infer[count];
-        sum_measure_data[i][8] = measure_data[core_id - 1].e_gpu_infer[count];
-        sum_measure_data[i][9] = measure_data[core_id - 1].e_gpu_infer_max[count];
-        sum_measure_data[i][10] = measure_data[core_id - 1].end_gpu_infer[count];
-        sum_measure_data[i][11] = measure_data[core_id - 1].waiting_reclaim[count];
-        sum_measure_data[i][12] = measure_data[core_id - 1].start_reclaim_infer[count];    
-        sum_measure_data[i][13] = measure_data[core_id - 1].e_reclaim_infer[count];    
-        sum_measure_data[i][14] = measure_data[core_id - 1].end_reclaim_infer[count];
-        sum_measure_data[i][15] = measure_data[core_id - 1].start_cpu_infer[count];
-        sum_measure_data[i][16] = measure_data[core_id - 1].e_cpu_infer[count];
-        sum_measure_data[i][17] = measure_data[core_id - 1].end_infer[count];
-        sum_measure_data[i][18] = measure_data[core_id - 1].e_infer[count];
-        sum_measure_data[i][19] = measure_data[core_id - 1].start_postprocess[count];
-        sum_measure_data[i][20] = measure_data[core_id - 1].e_postprocess[count];
-        sum_measure_data[i][21] = measure_data[core_id - 1].end_postprocess[count];
-        sum_measure_data[i][22] = measure_data[core_id - 1].execution_time[count];
-        sum_measure_data[i][23] = measure_data[core_id - 1].execution_time_max[count];
-        sum_measure_data[i][24] = measure_data[core_id - 1].frame_rate[count];
-        sum_measure_data[i][25] = 1000/measure_data[core_id - 1].frame_rate[count];
-        sum_measure_data[i][26] = measure_data[core_id - 1].start_gap[count]; // start_gap
+        sum_measure_data[i][4] = measure_data[core_id - 1].e_preprocess_max[count];
+        sum_measure_data[i][5] = measure_data[core_id - 1].e_preprocess_max_value[count];
+        sum_measure_data[i][6] = measure_data[core_id - 1].start_infer[count]; 
+        sum_measure_data[i][7] = measure_data[core_id - 1].start_gpu_waiting[count];
+        sum_measure_data[i][8] = measure_data[core_id - 1].waiting_gpu[count];
+        sum_measure_data[i][9] = measure_data[core_id - 1].start_gpu_infer[count];
+        sum_measure_data[i][10] = measure_data[core_id - 1].e_gpu_infer[count];
+        sum_measure_data[i][11] = measure_data[core_id - 1].end_gpu_infer[count];
+        sum_measure_data[i][12] = measure_data[core_id - 1].e_gpu_infer_max[count];
+        sum_measure_data[i][13] = measure_data[core_id - 1].e_gpu_infer_max_value[count];
+        sum_measure_data[i][14] = measure_data[core_id - 1].waiting_reclaim[count];
+        sum_measure_data[i][15] = measure_data[core_id - 1].start_reclaim_infer[count];    
+        sum_measure_data[i][16] = measure_data[core_id - 1].e_reclaim_infer[count];    
+        sum_measure_data[i][17] = measure_data[core_id - 1].end_reclaim_infer[count];
+        sum_measure_data[i][18] = measure_data[core_id - 1].e_reclaim_infer_max[count];
+        sum_measure_data[i][19] = measure_data[core_id - 1].e_reclaim_infer_max_value[count];
+        sum_measure_data[i][20] = measure_data[core_id - 1].start_cpu_infer[count];
+        sum_measure_data[i][21] = measure_data[core_id - 1].e_cpu_infer[count];
+        sum_measure_data[i][22] = measure_data[core_id - 1].end_infer[count];
+        sum_measure_data[i][23] = measure_data[core_id - 1].e_infer[count];
+        sum_measure_data[i][24] = measure_data[core_id - 1].start_postprocess[count];
+        sum_measure_data[i][25] = measure_data[core_id - 1].e_postprocess[count];
+        sum_measure_data[i][26] = measure_data[core_id - 1].end_postprocess[count];
+        sum_measure_data[i][27] = measure_data[core_id - 1].execution_time[count];
+        sum_measure_data[i][28] = measure_data[core_id - 1].execution_time_max[count];
+        sum_measure_data[i][29] = measure_data[core_id - 1].execution_time_max_value[count];
+        sum_measure_data[i][30] = measure_data[core_id - 1].frame_rate[count];
+        sum_measure_data[i][31] = 1000/measure_data[core_id - 1].frame_rate[count];
+        sum_measure_data[i][32] = measure_data[core_id - 1].start_gap[count]; // start_gap
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
-            "start_preprocess", "e_preprocess", "end_preprocess", 
+            "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value", 
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "e_gpu_infer_max", "end_gpu_infer", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value", 
             "waiting_reclaim",
-            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
+            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", "e_reclaim_infer_max", "e_reclaim_infer_max_value",  
             "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "execution_time_max", "frame_rate", "cycle_time", "start_gap");
+            "execution_time", "execution_time_max", "execution_time_max_value", "frame_rate", "cycle_time", "start_gap");
 
     for(i = 0; i < num_exp * num_process; i++)
     {
@@ -220,13 +236,15 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         if (i == 0) gap = 0.0;
         else gap = sum_measure_data[i][1] - sum_measure_data[i-1][1]; // start_gap
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 sum_measure_data[i][0], sum_measure_data[i][1], sum_measure_data[i][2], sum_measure_data[i][3], 
                 sum_measure_data[i][4], sum_measure_data[i][5], sum_measure_data[i][6], sum_measure_data[i][7], 
                 sum_measure_data[i][8], sum_measure_data[i][9], sum_measure_data[i][10], sum_measure_data[i][11], 
                 sum_measure_data[i][12], sum_measure_data[i][13], sum_measure_data[i][14], sum_measure_data[i][15],
                 sum_measure_data[i][16], sum_measure_data[i][17], sum_measure_data[i][18], sum_measure_data[i][19], sum_measure_data[i][20], sum_measure_data[i][21],
-                sum_measure_data[i][22], sum_measure_data[i][23], sum_measure_data[i][24], sum_measure_data[i][25], gap);
+                sum_measure_data[i][22], sum_measure_data[i][23], sum_measure_data[i][24], sum_measure_data[i][25],
+                sum_measure_data[i][26], sum_measure_data[i][27], sum_measure_data[i][28], sum_measure_data[i][29],
+                sum_measure_data[i][30], sum_measure_data[i][31],  gap);
     }
 
     fclose(fp);
@@ -362,7 +380,7 @@ static void processFunc(process_data_t data)
     for (i = 0; i < num_exp; i++) {
         if (data.isTest){
             if (i == 0) usleep ((data.process_id) * 100 * 1000);
-            if (i == NUM_TEST) {
+            if (i == START_SYNC) {
 
                 //printf("counter = %d\n", *start_counter);
                 while(!(*start_counter == data.num_process)) {
@@ -633,7 +651,7 @@ static void processFunc(process_data_t data)
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
         if(data.isTest) {
-            if(i == NUM_TEST-1) {
+            if(i == START_SYNC-1) {
                 (*start_counter)++;
             }
         }
