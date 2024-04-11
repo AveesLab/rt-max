@@ -55,6 +55,7 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
+    int cpu_id;
     double R;
     double max_gpu_infer;
     double max_execution;
@@ -266,7 +267,7 @@ static void processFunc(process_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.process_id, &cpuset); // cpu core index
+    CPU_SET(data.cpu_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -358,7 +359,7 @@ static void processFunc(process_data_t data)
                 }
 
                 usleep ((data.R * (data.process_id-1)) * 1000);
-                //printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
+                // printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
             }
         }
 
@@ -591,6 +592,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     if (num_process > 11) num_process = 11;
     pid_t pids[num_process];
     int status;
+    int coreIDOrder[11] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
     key_t key = ftok("shmfile", 65);
     int shm_id;
@@ -644,6 +646,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
+        data[i].cpu_id = coreIDOrder[i];
         data[i].max_gpu_infer = 0;
         data[i].max_execution = 0;
         data[i].num_process = optimal_core;
@@ -742,6 +745,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data2[i].letter_box = letter_box;
         data2[i].benchmark_layers = benchmark_layers;
         data2[i].process_id = i + 1;
+        data2[i].cpu_id = coreIDOrder[i];
         data2[i].R = R;
         data2[i].max_gpu_infer = max_gpu_infer_time;
         data2[i].max_execution = max_execution_time;
@@ -846,6 +850,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data3[i].letter_box = letter_box;
         data3[i].benchmark_layers = benchmark_layers;
         data3[i].process_id = i + 1;
+        data3[i].cpu_id = coreIDOrder[i + 1];
         data3[i].R = R;
         data3[i].max_gpu_infer = max_gpu_infer_time;
         data3[i].max_execution = max_execution_time;
@@ -950,6 +955,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data4[i].letter_box = letter_box;
         data4[i].benchmark_layers = benchmark_layers;
         data4[i].process_id = i + 1;
+        data4[i].cpu_id = coreIDOrder[i + 1];
         data4[i].R = R;
         data4[i].max_gpu_infer = max_gpu_infer_time;
         data4[i].max_execution = max_execution_time;
