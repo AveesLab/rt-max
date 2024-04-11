@@ -41,8 +41,8 @@ static int sem_id2;
 static key_t key = 1234;
 int *start_counter;
 
-//int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
-static int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+static int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+//static int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
 typedef struct process_data_t{
     char *datacfg;
@@ -541,7 +541,7 @@ static void processFunc(process_data_t data)
         CPU_SET(data.cpu_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for (int k = data.num_process + 1; k < MAXCORES; k++) {
-            printf("reclaim infer k is %d (%d) \n", k, coreIDOrder[k]);
+            //printf("reclaim infer k is %d (%d) \n", k, coreIDOrder[k]);
             CPU_ZERO(&cpuset);
             CPU_SET(coreIDOrder[k], &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);

@@ -41,7 +41,7 @@ static key_t key = 1234;
 int *start_counter;
 
 static int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
-// int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+// static int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
 typedef struct process_data_t{
     char *datacfg;
