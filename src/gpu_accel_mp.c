@@ -40,6 +40,9 @@ static int sem_id;
 static key_t key = 1234;
 int *start_counter;
 
+int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+// int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+
 typedef struct process_data_t{
     char *datacfg;
     char *cfgfile;
@@ -169,7 +172,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
 
-        sum_measure_data[i][0] = (double)core_id;
+        sum_measure_data[i][0] = coreIDOrder[core_id];
         sum_measure_data[i][1] = measure_data[core_id - 1].start_preprocess[count];
         sum_measure_data[i][2] = measure_data[core_id - 1].e_preprocess[count];
         sum_measure_data[i][3] = measure_data[core_id - 1].end_preprocess[count];
@@ -368,7 +371,7 @@ static void processFunc(process_data_t data)
                 // pthread_barrier_wait
                 while(!(*start_counter == data.num_process)) {
                     usleep(1);
-                    //printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
+                    // printf("%d -- counter = %d(%d)\n", i, *start_counter, sched_getcpu());
                 }
 
                 usleep ((data.R * (data.process_id-1)) * 1000);
@@ -389,7 +392,7 @@ static void processFunc(process_data_t data)
 #endif
 
 #ifdef MEASURE
-        // printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
+        // printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
 #else
         printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
 #endif
@@ -582,6 +585,7 @@ static void processFunc(process_data_t data)
 
 
         if(data.isTest) {
+            // printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
             if(i == START_SYNC-1) {
                 (*start_counter)++;
             }
@@ -616,7 +620,6 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     if (num_process > 11) num_process = 11;
     pid_t pids[num_process];
     int status;
-    int coreIDOrder[11] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
     key_t key = ftok("shmfile", 65);
     int shm_id;
@@ -670,7 +673,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
-        data[i].cpu_id = coreIDOrder[i];
+        data[i].cpu_id = coreIDOrder[i+1];
         data[i].max_preprocess = 0;
         data[i].max_gpu_infer = 0;
         data[i].max_execution = 0;
@@ -783,7 +786,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data2[i].letter_box = letter_box;
         data2[i].benchmark_layers = benchmark_layers;
         data2[i].process_id = i + 1;
-        data2[i].cpu_id = coreIDOrder[i];
+        data2[i].cpu_id = coreIDOrder[i+1];
         data2[i].R = R;
         data2[i].max_preprocess = max_preprocess_time;
         data2[i].max_gpu_infer = max_gpu_infer_time;
@@ -899,7 +902,7 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
         data3[i].letter_box = letter_box;
         data3[i].benchmark_layers = benchmark_layers;
         data3[i].process_id = i + 1;
-        data3[i].cpu_id = coreIDOrder[i + 1];
+        data3[i].cpu_id = coreIDOrder[i+1];
         data3[i].R = R;
         data3[i].max_preprocess = max_preprocess_time;
         data3[i].max_gpu_infer = max_gpu_infer_time;
