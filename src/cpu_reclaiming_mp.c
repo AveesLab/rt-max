@@ -541,7 +541,7 @@ static void processFunc(process_data_t data)
         CPU_SET(data.cpu_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for (int k = data.num_process + 1; k < MAXCORES; k++) {
-            //printf("reclaim infer k is %d (%d) \n", k, coreIDOrder[k]);
+            printf("reclaim infer k is %d (%d) \n", k, coreIDOrder[k]);
             CPU_ZERO(&cpuset);
             CPU_SET(coreIDOrder[k], &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
@@ -676,7 +676,7 @@ static void processFunc(process_data_t data)
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
         if(data.isTest) {
-            // printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
+            printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
             if(i == START_SYNC-1) {
                 (*start_counter)++;
             }
@@ -895,7 +895,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data2[i].R = R;
         data2[i].max_preprocess = max_preprocess_time;
         data2[i].max_gpu_infer = max_gpu_infer_time;
-        data2[i].max_reclaim_infer = max_reclaim_infer_time;
+        data2[i].max_reclaim_infer = 0; // still like GPU-accel
         data2[i].max_execution = max_execution_time;
         data2[i].num_process = optimal_core;
         data2[i].isTest = true; // TEST 1
@@ -1025,7 +1025,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data3[i].R = R;
         data3[i].max_preprocess = max_preprocess_time;
         data3[i].max_gpu_infer = max_gpu_infer_time;
-        data3[i].max_reclaim_infer = max_reclaim_infer_time;
+        data3[i].max_reclaim_infer = 0; // still like GPU-accel
         data3[i].max_execution = max_execution_time;
         data3[i].num_process = optimal_core;
         data3[i].isTest = true;
