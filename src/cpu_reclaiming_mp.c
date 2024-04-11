@@ -85,6 +85,7 @@ typedef struct measure_data_t{
     double start_gpu_waiting[200];
     double start_gpu_infer[200];
     double end_gpu_infer[200];
+    double start_reclaim_waiting[200];
     double start_reclaim_infer[1000];
     double end_reclaim_infer[1000];
     double start_cpu_infer[200];
@@ -405,7 +406,7 @@ static void processFunc(process_data_t data)
 
 #ifdef NVTX
         char task[100];
-        sprintf(task, "Task (cpu: %d)", data.process_id);
+        sprintf(task, "Task %d (cpu: %d)", data.process_id, data.cpu_id);
         nvtxRangeId_t nvtx_task;
         nvtx_task = nvtxRangeStartA(task);
 #endif
@@ -466,7 +467,7 @@ static void processFunc(process_data_t data)
         //printf("Process %d is GPU lock\n", data.process_id);
 #ifdef NVTX
         char task_gpu[100];
-        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
+        sprintf(task_gpu, "Task %d (cpu: %d) - GPU Inference", data.process_id, data.cpu_id);
         nvtxRangeId_t nvtx_task_gpu;
         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
 #endif
@@ -516,27 +517,33 @@ static void processFunc(process_data_t data)
         unlock_resource(0);
 
         // Reclaiming Inference
+#ifdef MEASURE
+        measure_data.start_reclaim_waiting[i] = get_time_in_ms();
+#endif
+
+        lock_resource(1);
+
 #ifdef NVTX
         char task_reclaiming[100];
-        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.process_id);
+        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.cpu_id);
         nvtxRangeId_t nvtx_task_reclaiming;
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
-        lock_resource(1);
 
 #ifdef MEASURE
         measure_data.start_reclaim_infer[i] = get_time_in_ms();
 #endif
         // Openblas set num threads for Reclaiming inference
         // when cpu reclaim over gpu, exit() okay??????????????????????
-        openblas_thread = (MAXCORES-1) - data.num_process + 1;
+        openblas_thread = (MAXCORES-1) - data.num_process + 1; // [+1] itself !!
         openblas_set_num_threads(openblas_thread);
         CPU_ZERO(&cpuset);
-        CPU_SET(data.process_id, &cpuset);
+        CPU_SET(data.cpu_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < openblas_thread - 1; k++) {
+        for (int k = data.num_process + 1; k < MAXCORES; k++) {
+            printf("reclaim infer k is %d (%d) \n", k, coreIDOrder[k]);
             CPU_ZERO(&cpuset);
-            CPU_SET(num_process - k, &cpuset);
+            CPU_SET(coreIDOrder[k], &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
         }
 
@@ -553,22 +560,26 @@ static void processFunc(process_data_t data)
             state.input = l.output;
         }
 
-        // if (data.isTest) {
-        //     //printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
-        //     usleep((data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_infer[i])) * 1000);
-        // }
-        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
-        //printf("Process %d is Reclaiming unlock\n", data.process_id);
 
-        unlock_resource(1);
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_reclaiming);
+#endif
 
 #ifdef MEASURE
         measure_data.end_reclaim_infer[i] = get_time_in_ms();
 #endif
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_reclaiming);
-#endif
+        measure_data.e_reclaim_infer_max_value[i] = data.max_reclaim_infer;
+        if (data.isTest) {
+            // printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
+            remaining_time = data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_waiting[i]); // [+] Waiting_Reclaim Time !!
+            // printf("remaining_time : %.3f\n", remaining_time);
+            if (remaining_time > 0) usleep(remaining_time * 1000);
+        }
+        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
+        //printf("Process %d is Reclaiming unlock\n", data.process_id);
+
+        unlock_resource(1);
 
         // CPU Inference
 #ifdef MEASURE
@@ -576,7 +587,7 @@ static void processFunc(process_data_t data)
 #endif
         openblas_set_num_threads(1);
         CPU_ZERO(&cpuset);
-        CPU_SET(data.process_id, &cpuset);
+        CPU_SET(data.cpu_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for(j = rLayer; j < net.n; ++j){
             //printf("get num threads : %d \n", openblas_get_num_threads());
@@ -599,7 +610,7 @@ static void processFunc(process_data_t data)
         //measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
-        measure_data.waiting_reclaim[i] = measure_data.start_reclaim_infer[i] - measure_data.end_gpu_infer[i];
+        measure_data.waiting_reclaim[i] = measure_data.start_reclaim_infer[i] - measure_data.start_reclaim_waiting[i];
         measure_data.e_reclaim_infer[i] = measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i];
         measure_data.e_cpu_infer[i] = measure_data.end_infer[i] - measure_data.start_cpu_infer[i];
         measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
