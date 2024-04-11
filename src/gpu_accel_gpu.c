@@ -23,6 +23,8 @@
 #endif
 #endif
 
+#define STARTIDX 0
+
 pthread_barrier_t barrier;
 
 static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
@@ -179,7 +181,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = optimal_core * 5; // Delete some ROWs
+    int startIdx = optimal_core * STARTIDX; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -329,7 +331,7 @@ static void threadFunc(thread_data_t data)
     for (i = 0; i < num_exp; i++) {
 
         if (!data.isTest) {
-            if (i == 5) {
+            if (i == STARTIDX) {
                 pthread_barrier_wait(&barrier);
                 //usleep(R * (data.thread_id - 1) * 1000);
 
@@ -473,19 +475,19 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // Busy wait for the remaining time
-        // if (!data.isTest) {
-        //     remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time
-        //     wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+        if (!data.isTest) {
+            remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time
+            wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
             
-        //     if (remaining_time > 0) {
-        //         wait_start = get_time_in_ms();
-        //         wait_end;
-        //         do {
-        //             wait_end = get_time_in_ms();
-        //             work_time = wait_end - wait_start;
-        //         } while(work_time < remaining_time);
-        //     }
-        // }
+            if (remaining_time > 0) {
+                wait_start = get_time_in_ms();
+                wait_end;
+                do {
+                    wait_end = get_time_in_ms();
+                    work_time = wait_end - wait_start;
+                } while(work_time < remaining_time);
+            }
+        }
 
         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
 
@@ -664,7 +666,7 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
             pthread_join(threads[i], NULL);
         }
 
-        int startIdx = 5 * optimal_core;
+        int startIdx = STARTIDX * optimal_core;
         for (i = startIdx; i < optimal_core * num_exp; i++) {
             // max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
             max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
@@ -728,7 +730,7 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         }
 
 
-        startIdx = 5 * optimal_core;
+        startIdx = STARTIDX * optimal_core;
         for (i = startIdx; i < optimal_core * num_exp; i++) {
             // max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
             max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
@@ -758,7 +760,9 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
         sleep_time = R * optimal_core - max_execution_time;
         if (sleep_time < 0) sleep_time = 0.0;
+        optimal_core = ceil(max_execution_time / R);
         printf("R : %lf \n", R);
+        printf("optimal_core : %d \n", optimal_core);
         printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
 
         printf("\n\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
