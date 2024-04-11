@@ -649,6 +649,11 @@ static void processFunc(process_data_t data)
         //     wait_key_cv(1);
         // }
 
+        // free memory
+        free_image(im);
+        free_image(resized);
+        free_image(cropped);
+
 #ifdef MEASURE
         measure_data.end_postprocess[i] = get_time_in_ms();
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
@@ -663,26 +668,23 @@ static void processFunc(process_data_t data)
         data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, data.execution_time[i], measure_data.frame_rate[i]);
 #endif
-        // free memory
-        free_image(im);
-        free_image(resized);
-        free_image(cropped);
-
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task);
-#endif
-        double reamin_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
+        measure_data.execution_time_max_value[i] = data.R * data.num_process;
         if (data.isTest) {
-            //printf("data.max_execution: %.3f (%.3f)\n", data.max_execution, data.R * data.num_process);
-            if (reamin_time > 0) usleep(reamin_time * 1000);
+            remaining_time = data.R * data.num_process - (get_time_in_ms() - measure_data.start_preprocess[i]);
+            if (remaining_time > 0) usleep(remaining_time * 1000);
         }
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
         if(data.isTest) {
+            // printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
             if(i == START_SYNC-1) {
                 (*start_counter)++;
             }
         }
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task);
+#endif
 
     }
 
