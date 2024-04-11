@@ -37,6 +37,9 @@
 #define WCET_RATIO_GPU 1.02
 #define WCET_RATIO_ALL 1.1
 
+#define STARTIDX 0
+#define START_SYNC 5
+
 static int sem_id;
 static key_t key = 1234;
 int *start_counter;
@@ -350,9 +353,8 @@ static void processFunc(process_data_t data)
 
         if (data.isTest){
             if (i == 0) usleep ((data.process_id) * 100 * 1000);
-            if (i == NUM_TEST) {
-
-                //printf("counter = %d\n", *start_counter);
+            if (i == START_SYNC) {
+                // pthread_barrier_wait
                 while(!(*start_counter == data.num_process)) {
                     usleep(1);
                     //printf("counter = %d(%d)\n", *start_counter, sched_getcpu());
@@ -362,6 +364,11 @@ static void processFunc(process_data_t data)
                 // printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
             }
         }
+
+        // __Preprocess__
+#ifdef MEASURE
+        measure_data.start_preprocess[i] = get_time_in_ms();
+#endif
 
 #ifdef NVTX
         char task[100];
@@ -374,12 +381,6 @@ static void processFunc(process_data_t data)
         // printf("\nProcess %d is set to CPU core %d count(%d) : %d \n\n", data.process_id, sched_getcpu(), data.process_id, i);
 #else
         printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
-#endif
-
-        time = get_time_in_ms();
-        // __Preprocess__
-#ifdef MEASURE
-        measure_data.start_preprocess[i] = get_time_in_ms();
 #endif
 
         im = load_image(input, 0, 0, net.c);
