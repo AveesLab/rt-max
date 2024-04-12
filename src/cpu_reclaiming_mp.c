@@ -563,6 +563,7 @@ static void processFunc(process_data_t data)
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
         lock_resource(1);
+        printf("Process %d is lock\n", data.process_id);
 
 #ifdef MEASURE
         measure_data.start_reclaim_infer[i] = get_time_in_ms();
@@ -593,19 +594,19 @@ static void processFunc(process_data_t data)
             state.input = l.output;
         }
 
-        // // Jitter compensation for Reclaiming inference
-        // if (data.isTest) {
-        //     //printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
-        //     usleep((data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_infer[i])) * 1000);
-        // }
-        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
-        //printf("Process %d is Reclaiming unlock\n", data.process_id);
-
-        unlock_resource(1);
 
 #ifdef MEASURE
         measure_data.end_reclaim_infer[i] = get_time_in_ms();
 #endif
+
+        // // Jitter compensation for Reclaiming inference
+        if (data.isTest) {
+            //printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
+            usleep((data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_infer[i])) * 1000);
+        }
+        unlock_resource(1);
+        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
+        printf("Process %d is Reclaiming unlock -- %.3f\n", data.process_id, measure_data.start_reclaim_infer[i]-measure_data.end_reclaim_infer[i]);
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_reclaiming);
@@ -905,6 +906,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 
     double R = MAX(max_gpu_infer_time, max_execution_time/optimal_core); // like GPU-accel
+    optimal_core = ceil(max_execution_time / R);
     double sleep_time = R * optimal_core - max_execution_time;
     if (sleep_time < 0) sleep_time = 0.0;
     printf("R : %lf \n", R);
