@@ -738,8 +738,8 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     // Pre-test
-    printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", num_process, gLayer, rLayer);
     int i, j;
+    if (num_process > 11) num_process = 11;
 
     pid_t pids[num_process];
     int status;
@@ -760,10 +760,6 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
     *start_counter = 0;
 
-#ifdef MEASURE
-    int fd[num_process][2];
-#endif
-
     // Create semaphore set with NUM_PROCESSES semaphores
     sem_id = semget(key, 2, IPC_CREAT | 0666);
 
@@ -778,9 +774,15 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     arg.array = values;
     semctl(sem_id, 0, SETALL, arg);
 
-    process_data_t data[num_process];
+    // Pre-test :: 11 process with acting like gpu-accel_gpu
+    int optimal_core = 11;
+    *start_counter = 0;
 
-    for (i = 0; i < num_process; i++) {
+    printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer (like GPU-accel) \n", optimal_core, gLayer, rLayer);
+    int fd[optimal_core][2];
+    process_data_t data[optimal_core];
+
+    for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -798,11 +800,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data[i].max_gpu_infer = 0;
         data[i].max_reclaim_infer = 0;
         data[i].max_execution = 0;
-        data[i].num_process = num_process;
+        data[i].num_process = optimal_core;
         data[i].isTest = false;
     }
 
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
 
 #ifdef MEASURE
         if (pipe(fd[i]) == -1) {
@@ -830,10 +832,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
 #ifdef MEASURE
-    measure_data_t receivedData[num_process];
+    measure_data_t receivedData[optimal_core];
 
     // In the parent process, read data from all child processes
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
         close(fd[i][1]); // close writing end in the parent
         // read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
         if (read_full(fd[i][0], &receivedData[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
@@ -845,7 +847,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 #endif
 
-    for (i = 0; i < num_process; i++) {
+    for (i = 0; i < optimal_core; i++) {
         wait(&status);
     }
 
@@ -882,7 +884,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     double R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, max_execution_time/num_process);
 
     // int optimal_core = ceil(max_execution_time / R);
-    int optimal_core = 11;
+    optimal_core = 11;
 
     printf("\n\n::Test 1:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
     printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
