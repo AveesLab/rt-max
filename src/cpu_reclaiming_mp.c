@@ -13,6 +13,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#include <errno.h>  
 
 #ifdef OPENBLAS
 #include <cblas.h>
@@ -141,6 +142,44 @@ double maxOfThree(double a, double b, double c) {
     return max; 
 }
 
+ssize_t write_full(int fd, const void *buffer, size_t count) {
+    const char *ptr = (const char *)buffer;
+    size_t total_written = 0;
+    ssize_t bytes_written;
+
+    while (total_written < count) {
+        bytes_written = write(fd, ptr + total_written, count - total_written);
+        if (bytes_written == -1) {
+            if (errno == EINTR) continue;  // 시그널에 의해 중단된 경우 다시 시도
+            perror("write");
+            return -1;  // 오류 발생
+        }
+        total_written += bytes_written;
+    }
+    return total_written;
+}
+
+ssize_t read_full(int fd, void *buffer, size_t count) {
+    size_t total_read = 0;
+    ssize_t bytes_read;
+
+    while (total_read < count) {
+        bytes_read = read(fd, buffer + total_read, count - total_read);
+        if (bytes_read == -1) {
+            if (errno == EINTR) {  // read가 인터럽트된 경우
+                continue;
+            }
+            perror("read");
+            return -1;
+        }
+        if (bytes_read == 0) {
+            break;  // 파일의 끝에 도달했거나 더 이상 읽을 데이터가 없는 경우
+        }
+        total_read += bytes_read;
+    }
+    return total_read;
+}
+
 static int write_result(char *file_path, measure_data_t *measure_data, int num_exp, int num_process) 
 {
     static int exist=0;
@@ -214,7 +253,8 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][28] = measure_data[core_id - 1].execution_time_max[count];
         sum_measure_data[i][29] = measure_data[core_id - 1].execution_time_max_value[count];
         sum_measure_data[i][30] = measure_data[core_id - 1].frame_rate[count];
-        sum_measure_data[i][31] = 1000/measure_data[core_id - 1].frame_rate[count];
+        sum_measure_data[i][31] = measure_data[core_id - 1].cycle_time[count];
+        // printf("measure_data[core_id - 1].cycle_time[count] : %.3f \n", measure_data[core_id - 1].cycle_time[count]);
         sum_measure_data[i][32] = measure_data[core_id - 1].start_gap[count]; // start_gap
     }
 
@@ -640,7 +680,7 @@ static void processFunc(process_data_t data)
         measure_data.end_postprocess[i] = get_time_in_ms();
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
-        measure_data.cycle_time[i] = 1000 / data.R;
+        measure_data.cycle_time[i] = data.R;
         // if (data.isTest) printf("measure_data.cycle_time[i]: %.3f \n",measure_data.cycle_time[i]);
         measure_data.frame_rate[i] = 1000 / data.R;
         measure_data.start_gap[i] = 0;
@@ -674,7 +714,13 @@ static void processFunc(process_data_t data)
     }
 
 #ifdef MEASURE
-    write(write_fd, &measure_data, sizeof(measure_data_t));
+
+    // write(write_fd, &measure_data, sizeof(measure_data_t));
+    ssize_t nbytes;
+    nbytes = write_full(write_fd, &measure_data, sizeof(measure_data_t));
+    if (nbytes != sizeof(measure_data_t)) {
+        fprintf(stderr, "write error: expected %lu, got %zd\n", sizeof(measure_data_t), nbytes);
+    }
 #endif
 
     // free memory
@@ -789,7 +835,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // In the parent process, read data from all child processes
     for (i = 0; i < num_process; i++) {
         close(fd[i][1]); // close writing end in the parent
-        read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+        // read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+        if (read_full(fd[i][0], &receivedData[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+            // 적절한 오류 처리
+        }
         // data[i] = receivedData[i];
         close(fd[i][0]);
     }
@@ -900,7 +950,12 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd2[i][1]); // close writing end in the parent
-        read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
+        // read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
+
+        if (read_full(fd2[i][0], &receivedData2[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+            // 적절한 오류 처리
+        }
         // data[i] = receivedData[i];
         close(fd2[i][0]);
     }
@@ -1006,9 +1061,15 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     measure_data_t receivedData3[optimal_core];
     // printf("In the parent process, read data from all child processes \n");
     // In the parent process, read data from all child processes
+            ssize_t nbytes;
     for (i = 0; i < optimal_core; i++) {
         close(fd3[i][1]); // close writing end in the parent
-        read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
+
+        if (read_full(fd3[i][0], &receivedData3[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+            // 적절한 오류 처리
+        }
+        // read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
         // data[i] = receivedData[i];
         close(fd3[i][0]);
     }
