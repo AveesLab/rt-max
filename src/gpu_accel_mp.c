@@ -13,6 +13,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#include <errno.h>  
 
 #ifdef OPENBLAS
 #include <cblas.h>
@@ -128,6 +129,44 @@ static int compare(const void *a, const void *b) {
     if (valueA < valueB) return -1;
     if (valueA > valueB) return 1;
     return 0;
+}
+
+static ssize_t write_full(int fd, const void *buffer, size_t count) {
+    const char *ptr = (const char *)buffer;
+    size_t total_written = 0;
+    ssize_t bytes_written;
+
+    while (total_written < count) {
+        bytes_written = write(fd, ptr + total_written, count - total_written);
+        if (bytes_written == -1) {
+            if (errno == EINTR) continue;  // 시그널에 의해 중단된 경우 다시 시도
+            perror("write");
+            return -1;  // 오류 발생
+        }
+        total_written += bytes_written;
+    }
+    return total_written;
+}
+
+static ssize_t read_full(int fd, void *buffer, size_t count) {
+    size_t total_read = 0;
+    ssize_t bytes_read;
+
+    while (total_read < count) {
+        bytes_read = read(fd, buffer + total_read, count - total_read);
+        if (bytes_read == -1) {
+            if (errno == EINTR) {  // read가 인터럽트된 경우
+                continue;
+            }
+            perror("read");
+            return -1;
+        }
+        if (bytes_read == 0) {
+            break;  // 파일의 끝에 도달했거나 더 이상 읽을 데이터가 없는 경우
+        }
+        total_read += bytes_read;
+    }
+    return total_read;
 }
 
 static int write_result(char *file_path, measure_data_t *measure_data, int num_exp, int num_process) 
@@ -598,7 +637,12 @@ static void processFunc(process_data_t data)
     }
 
 #ifdef MEASURE
-    write(write_fd, &measure_data, sizeof(measure_data_t));
+    // write(write_fd, &measure_data, sizeof(measure_data_t));
+    ssize_t nbytes;
+    nbytes = write_full(write_fd, &measure_data, sizeof(measure_data_t));
+    if (nbytes != sizeof(measure_data_t)) {
+        fprintf(stderr, "write error: expected %lu, got %zd\n", sizeof(measure_data_t), nbytes);
+    }
 #endif
 
     // free memory
@@ -714,7 +758,11 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd[i][1]); // close writing end in the parent
-        read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+        // read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+        if (read_full(fd[i][0], &receivedData[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+            // 적절한 오류 처리
+        }
         // data[i] = receivedData[i];
         close(fd[i][0]);
     }
@@ -755,8 +803,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
-    printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-    printf("WCET ratio : %lf \n", wcet_ratio);
+    printf("\nWCET ratio : %lf \n", wcet_ratio);
+    printf("avg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
     printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 
@@ -828,7 +876,12 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd2[i][1]); // close writing end in the parent
-        read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
+        // read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
+
+        if (read_full(fd2[i][0], &receivedData2[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+            // 적절한 오류 처리
+        }
         // data[i] = receivedData[i];
         close(fd2[i][0]);
     }
@@ -851,12 +904,12 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     startIdx = START_SYNC * optimal_core;
     for (i = START_SYNC; i < num_exp; i++) {
         for (j = 0; j < optimal_core; j++) {
-            avg_preprocess_time += receivedData[j].e_preprocess[i];
-            max_preprocess_time = MAX(max_preprocess_time, receivedData[j].e_preprocess[i]);
-            avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
-            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
-            avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
-            max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
+            avg_preprocess_time += receivedData2[j].e_preprocess[i];
+            max_preprocess_time = MAX(max_preprocess_time, receivedData2[j].e_preprocess[i]);
+            avg_gpu_infer_time += receivedData2[j].e_gpu_infer[i];
+            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData2[j].e_gpu_infer[i]);
+            avg_execution_time += receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i];
+            max_execution_time = MAX(max_execution_time, (receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i]));
         }        
     }
 
@@ -869,8 +922,8 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
     max_execution_time = avg_execution_time * wcet_ratio; // total
 
-    printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-    printf("WCET ratio : %lf \n", wcet_ratio);
+    printf("\nWCET ratio : %lf \n", wcet_ratio);
+    printf("avg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
     printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
     printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
 
@@ -945,7 +998,11 @@ void gpu_accel_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd3[i][1]); // close writing end in the parent
-        read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
+        if (read_full(fd3[i][0], &receivedData3[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+            // 적절한 오류 처리
+        }
+        // read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
         // data[i] = receivedData[i];
         close(fd3[i][0]);
     }

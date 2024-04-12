@@ -142,7 +142,7 @@ double maxOfThree(double a, double b, double c) {
     return max; 
 }
 
-ssize_t write_full(int fd, const void *buffer, size_t count) {
+static ssize_t write_full(int fd, const void *buffer, size_t count) {
     const char *ptr = (const char *)buffer;
     size_t total_written = 0;
     ssize_t bytes_written;
@@ -159,7 +159,7 @@ ssize_t write_full(int fd, const void *buffer, size_t count) {
     return total_written;
 }
 
-ssize_t read_full(int fd, void *buffer, size_t count) {
+static ssize_t read_full(int fd, void *buffer, size_t count) {
     size_t total_read = 0;
     ssize_t bytes_read;
 
