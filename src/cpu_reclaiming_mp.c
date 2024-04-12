@@ -467,10 +467,11 @@ static void processFunc(process_data_t data)
 #endif
 
         measure_data.e_preprocess_max_value[i] = data.max_preprocess;
-        if (data.isTest) {
-            remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
+        // // Jitter compensation for Preprocessing
+        // if (data.isTest) {
+        //     remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
 
 #ifdef MEASURE
         measure_data.e_preprocess_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
@@ -536,6 +537,7 @@ static void processFunc(process_data_t data)
 
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
+        // // Jitter compensation for GPU inference
         // if (data.isTest) {
         //     //printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
         //     usleep((data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_infer[i])) * 1000);
@@ -591,6 +593,7 @@ static void processFunc(process_data_t data)
             state.input = l.output;
         }
 
+        // // Jitter compensation for Reclaiming inference
         // if (data.isTest) {
         //     //printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
         //     usleep((data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_infer[i])) * 1000);
@@ -698,10 +701,10 @@ static void processFunc(process_data_t data)
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
 #endif
-        double reamin_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
+        // Jitter compensation for R
         if (data.isTest) {
-            //printf("data.max_execution: %.3f (%.3f)\n", data.max_execution, data.R * data.num_process);
-            if (reamin_time > 0) usleep(reamin_time * 1000);
+            remaining_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
+            if (remaining_time > 0) usleep(remaining_time * 1000);
         }
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
