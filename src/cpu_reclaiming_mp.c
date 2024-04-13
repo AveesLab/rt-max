@@ -13,6 +13,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#include <errno.h>  
 
 #ifdef OPENBLAS
 #include <cblas.h>
@@ -142,6 +143,44 @@ double maxOfThree(double a, double b, double c) {
     return max; 
 }
 
+ssize_t write_full(int fd, const void *buffer, size_t count) {
+    const char *ptr = (const char *)buffer;
+    size_t total_written = 0;
+    ssize_t bytes_written;
+
+    while (total_written < count) {
+        bytes_written = write(fd, ptr + total_written, count - total_written);
+        if (bytes_written == -1) {
+            if (errno == EINTR) continue;  // 시그널에 의해 중단된 경우 다시 시도
+            perror("write");
+            return -1;  // 오류 발생
+        }
+        total_written += bytes_written;
+    }
+    return total_written;
+}
+
+ssize_t read_full(int fd, void *buffer, size_t count) {
+    size_t total_read = 0;
+    ssize_t bytes_read;
+
+    while (total_read < count) {
+        bytes_read = read(fd, buffer + total_read, count - total_read);
+        if (bytes_read == -1) {
+            if (errno == EINTR) {  // read가 인터럽트된 경우
+                continue;
+            }
+            perror("read");
+            return -1;
+        }
+        if (bytes_read == 0) {
+            break;  // 파일의 끝에 도달했거나 더 이상 읽을 데이터가 없는 경우
+        }
+        total_read += bytes_read;
+    }
+    return total_read;
+}
+
 static int write_result(char *file_path, measure_data_t *measure_data, int num_exp, int num_process) 
 {
     static int exist=0;
@@ -215,7 +254,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][28] = measure_data[core_id - 1].execution_time_max[count];
         sum_measure_data[i][29] = measure_data[core_id - 1].execution_time_max_value[count];
         sum_measure_data[i][30] = measure_data[core_id - 1].frame_rate[count];
-        sum_measure_data[i][31] = 1000/measure_data[core_id - 1].frame_rate[count];
+        sum_measure_data[i][31] = measure_data[core_id - 1].cycle_time[count];
         sum_measure_data[i][32] = measure_data[core_id - 1].start_gap[count]; // start_gap
     }
 
@@ -385,6 +424,7 @@ static void processFunc(process_data_t data)
     double remaining_time = 0.0;
 
     for (i = 0; i < num_exp; i++) {
+
         if (data.isTest){
             if (i == 0) usleep ((data.process_id) * 100 * 1000);
             if (i == START_SYNC) {
@@ -406,7 +446,7 @@ static void processFunc(process_data_t data)
 
 #ifdef NVTX
         char task[100];
-        sprintf(task, "Task %d (cpu: %d)", data.process_id, data.cpu_id);
+        sprintf(task, "Task (cpu: %d)", data.process_id);
         nvtxRangeId_t nvtx_task;
         nvtx_task = nvtxRangeStartA(task);
 #endif
@@ -428,10 +468,11 @@ static void processFunc(process_data_t data)
 #endif
 
         measure_data.e_preprocess_max_value[i] = data.max_preprocess;
-        if (data.isTest) {
-            remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
+        // Jitter compensation for Preprocessing
+        // if (data.isTest) {
+        //     remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
 
 #ifdef MEASURE
         measure_data.e_preprocess_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
@@ -467,7 +508,7 @@ static void processFunc(process_data_t data)
         //printf("Process %d is GPU lock\n", data.process_id);
 #ifdef NVTX
         char task_gpu[100];
-        sprintf(task_gpu, "Task %d (cpu: %d) - GPU Inference", data.process_id, data.cpu_id);
+        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
         nvtxRangeId_t nvtx_task_gpu;
         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
 #endif
@@ -506,12 +547,13 @@ static void processFunc(process_data_t data)
 #endif
 
         measure_data.e_gpu_infer_max_value[i] = data.max_gpu_infer;
-        if (data.isTest) {
-            // printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
-            remaining_time = data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_waiting[i]); // [+] Waiting_GPU Time !!
-            // printf("remaining_time : %.3f\n", remaining_time);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
+        // Jitter compensation for GPU inference
+        // if (data.isTest) {
+        //     // printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
+        //     remaining_time = data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_waiting[i]); // [+] Waiting_GPU Time !!
+        //     // printf("remaining_time : %.3f\n", remaining_time);
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
 
         unlock_resource(0);
@@ -521,29 +563,28 @@ static void processFunc(process_data_t data)
         measure_data.start_reclaim_waiting[i] = get_time_in_ms();
 #endif
 
-        lock_resource(1);
-
 #ifdef NVTX
         char task_reclaiming[100];
-        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.cpu_id);
+        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", data.process_id);
         nvtxRangeId_t nvtx_task_reclaiming;
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
+
+        lock_resource(1);
 
 #ifdef MEASURE
         measure_data.start_reclaim_infer[i] = get_time_in_ms();
 #endif
         // Openblas set num threads for Reclaiming inference
         // when cpu reclaim over gpu, exit() okay??????????????????????
-        openblas_thread = (MAXCORES-1) - data.num_process + 1; // [+1] itself !!
+        openblas_thread = (MAXCORES-1) - data.num_process + 1;
         openblas_set_num_threads(openblas_thread);
         CPU_ZERO(&cpuset);
-        CPU_SET(data.cpu_id, &cpuset);
+        CPU_SET(data.process_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = data.num_process + 1; k < MAXCORES; k++) {
-            printf("reclaim infer k is %d (%d) \n", k, coreIDOrder[k]);
+        for (int k = 0; k < openblas_thread - 1; k++) {
             CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[k], &cpuset);
+            CPU_SET(num_process - k, &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
         }
 
@@ -560,26 +601,26 @@ static void processFunc(process_data_t data)
             state.input = l.output;
         }
 
+        measure_data.e_reclaim_infer_max_value[i] = data.max_reclaim_infer;
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_reclaiming);
-#endif
+        // Jitter compensation for Reclaiming inference
+        // if (data.isTest) {
+        //     remaining_time = data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_waiting[i]); // [+] Waiting_GPU Time !!
+        //     // remaining_time = data.max_recalim_infer - (get_time_in_ms() - measure_data.start_reclaim_infer[i]); // [+] Waiting_GPU Time !!
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
+        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
+        //printf("Process %d is Reclaiming unlock\n", data.process_id);
+
+        unlock_resource(1);
 
 #ifdef MEASURE
         measure_data.end_reclaim_infer[i] = get_time_in_ms();
 #endif
 
-        measure_data.e_reclaim_infer_max_value[i] = data.max_reclaim_infer;
-        if (data.isTest) {
-            // printf("data.max_reclaim_infer : %.3f\n", data.max_reclaim_infer);
-            remaining_time = data.max_reclaim_infer - (get_time_in_ms() - measure_data.start_reclaim_waiting[i]); // [+] Waiting_Reclaim Time !!
-            // printf("remaining_time : %.3f\n", remaining_time);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
-        measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
-        //printf("Process %d is Reclaiming unlock\n", data.process_id);
-
-        unlock_resource(1);
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_reclaiming);
+#endif
 
         // CPU Inference
 #ifdef MEASURE
@@ -587,7 +628,7 @@ static void processFunc(process_data_t data)
 #endif
         openblas_set_num_threads(1);
         CPU_ZERO(&cpuset);
-        CPU_SET(data.cpu_id, &cpuset);
+        CPU_SET(data.process_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for(j = rLayer; j < net.n; ++j){
             //printf("get num threads : %d \n", openblas_get_num_threads());
@@ -658,8 +699,7 @@ static void processFunc(process_data_t data)
         measure_data.end_postprocess[i] = get_time_in_ms();
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
-        measure_data.cycle_time[i] = 1000 / data.R;
-        // if (data.isTest) printf("measure_data.cycle_time[i]: %.3f \n",measure_data.cycle_time[i]);
+        measure_data.cycle_time[i] = data.R;
         measure_data.frame_rate[i] = 1000 / data.R;
         measure_data.start_gap[i] = 0;
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
@@ -668,15 +708,17 @@ static void processFunc(process_data_t data)
         data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, data.execution_time[i], measure_data.frame_rate[i]);
 #endif
+
         measure_data.execution_time_max_value[i] = data.R * data.num_process;
+
+        // Jitter compensation for R
         if (data.isTest) {
-            remaining_time = data.R * data.num_process - (get_time_in_ms() - measure_data.start_preprocess[i]);
+            remaining_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
             if (remaining_time > 0) usleep(remaining_time * 1000);
         }
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
         if(data.isTest) {
-            printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
             if(i == START_SYNC-1) {
                 (*start_counter)++;
             }
@@ -689,7 +731,13 @@ static void processFunc(process_data_t data)
     }
 
 #ifdef MEASURE
-    write(write_fd, &measure_data, sizeof(measure_data_t));
+
+    // write(write_fd, &measure_data, sizeof(measure_data_t));
+    ssize_t nbytes;
+    nbytes = write_full(write_fd, &measure_data, sizeof(measure_data_t));
+    if (nbytes != sizeof(measure_data_t)) {
+        fprintf(stderr, "write error: expected %lu, got %zd\n", sizeof(measure_data_t), nbytes);
+    }
 #endif
 
     // free memory
@@ -701,7 +749,6 @@ static void processFunc(process_data_t data)
     free_network(net);
     // free_network(net); // Error occur
 }
-
 
 void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
@@ -807,7 +854,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd[i][1]); // close writing end in the parent
-        read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+        // read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
+        if (read_full(fd[i][0], &receivedData[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+        }
         // data[i] = receivedData[i];
         close(fd[i][0]);
     }
@@ -934,7 +984,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd2[i][1]); // close writing end in the parent
-        read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
+        // read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
+
+        if (read_full(fd2[i][0], &receivedData2[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+        }
         // data[i] = receivedData[i];
         close(fd2[i][0]);
     }
@@ -1065,7 +1119,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd3[i][1]); // close writing end in the parent
-        read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
+        if (read_full(fd3[i][0], &receivedData3[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+        }
+        // read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));        
         // data[i] = receivedData[i];
         close(fd3[i][0]);
     }
@@ -1188,7 +1245,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // In the parent process, read data from all child processes
     for (i = 0; i < optimal_core; i++) {
         close(fd4[i][1]); // close writing end in the parent
-        read(fd4[i][0], &receivedData4[i], sizeof(measure_data_t));
+        // read(fd4[i][0], &receivedData4[i], sizeof(measure_data_t));
+        if (read_full(fd4[i][0], &receivedData4[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
+            fprintf(stderr, "Failed to read the expected amount of data\n");
+        }
         // data[i] = receivedData[i];
         close(fd4[i][0]);
     }

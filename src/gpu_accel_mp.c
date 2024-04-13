@@ -407,10 +407,11 @@ static void processFunc(process_data_t data)
         measure_data.e_preprocess[i] = measure_data.end_preprocess[i] - measure_data.start_preprocess[i];
 #endif
         measure_data.e_preprocess_max_value[i] = data.max_preprocess;
-        if (data.isTest) {
-            remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
+        // Jitter compensation for Preprocessing
+        // if (data.isTest) {
+        //     remaining_time = data.max_preprocess - (get_time_in_ms() - measure_data.start_preprocess[i]);
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
 
 #ifdef MEASURE
         measure_data.e_preprocess_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
@@ -483,13 +484,13 @@ static void processFunc(process_data_t data)
 #ifdef MEASURE
         measure_data.end_gpu_infer[i] = get_time_in_ms();
 #endif
+
         measure_data.e_gpu_infer_max_value[i] = data.max_gpu_infer;
-        if (data.isTest) {
-            // printf("data.max_gpu_infer : %.3f\n", data.max_gpu_infer);
-            remaining_time = data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_waiting[i]); // [+] Waiting_GPU Time !!
-            // printf("remaining_time : %.3f\n", remaining_time);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
+        // Jitter compensation for GPU inference
+        // if (data.isTest) {
+        //     remaining_time = data.max_gpu_infer - (get_time_in_ms() - measure_data.start_gpu_waiting[i]); // [+] Waiting_GPU Time !!
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
 
         unlock_resource(0);
@@ -576,6 +577,8 @@ static void processFunc(process_data_t data)
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, data.execution_time[i], measure_data.frame_rate[i]);
 #endif
         measure_data.execution_time_max_value[i] = data.R * data.num_process;
+
+        // Jitter compensation for R
         if (data.isTest) {
             remaining_time = data.R * data.num_process - (get_time_in_ms() - measure_data.start_preprocess[i]);
             if (remaining_time > 0) usleep(remaining_time * 1000);
@@ -598,7 +601,12 @@ static void processFunc(process_data_t data)
     }
 
 #ifdef MEASURE
-    write(write_fd, &measure_data, sizeof(measure_data_t));
+    // write(write_fd, &measure_data, sizeof(measure_data_t));
+    ssize_t nbytes;
+    nbytes = write_full(write_fd, &measure_data, sizeof(measure_data_t));
+    if (nbytes != sizeof(measure_data_t)) {
+        fprintf(stderr, "write error: expected %lu, got %zd\n", sizeof(measure_data_t), nbytes);
+    }
 #endif
 
     // free memory
