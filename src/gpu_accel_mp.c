@@ -85,6 +85,7 @@ typedef struct measure_data_t{
     double start_gpu_infer[200];
     double end_gpu_infer[200];
     double start_cpu_infer[200];
+    double end_cpu_infer[200];
     double end_infer[200];
 
     double waiting_gpu[200];
@@ -188,7 +189,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][13] = measure_data[core_id - 1].e_gpu_infer_max_value[count];
         sum_measure_data[i][14] = measure_data[core_id - 1].start_cpu_infer[count];
         sum_measure_data[i][15] = measure_data[core_id - 1].e_cpu_infer[count];
-        sum_measure_data[i][16] = measure_data[core_id - 1].end_infer[count];
+        sum_measure_data[i][16] = measure_data[core_id - 1].end_cpu_infer[count];
         sum_measure_data[i][17] = measure_data[core_id - 1].e_infer[count];
         sum_measure_data[i][18] = measure_data[core_id - 1].start_postprocess[count];
         sum_measure_data[i][19] = measure_data[core_id - 1].e_postprocess[count];
@@ -209,7 +210,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
             "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value", 
-            "start_cpu_infer", "e_cpu_infer", "end_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
@@ -516,12 +517,13 @@ static void processFunc(process_data_t data)
         else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
-
+        measure_data.end_cpu_infer[i] = get_time_in_ms();
+        
 #ifdef MEASURE
         measure_data.end_infer[i] = get_time_in_ms();
         measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
-        measure_data.e_cpu_infer[i] = measure_data.end_infer[i] - measure_data.start_cpu_infer[i];
+        measure_data.e_cpu_infer[i] = measure_data.end_cpu_infer[i] - measure_data.start_cpu_infer[i];
         measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
 #endif
 

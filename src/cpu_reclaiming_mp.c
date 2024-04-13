@@ -91,6 +91,7 @@ typedef struct measure_data_t{
     double start_reclaim_infer[1000];
     double end_reclaim_infer[1000];
     double start_cpu_infer[200];
+    double end_cpu_infer[200];
     double end_infer[200];
 
     double waiting_gpu[200];
@@ -246,7 +247,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][19] = measure_data[core_id - 1].e_reclaim_infer_max_value[count];
         sum_measure_data[i][20] = measure_data[core_id - 1].start_cpu_infer[count];
         sum_measure_data[i][21] = measure_data[core_id - 1].e_cpu_infer[count];
-        sum_measure_data[i][22] = measure_data[core_id - 1].end_infer[count];
+        sum_measure_data[i][22] = measure_data[core_id - 1].end_cpu_infer[count];
         sum_measure_data[i][23] = measure_data[core_id - 1].e_infer[count];
         sum_measure_data[i][24] = measure_data[core_id - 1].start_postprocess[count];
         sum_measure_data[i][25] = measure_data[core_id - 1].e_postprocess[count];
@@ -269,7 +270,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
             "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value", 
             "waiting_reclaim",
             "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", "e_reclaim_infer_max", "e_reclaim_infer_max_value",  
-            "start_cpu_infer", "e_cpu_infer", "end_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value", "frame_rate", "cycle_time", "start_gap");
@@ -584,6 +585,7 @@ static void processFunc(process_data_t data)
         }
 
         lock_resource(1);
+        usleep(5*1000);
         // if (data.isTest) printf("Process %d is Reclaim lock\n", data.process_id);
 
 #ifdef MEASURE
@@ -592,13 +594,14 @@ static void processFunc(process_data_t data)
         // Openblas set num threads for Reclaiming inference
         // when cpu reclaim over gpu, exit() okay??????????????????????
         openblas_thread = (MAXCORES-1) - data.num_process + 1;
+        // if (data.isTest) openblas_thread = 1 + 1;
         openblas_set_num_threads(openblas_thread);
         CPU_ZERO(&cpuset);
         CPU_SET(data.process_id, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for (int k = 0; k < openblas_thread - 1; k++) {
             CPU_ZERO(&cpuset);
-            // if (i==0) printf("Process %d with reclaiming core - %d\n", sched_getcpu(), num_process - k);
+            if (i==0) printf("Process %d with reclaiming core - %d\n", sched_getcpu(), num_process - k);
             CPU_SET(num_process - k, &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
         }
@@ -664,6 +667,7 @@ static void processFunc(process_data_t data)
         else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
+        measure_data.end_cpu_infer[i] = get_time_in_ms();
 
 #ifdef MEASURE
         measure_data.end_infer[i] = get_time_in_ms();
@@ -672,7 +676,7 @@ static void processFunc(process_data_t data)
         measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
         measure_data.waiting_reclaim[i] = measure_data.start_reclaim_infer[i] - measure_data.start_reclaim_waiting[i];
         measure_data.e_reclaim_infer[i] = measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i];
-        measure_data.e_cpu_infer[i] = measure_data.end_infer[i] - measure_data.start_cpu_infer[i];
+        measure_data.e_cpu_infer[i] = measure_data.end_cpu_infer[i] - measure_data.start_cpu_infer[i];
         measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
 #endif
 
@@ -994,6 +998,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     double R = MAX(max_gpu_infer_time, max_execution_time/optimal_core); // like GPU-accel
     optimal_core = ceil(max_execution_time / R);
+    // optimal_core = 5;
     double sleep_time = R * optimal_core - max_execution_time;
     if (sleep_time < 0) sleep_time = 0.0;
     printf("R : %lf \n", R);
