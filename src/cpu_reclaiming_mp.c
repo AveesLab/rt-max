@@ -779,10 +779,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     pid_t pids[num_process];
     int status;
 
-    key_t key = ftok("shmfile", 65);
+    key_t key = ftok("shmfile1", 65);
     int shm_id;
 
-    key = ftok("shmfile", 65);
+    key = ftok("shmfile1", 65);
     shm_id = shmget(key, sizeof(int), 0666 | IPC_CREAT);
     if (shm_id == -1) {
         perror("shmget failed");
@@ -792,11 +792,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     key_t key1, key2, key3;
     int shm_id1, shm_id2, shm_id3;
     // ftok 전에 파일이 존재하는지 확인
-    system("touch shmfile"); // 확실하게 파일을 생성
+    system("touch shmfile1"); // 확실하게 파일을 생성
 
-    key1 = ftok("shmfile", 65);
-    key2 = ftok("shmfile", 66);
-    key3 = ftok("shmfile", 67);
+    key1 = ftok("shmfile1", 65);
+    key2 = ftok("shmfile1", 66);
+    key3 = ftok("shmfile1", 67);
 
     printf("Key1: %d, Key2: %d, Key3: %d\n", key1, key2, key3); // 키 값 로깅
 
