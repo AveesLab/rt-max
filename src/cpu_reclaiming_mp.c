@@ -561,9 +561,7 @@ static void processFunc(process_data_t data)
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
 
         if(data.isTest) { 
-            // printf("%d (%d) -- counter = %d, %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
             (*gpu_counter)++;
-            // printf("%d (%d) -- counter = %d, %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
         }
         unlock_resource(0);
 
@@ -579,7 +577,14 @@ static void processFunc(process_data_t data)
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
 
+        if (data.isTest) {
+            while (!(data.process_id == (*reclaim_counter+1))){
+                usleep(1);
+            }
+        }
+
         lock_resource(1);
+        // if (data.isTest) printf("Process %d is Reclaim lock\n", data.process_id);
 
 #ifdef MEASURE
         measure_data.start_reclaim_infer[i] = get_time_in_ms();
@@ -621,6 +626,10 @@ static void processFunc(process_data_t data)
         // }
         measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
         //printf("Process %d is Reclaiming unlock\n", data.process_id);
+
+        if(data.isTest) { 
+            (*reclaim_counter)++;
+        }
 
         unlock_resource(1);
 
@@ -733,12 +742,13 @@ static void processFunc(process_data_t data)
                 lock_resource(2);
                 if (*start_counter == data.num_process && *start_counter != 0) *start_counter = 0;
                 (*start_counter)++;
-                // if (*start_counter == data.num_process) {
-                //     // 초기화
-                //     *gpu_counter = 0;
-                // }
+                if (*start_counter == data.num_process) {
+                    // 초기화
+                    *gpu_counter = 0;
+                    *reclaim_counter = 0;
+                }
                 unlock_resource(2);
-                printf("%d (%d) -- start_counter = %d, gpu_counter = %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
+                // printf("%d (%d) -- start_counter = %d, gpu_counter = %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
 
            // }
         }
@@ -779,10 +789,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     pid_t pids[num_process];
     int status;
 
-    key_t key = ftok("shmfile1", 65);
+    key_t key = ftok("shmfile", 65);
     int shm_id;
 
-    key = ftok("shmfile1", 65);
+    key = ftok("shmfile", 65);
     shm_id = shmget(key, sizeof(int), 0666 | IPC_CREAT);
     if (shm_id == -1) {
         perror("shmget failed");
@@ -792,11 +802,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     key_t key1, key2, key3;
     int shm_id1, shm_id2, shm_id3;
     // ftok 전에 파일이 존재하는지 확인
-    system("touch shmfile1"); // 확실하게 파일을 생성
+    system("touch shmfile"); // 확실하게 파일을 생성
 
-    key1 = ftok("shmfile1", 65);
-    key2 = ftok("shmfile1", 66);
-    key3 = ftok("shmfile1", 67);
+    key1 = ftok("shmfile", 65);
+    key2 = ftok("shmfile", 66);
+    key3 = ftok("shmfile", 67);
 
     printf("Key1: %d, Key2: %d, Key3: %d\n", key1, key2, key3); // 키 값 로깅
 
@@ -1380,28 +1390,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     strcat(file_path, ".csv");
     // here! receivedData, receivedData2, receivedData3 ...
-    if(write_result(file_path, receivedData2, num_exp, 6) == -1) {
+    if(write_result(file_path, receivedData2, num_exp, optimal_core) == -1) {
         /* return error */
         exit(0);
     }
 #endif
-
-   if (shmdt(start_counter) == -1) {
-        perror("shmdt failed");
-        exit(1);
-    }
-   if (shmdt(gpu_counter) == -1) {
-        perror("shmdt failed");
-        exit(1);
-    }
-   if (shmdt(reclaim_counter) == -1) {
-        perror("shmdt failed");
-        exit(1);
-    }
-    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-        perror("shmctl IPC_RMID failed");
-        exit(1);
-    }
 
     return 0;
 
