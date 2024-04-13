@@ -41,7 +41,8 @@ static int sem_id;
 static int sem_id2;
 static key_t key = 1234;
 int *start_counter;
-
+int *gpu_counter;
+int *reclaim_counter;
 // static int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 static int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
@@ -502,8 +503,13 @@ static void processFunc(process_data_t data)
 #endif
 
         // GPU Inference
+        if (data.isTest) {
+            while (!(data.process_id == (*gpu_counter+1))){
+                usleep(1);
+            }
+        }
         lock_resource(0); // 0.2s
-        //printf("Process %d is GPU lock\n", data.process_id);
+        // if (data.isTest) printf("Process %d is GPU lock\n", data.process_id);
 #ifdef NVTX
         char task_gpu[100];
         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
@@ -554,6 +560,11 @@ static void processFunc(process_data_t data)
         // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
 
+        if(data.isTest) { 
+            // printf("%d (%d) -- counter = %d, %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
+            (*gpu_counter)++;
+            // printf("%d (%d) -- counter = %d, %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
+        }
         unlock_resource(0);
 
         // Reclaiming Inference
@@ -722,8 +733,12 @@ static void processFunc(process_data_t data)
                 lock_resource(2);
                 if (*start_counter == data.num_process && *start_counter != 0) *start_counter = 0;
                 (*start_counter)++;
+                // if (*start_counter == data.num_process) {
+                //     // 초기화
+                //     *gpu_counter = 0;
+                // }
                 unlock_resource(2);
-                printf("%d -- counter = %d(%d)\n", i, *start_counter, sched_getcpu());
+                printf("%d (%d) -- start_counter = %d, gpu_counter = %d\n", i, sched_getcpu(), *start_counter, *gpu_counter);
 
            // }
         }
@@ -767,18 +782,56 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     key_t key = ftok("shmfile", 65);
     int shm_id;
 
+    key = ftok("shmfile", 65);
     shm_id = shmget(key, sizeof(int), 0666 | IPC_CREAT);
     if (shm_id == -1) {
         perror("shmget failed");
         exit(1);
     }
 
-    start_counter = (int*) shmat(shm_id, NULL, 0);
-    if (start_counter == (int*)(-1)) {
-        perror("shmat failed");
+    key_t key1, key2, key3;
+    int shm_id1, shm_id2, shm_id3;
+    // ftok 전에 파일이 존재하는지 확인
+    system("touch shmfile"); // 확실하게 파일을 생성
+
+    key1 = ftok("shmfile", 65);
+    key2 = ftok("shmfile", 66);
+    key3 = ftok("shmfile", 67);
+
+    printf("Key1: %d, Key2: %d, Key3: %d\n", key1, key2, key3); // 키 값 로깅
+
+    int shm_size = 4096; // 페이지 크기에 맞추어 크기 설정
+
+    shm_id1 = shmget(key1, shm_size, 0666 | IPC_CREAT);
+    if (shm_id1 == -1) {
+        perror("shmget failed for key1");
         exit(1);
     }
+    start_counter = (int*) shmat(shm_id1, NULL, 0);
 
+    shm_id2 = shmget(key2, shm_size, 0666 | IPC_CREAT);
+    if (shm_id2 == -1) {
+        perror("shmget failed for key2");
+        exit(1);
+    }
+    gpu_counter = (int*) shmat(shm_id2, NULL, 0);
+
+    shm_id3 = shmget(key3, shm_size, 0666 | IPC_CREAT);
+    if (shm_id3 == -1) {
+        perror("shmget failed for key3");
+        exit(1);
+    }
+    reclaim_counter = (int*) shmat(shm_id3, NULL, 0);
+
+    // 공유 메모리 초기화 (첫 번째 프로세스에서만 실행)
+    *start_counter = 0;
+    *gpu_counter = 0;
+
+    // 값 변경 및 확인
+    (*gpu_counter)++;
+    printf("Start Counter: %d\n", *start_counter);
+    printf("GPU Counter: %d\n", *gpu_counter);
+    
     // Create semaphore set with NUM_PROCESSES semaphores
     sem_id = semget(key, 4, IPC_CREAT | 0666);
 
@@ -802,6 +855,9 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer (like GPU-accel) \n", optimal_core, gLayer, rLayer);
 
     *start_counter = 0;
+    *gpu_counter = 0;
+    *reclaim_counter = 0;
+
     int fd[optimal_core][2];
     process_data_t data[optimal_core];
 
@@ -876,6 +932,9 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     // TEST 1
     *start_counter = 0;
+    *gpu_counter = 0;
+    *reclaim_counter = 0;
+
 
     double max_preprocess_time = 0;
     double max_gpu_infer_time = 0;
@@ -1007,7 +1066,10 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
 //     // TEST 2
-//     *start_counter = 0;
+    // *start_counter = 0;
+    // *gpu_counter = 0;
+    // *reclaim_counter = 0;
+
 
 //     max_preprocess_time = 0;
 //     max_gpu_infer_time = 0;
@@ -1140,7 +1202,9 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 //     }
 
 //     // TEST 3
-//     *start_counter = 0;
+    // *start_counter = 0;
+    // *gpu_counter = 0;
+    // *reclaim_counter = 0;
 
 //     max_preprocess_time = 0;
 //     max_gpu_infer_time = 0;
@@ -1268,6 +1332,31 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     // Remove semaphores
     semctl(sem_id, 0, IPC_RMID);
 
+    // 공유 메모리 연결 해제
+    shmdt(start_counter);
+
+    // 공유 메모리 세그먼트 삭제
+    if (shmctl(shm_id1, IPC_RMID, NULL) == -1) {
+        perror("shmctl failed");
+        exit(1);
+    }    
+
+    shmdt(gpu_counter);
+
+    // 공유 메모리 세그먼트 삭제
+    if (shmctl(shm_id2, IPC_RMID, NULL) == -1) {
+        perror("shmctl failed");
+        exit(1);
+    }    
+
+    shmdt(reclaim_counter);
+
+    // 공유 메모리 세그먼트 삭제
+    if (shmctl(shm_id3, IPC_RMID, NULL) == -1) {
+        perror("shmctl failed");
+        exit(1);
+    }    
+
 #ifdef MEASURE
     char file_path[256] = "measure/";
 
@@ -1298,6 +1387,14 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 #endif
 
    if (shmdt(start_counter) == -1) {
+        perror("shmdt failed");
+        exit(1);
+    }
+   if (shmdt(gpu_counter) == -1) {
+        perror("shmdt failed");
+        exit(1);
+    }
+   if (shmdt(reclaim_counter) == -1) {
         perror("shmdt failed");
         exit(1);
     }
