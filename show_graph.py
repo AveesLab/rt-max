@@ -28,7 +28,7 @@ def draw_process(ax, y, start, end, label, color):
     ax.barh(y, width, left=start, height=0.4, color=color, label=label, align='center')
 
 # Setup the plot
-fig, ax = plt.subplots(figsize=(20, 5))
+fig, ax = plt.subplots(figsize=(50, 10))
 colors = {'Preprocess': 'skyblue', 'GPU Inference': 'limegreen', 'Reclaim Inference': 'violet', 'CPU Inference': 'orange', 'Postprocess': 'salmon'}
 core_ids = df['core_id'].unique()
 core_ids.sort()
@@ -37,7 +37,7 @@ y_ticks = np.arange(len(core_ids))
 
 # Draw each process for each core
 for i, core_id in enumerate(core_ids):
-    for j in range(5, 8):
+    for j in range(1, 8):
         core_data = df[df['core_id'] == core_id].iloc[j]
         draw_process(ax, i, core_data['start_preprocess'], core_data['end_preprocess'], 'Preprocess', colors['Preprocess'])
         draw_process(ax, i, core_data['start_gpu_infer'], core_data['end_gpu_infer'], 'GPU Inference', colors['GPU Inference'])

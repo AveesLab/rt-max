@@ -792,7 +792,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
     // Sync :: optimal_core = 11 process
-    int optimal_core = 11;
+    int optimal_core = 6;
     *start_counter = 0;
     *gpu_counter = 0;
     *reclaim_counter = 0;
