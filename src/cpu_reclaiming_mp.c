@@ -40,10 +40,10 @@
 static int sem_id;
 static int sem_id2;
 static key_t key = 1234;
-int *start_counter;
 
-static int coreIDOrder[12] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
-//static int coreIDOrder[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+int *start_counter;
+int *gpu_counter;
+int *reclaim_counter;
 
 typedef struct process_data_t{
     char *datacfg;
@@ -59,7 +59,6 @@ typedef struct process_data_t{
     int letter_box;
     int benchmark_layers;
     int process_id;
-    int cpu_id;
     double R;
     double max_preprocess;
     double max_gpu_infer;
@@ -223,7 +222,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         int core_id = (i + 1) - (i / num_process) * num_process;
         int count = i / num_process;
 
-        sum_measure_data[i][0] = coreIDOrder[core_id];
+        sum_measure_data[i][0] = core_id; // coreIDOrder[core_id];
         sum_measure_data[i][1] = measure_data[core_id - 1].start_preprocess[count];
         sum_measure_data[i][2] = measure_data[core_id - 1].e_preprocess[count];
         sum_measure_data[i][3] = measure_data[core_id - 1].end_preprocess[count];
@@ -341,7 +340,7 @@ static void processFunc(process_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(data.cpu_id, &cpuset); // cpu core index
+    CPU_SET(data.process_id, &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -790,11 +789,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     arg.array = values;
     semctl(sem_id, 0, SETALL, arg);
 
-    // Pre-test :: 11 process with acting like gpu-accel_gpu
+    // Sync :: optimal_core = 11 process
     int optimal_core = 11;
     *start_counter = 0;
 
-    printf("\n\n::Pre-test:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer (like GPU-accel) \n", optimal_core, gLayer, rLayer);
+    printf("\n\n::Sync:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
     int fd[optimal_core][2];
     process_data_t data[optimal_core];
 
@@ -812,7 +811,6 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].process_id = i + 1;
-        data[i].cpu_id = coreIDOrder[i+1];
         data[i].max_preprocess = 0;
         data[i].max_gpu_infer = 0;
         data[i].max_reclaim_infer = 0;
@@ -857,9 +855,7 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         // read(fd[i][0], &receivedData[i], sizeof(measure_data_t));
         if (read_full(fd[i][0], &receivedData[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
             fprintf(stderr, "Failed to read the expected amount of data\n");
-            // 적절한 오류 처리
         }
-        // data[i] = receivedData[i];
         close(fd[i][0]);
     }
 #endif
@@ -867,256 +863,6 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     for (i = 0; i < optimal_core; i++) {
         wait(&status);
     }
-
-    // TEST 1
-    *start_counter = 0;
-
-    double max_preprocess_time = 0;
-    double max_gpu_infer_time = 0;
-    double max_reclaim_infer_time = 0;
-    double max_cpu_infer_time = 0;
-    double max_execution_time = 0;
-    double avg_preprocess_time = 0;
-    double avg_gpu_infer_time = 0;
-    double avg_reclaim_infer_time = 0;
-    double avg_cpu_infer_time = 0;
-    double avg_execution_time = 0;
-
-    int startIdx = START_SYNC * optimal_core;
-    for (i = START_SYNC; i < num_exp; i++) {
-        for (j = 0; j < optimal_core; j++) {
-            avg_preprocess_time += receivedData[j].e_preprocess[i];
-            max_preprocess_time = MAX(max_preprocess_time, receivedData[j].e_preprocess[i]);
-            avg_gpu_infer_time += receivedData[j].e_gpu_infer[i];
-            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData[j].e_gpu_infer[i]);
-            avg_reclaim_infer_time += receivedData[j].e_reclaim_infer[i];
-            max_reclaim_infer_time = MAX(max_reclaim_infer_time, receivedData[j].e_reclaim_infer[i]);
-            avg_cpu_infer_time += receivedData[j].e_cpu_infer[i];
-            max_cpu_infer_time = MAX(max_cpu_infer_time, receivedData[j].e_cpu_infer[i]);
-            avg_execution_time += receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_reclaim_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i];
-            max_execution_time = MAX(max_execution_time, (receivedData[j].e_preprocess[i]+receivedData[j].e_gpu_infer[i]+receivedData[j].e_reclaim_infer[i]+receivedData[j].e_cpu_infer[i]+receivedData[j].e_postprocess[i]));
-        }        
-    }
-
-    avg_preprocess_time /= optimal_core * num_exp - startIdx;
-    avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
-    avg_reclaim_infer_time /= optimal_core * num_exp - startIdx;
-    avg_cpu_infer_time /= optimal_core * num_exp - startIdx;
-    avg_execution_time /= optimal_core * num_exp - startIdx;
-
-    double wcet_ratio = 1.07;
-    max_preprocess_time = avg_preprocess_time * wcet_ratio; // preprocess
-    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // Reclaim_infer
-    max_cpu_infer_time = avg_cpu_infer_time * wcet_ratio; // CPU_infer
-    max_execution_time = avg_execution_time * wcet_ratio; // total
-
-    printf("\nWCET ratio : %lf \n", wcet_ratio);
-    printf("avg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-    printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
-    printf("avg cpu inference (reclaiming 1 + cpu 1) time (max) : %0.2lf (%0.2lf) \n", avg_reclaim_infer_time+avg_cpu_infer_time, max_reclaim_infer_time+max_cpu_infer_time);
-    printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
-
-    double R = MAX(max_gpu_infer_time, max_execution_time/optimal_core); // like GPU-accel
-    double sleep_time = R * optimal_core - max_execution_time;
-    if (sleep_time < 0) sleep_time = 0.0;
-    printf("R : %lf \n", R);
-    printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
-
-    printf("\n\n::Test 1:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer (like GPU-accel)\n", optimal_core, gLayer, rLayer);
-
-    int fd2[optimal_core][2];
-    process_data_t data2[optimal_core];
-
-    for (i = 0; i < optimal_core; i++) {
-        data2[i].datacfg = datacfg;
-        data2[i].cfgfile = cfgfile;
-        data2[i].weightfile = weightfile;
-        data2[i].filename = filename;
-        data2[i].thresh = thresh;
-        data2[i].hier_thresh = hier_thresh;
-        data2[i].dont_show = dont_show;
-        data2[i].ext_output = ext_output;
-        data2[i].save_labels = save_labels;
-        data2[i].outfile = outfile;
-        data2[i].letter_box = letter_box;
-        data2[i].benchmark_layers = benchmark_layers;
-        data2[i].process_id = i + 1;
-        data2[i].cpu_id = coreIDOrder[i+1];
-        data2[i].R = R;
-        data2[i].max_preprocess = max_preprocess_time;
-        data2[i].max_gpu_infer = max_gpu_infer_time;
-        data2[i].max_reclaim_infer = max_reclaim_infer_time;
-        data2[i].max_execution = max_execution_time;
-        data2[i].num_process = optimal_core;
-        data2[i].isTest = true;
-        //printf("R = %.3f\n", data2[i].R);
-    }
-
-    for (i = 0; i < optimal_core; i++) {
-
-#ifdef MEASURE
-        if (pipe(fd2[i]) == -1) {
-            perror("pipe");
-            exit(1);
-        }
-#endif
-
-        pids[i] = fork();
-        if (pids[i] == 0) { // child process
-
-#ifdef MEASURE
-            close(fd2[i][0]); // close reading end in the child
-            processFunc(data2[i], fd2[i][1]);
-            close(fd2[i][1]);
-#else
-            processFunc(data2[i]);
-#endif
-
-            exit(0);
-        } else if (pids[i] < 0) {
-            perror("fork");
-            exit(1);
-        }
-    }
-
-#ifdef MEASURE
-    measure_data_t receivedData2[optimal_core];
-
-    // In the parent process, read data from all child processes
-    for (i = 0; i < optimal_core; i++) {
-        close(fd2[i][1]); // close writing end in the parent
-        // read(fd2[i][0], &receivedData2[i], sizeof(measure_data_t));
-
-        if (read_full(fd2[i][0], &receivedData2[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
-            fprintf(stderr, "Failed to read the expected amount of data\n");
-            // 적절한 오류 처리
-        }
-        // data[i] = receivedData[i];
-        close(fd2[i][0]);
-    }
-#endif
-
-    for (i = 0; i < optimal_core; i++) {
-        wait(&status);
-    }
-
-    // TEST 2
-    *start_counter = 0;
-    max_gpu_infer_time = 0;
-    max_reclaim_infer_time = 0;
-    max_execution_time = 0;
-    avg_gpu_infer_time = 0;
-    avg_reclaim_infer_time = 0;
-    avg_execution_time = 0;
-
-    startIdx = 5 * optimal_core;
-    for (i = 5; i < num_exp; i++) {
-        for (j = 0; j < optimal_core; j++) {
-            avg_gpu_infer_time += receivedData2[j].e_gpu_infer[i];
-            max_gpu_infer_time = MAX(max_gpu_infer_time, receivedData2[j].e_gpu_infer[i]);
-            avg_reclaim_infer_time += receivedData2[j].e_reclaim_infer[i];
-            max_reclaim_infer_time = MAX(max_reclaim_infer_time, receivedData2[j].e_reclaim_infer[i]);
-            avg_execution_time += receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_reclaim_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i];
-            max_execution_time = MAX(max_execution_time, (receivedData2[j].e_preprocess[i]+receivedData2[j].e_gpu_infer[i]+receivedData2[j].e_reclaim_infer[i]+receivedData2[j].e_cpu_infer[i]+receivedData2[j].e_postprocess[i]));
-        }        
-    }
-    avg_gpu_infer_time /= optimal_core * num_exp - startIdx;
-    avg_reclaim_infer_time /= optimal_core * num_exp - startIdx;
-    avg_execution_time /= optimal_core * num_exp - startIdx;
-
-    wcet_ratio = 1.3;
-    max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-    max_reclaim_infer_time = avg_reclaim_infer_time * wcet_ratio; // GPU_infer
-    max_execution_time = avg_execution_time * wcet_ratio; // total
-
-    R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, max_execution_time/num_process);
-    optimal_core = ceil(max_execution_time / R);
-
-    printf("\n\n::Test 2:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
-    printf("\nOptimal core = %d (R: %.3f)\n", optimal_core, R);
-    printf("GPU inference time : %.3f (%.3f)\n", avg_gpu_infer_time, max_gpu_infer_time);
-    printf("Reclaiming inference time : %.3f (%.3f)\n", avg_reclaim_infer_time, max_reclaim_infer_time);
-    printf("Execution time : %.3f (%.3f)\n", avg_execution_time, max_execution_time);
-
-    int fd3[optimal_core][2];
-    process_data_t data3[optimal_core];
-
-    for (i = 0; i < optimal_core; i++) {
-        data3[i].datacfg = datacfg;
-        data3[i].cfgfile = cfgfile;
-        data3[i].weightfile = weightfile;
-        data3[i].filename = filename;
-        data3[i].thresh = thresh;
-        data3[i].hier_thresh = hier_thresh;
-        data3[i].dont_show = dont_show;
-        data3[i].ext_output = ext_output;
-        data3[i].save_labels = save_labels;
-        data3[i].outfile = outfile;
-        data3[i].letter_box = letter_box;
-        data3[i].benchmark_layers = benchmark_layers;
-        data3[i].process_id = i + 1;
-        data3[i].cpu_id = coreIDOrder[i+1];
-        data3[i].R = R;
-        data3[i].max_gpu_infer = max_gpu_infer_time;
-        data3[i].max_reclaim_infer = max_reclaim_infer_time;
-        data3[i].max_execution = max_execution_time;
-        data3[i].num_process = optimal_core;
-        data3[i].isTest = true;
-        //printf("R = %.3f\n", data3[i].R);
-    }
-
-    for (i = 0; i < optimal_core; i++) {
-        // printf("Process %d starts \n", i);
-#ifdef MEASURE
-        if (pipe(fd3[i]) == -1) {
-            perror("pipe");
-            exit(1);
-        }
-#endif
-
-        pids[i] = fork();
-        if (pids[i] == 0) { // child process
-
-#ifdef MEASURE
-            close(fd3[i][0]); // close reading end in the child
-            processFunc(data3[i], fd3[i][1]);
-            close(fd3[i][1]);
-#else
-            processFunc(data3[i]);
-#endif
-
-            exit(0);
-        } else if (pids[i] < 0) {
-            perror("fork");
-            exit(1);
-        }
-    }
-
-#ifdef MEASURE
-    measure_data_t receivedData3[optimal_core];
-    // printf("In the parent process, read data from all child processes \n");
-    // In the parent process, read data from all child processes
-            ssize_t nbytes;
-    for (i = 0; i < optimal_core; i++) {
-        close(fd3[i][1]); // close writing end in the parent
-
-        if (read_full(fd3[i][0], &receivedData3[i], sizeof(measure_data_t)) != sizeof(measure_data_t)) {
-            fprintf(stderr, "Failed to read the expected amount of data\n");
-            // 적절한 오류 처리
-        }
-        // read(fd3[i][0], &receivedData3[i], sizeof(measure_data_t));
-        // data[i] = receivedData[i];
-        close(fd3[i][0]);
-    }
-#endif
-    // printf("Wait all process! \n");
-    for (i = 0; i < optimal_core; i++) {
-        wait(&status);
-    }
-    // printf("END all process! \n");
-    // Remove semaphores
-    semctl(sem_id, 0, IPC_RMID);
 
 #ifdef MEASURE
     char file_path[256] = "measure/";
@@ -1140,12 +886,8 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     strcat(file_path, reclaim_portion);
 
     strcat(file_path, ".csv");
-    // here! receivedData, receivedData2, receivedData3 ...
-    // printf("receivedData1[0].cycle_time[0]: %.3f \n",receivedData[0].cycle_time[0]);
-    // printf("receivedData2[0].cycle_time[0]: %.3f \n",receivedData2[0].cycle_time[0]);
-    // printf("receivedData3[0].cycle_time[0]: %.3f \n",receivedData3[0].cycle_time[0]);
 
-    if(write_result(file_path, receivedData3, num_exp, optimal_core) == -1) {
+    if(write_result(file_path, receivedData, num_exp, optimal_core) == -1) {
         /* return error */
         exit(0);
     }
