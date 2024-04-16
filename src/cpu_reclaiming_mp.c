@@ -23,13 +23,11 @@
 #include "nvToolsExt.h"
 #endif
 
-#ifdef MEASURE
 #ifdef WIN32
 #include <time.h>
 #include "gettimeofday.h"
 #else
 #include <sys/time.h>
-#endif
 #endif
 
 #ifdef MULTI_PROCESSOR
@@ -38,7 +36,6 @@
 #define START_SYNC 5
 
 static int sem_id;
-static int sem_id2;
 static key_t key = 1234;
 
 int *start_counter;
@@ -67,14 +64,8 @@ typedef struct process_data_t{
     int num_process;
     bool isTest;
 
-#ifndef MEASURE
-    double execution_time[200];
-    double frame_rate[200];
-#endif
-
 } process_data_t;
 
-#ifdef MEASURE
 typedef struct measure_data_t{
     double start_preprocess[200];
     double end_preprocess[200];
@@ -89,6 +80,7 @@ typedef struct measure_data_t{
     double start_reclaim_infer[1000];
     double end_reclaim_infer[1000];
     double start_cpu_infer[200];
+    double end_cpu_infer[200];
     double end_infer[200];
 
     double waiting_gpu[200];
@@ -118,9 +110,6 @@ typedef struct measure_data_t{
     double start_gap[200];
 } measure_data_t;
 
-#endif
-
-#ifdef MEASURE
 static int compare(const void *a, const void *b) {
     double valueA = *((double *)a + 1);
     double valueB = *((double *)b + 1);
@@ -244,7 +233,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
         sum_measure_data[i][19] = measure_data[core_id - 1].e_reclaim_infer_max_value[count];
         sum_measure_data[i][20] = measure_data[core_id - 1].start_cpu_infer[count];
         sum_measure_data[i][21] = measure_data[core_id - 1].e_cpu_infer[count];
-        sum_measure_data[i][22] = measure_data[core_id - 1].end_infer[count];
+        sum_measure_data[i][22] = measure_data[core_id - 1].end_cpu_infer[count];
         sum_measure_data[i][23] = measure_data[core_id - 1].e_infer[count];
         sum_measure_data[i][24] = measure_data[core_id - 1].start_postprocess[count];
         sum_measure_data[i][25] = measure_data[core_id - 1].e_postprocess[count];
@@ -267,7 +256,7 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
             "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value", 
             "waiting_reclaim",
             "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", "e_reclaim_infer_max", "e_reclaim_infer_max_value",  
-            "start_cpu_infer", "e_cpu_infer", "end_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value", "frame_rate", "cycle_time", "start_gap");
@@ -294,7 +283,6 @@ static int write_result(char *file_path, measure_data_t *measure_data, int num_e
 
     return 1;
 }
-#endif
 
 static union semun {
     int val;
@@ -327,16 +315,9 @@ static void unlock_resource(int resource_num) {
 }
 
 #ifdef GPU
-#ifdef MEASURE
 static void processFunc(process_data_t data, int write_fd)
-#else
-static void processFunc(process_data_t data)
-#endif
 {
-#ifdef MEASURE
     measure_data_t measure_data;
-#endif
-
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -424,24 +405,15 @@ static void processFunc(process_data_t data)
 
     for (i = 0; i < num_exp; i++) {
 
-        if (data.isTest){
-            if (i == 0) usleep ((data.process_id) * 100 * 1000);
-            if (i == START_SYNC) {
-                // pthread_barrier_wait
-                while(!(*start_counter == data.num_process)) {
-                    usleep(1);
-                    // printf("%d -- counter = %d(%d)\n", i, *start_counter, sched_getcpu());
-                }
-
-                usleep ((data.R * (data.process_id-1)) * 1000);
-                // printf("\n::Set_R:: Process %d (%d): %0.3lf\n", data.process_id, sched_getcpu(), data.R * (data.process_id-1));
+        // pthread_barrier_wait
+        if (i > 0) {
+            while(!(*start_counter == data.num_process)) {
+                usleep(1);
             }
         }
 
         // __Preprocess__
-#ifdef MEASURE
         measure_data.start_preprocess[i] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
         char task[100];
@@ -450,21 +422,15 @@ static void processFunc(process_data_t data)
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
-#ifdef MEASURE
         // printf("\n%d -- Process %d (%d) \n\n", i, data.process_id, sched_getcpu());
-#else
-        printf("\nProcess %d is set to CPU core %d\n\n", data.process_id, sched_getcpu());
-#endif
 
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-#ifdef MEASURE
         measure_data.end_preprocess[i] = get_time_in_ms();
         measure_data.e_preprocess[i] = measure_data.end_preprocess[i] - measure_data.start_preprocess[i];
-#endif
 
         measure_data.e_preprocess_max_value[i] = data.max_preprocess;
         // Jitter compensation for Preprocessing
@@ -473,17 +439,13 @@ static void processFunc(process_data_t data)
         //     if (remaining_time > 0) usleep(remaining_time * 1000);
         // }
 
-#ifdef MEASURE
         measure_data.e_preprocess_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
-#endif
 
         // __Inference__
         // if (device) predictions = network_predict(net, X);
         // else predictions = network_predict_cpu(net, X);
 
-#ifdef MEASURE
         measure_data.start_infer[i] = get_time_in_ms();
-#endif
 
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
@@ -498,13 +460,18 @@ static void processFunc(process_data_t data)
         state.train = 0;
         state.delta = 0;
 
-#ifdef MEASURE
         measure_data.start_gpu_waiting[i] = get_time_in_ms();
-#endif
 
         // GPU Inference
+
+        while (!(data.process_id == (*gpu_counter+1))){
+            usleep(1);
+        }
+
         lock_resource(0); // 0.2s
         //printf("Process %d is GPU lock\n", data.process_id);
+        // printf("%d (%d) -- start_counter = %d, gpu_counter = %d, reclaim_counter = %d\n", i, sched_getcpu(), *start_counter, *gpu_counter, *reclaim_counter);
+
 #ifdef NVTX
         char task_gpu[100];
         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.process_id);
@@ -512,9 +479,7 @@ static void processFunc(process_data_t data)
         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
 #endif
 
-#ifdef MEASURE
         measure_data.start_gpu_infer[i] = get_time_in_ms();
-#endif
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
@@ -541,9 +506,7 @@ static void processFunc(process_data_t data)
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
 
-#ifdef MEASURE
         measure_data.end_gpu_infer[i] = get_time_in_ms();
-#endif
 
         measure_data.e_gpu_infer_max_value[i] = data.max_gpu_infer;
         // Jitter compensation for GPU inference
@@ -555,12 +518,12 @@ static void processFunc(process_data_t data)
         // }
         measure_data.e_gpu_infer_max[i] = get_time_in_ms() - measure_data.start_gpu_infer[i];
 
+        (*gpu_counter)++;
+
         unlock_resource(0);
 
         // Reclaiming Inference
-#ifdef MEASURE
         measure_data.start_reclaim_waiting[i] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
         char task_reclaiming[100];
@@ -569,11 +532,16 @@ static void processFunc(process_data_t data)
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
 
-        lock_resource(1);
+        while (!(data.process_id == (*reclaim_counter+1))){
+            usleep(1);
+        }
 
-#ifdef MEASURE
+        lock_resource(1);
+        //printf("Process %d is Reclaim lock\n", data.process_id);
+        // printf("%d (%d) -- start_counter = %d, gpu_counter = %d, reclaim_counter = %d\n", i, sched_getcpu(), *start_counter, *gpu_counter, *reclaim_counter);
+
         measure_data.start_reclaim_infer[i] = get_time_in_ms();
-#endif
+
         // Openblas set num threads for Reclaiming inference
         // when cpu reclaim over gpu, exit() okay??????????????????????
         openblas_thread = (MAXCORES-1) - data.num_process + 1;
@@ -611,20 +579,19 @@ static void processFunc(process_data_t data)
         measure_data.e_reclaim_infer_max[i] = get_time_in_ms() - measure_data.start_reclaim_infer[i];
         //printf("Process %d is Reclaiming unlock\n", data.process_id);
 
+        (*reclaim_counter)++;
+
         unlock_resource(1);
 
-#ifdef MEASURE
         measure_data.end_reclaim_infer[i] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_reclaiming);
 #endif
 
         // CPU Inference
-#ifdef MEASURE
         measure_data.start_cpu_infer[i] = get_time_in_ms();
-#endif
+
         openblas_set_num_threads(1);
         CPU_ZERO(&cpuset);
         CPU_SET(data.process_id, &cpuset);
@@ -645,21 +612,18 @@ static void processFunc(process_data_t data)
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
 
-#ifdef MEASURE
+        measure_data.end_cpu_infer[i] = get_time_in_ms();
         measure_data.end_infer[i] = get_time_in_ms();
-        //measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.waiting_gpu[i] = measure_data.start_gpu_infer[i] - measure_data.start_gpu_waiting[i];
         measure_data.e_gpu_infer[i] = measure_data.end_gpu_infer[i] - measure_data.start_gpu_infer[i];
         measure_data.waiting_reclaim[i] = measure_data.start_reclaim_infer[i] - measure_data.start_reclaim_waiting[i];
         measure_data.e_reclaim_infer[i] = measure_data.end_reclaim_infer[i] - measure_data.start_reclaim_infer[i];
-        measure_data.e_cpu_infer[i] = measure_data.end_infer[i] - measure_data.start_cpu_infer[i];
+        measure_data.e_cpu_infer[i] = measure_data.end_cpu_infer[i] - measure_data.start_cpu_infer[i];
         measure_data.e_infer[i] = measure_data.end_infer[i] - measure_data.start_infer[i];
-#endif
 
         // __Postprecess__
-#ifdef MEASURE
         measure_data.start_postprocess[i] = get_time_in_ms();
-#endif
+
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
@@ -675,10 +639,9 @@ static void processFunc(process_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+                
+                // Print accuracy
+                // else printf("%s: %f\n",names[index], predictions[index]);
 
             }
         }
@@ -694,34 +657,34 @@ static void processFunc(process_data_t data)
         free_image(resized);
         free_image(cropped);
 
-#ifdef MEASURE
+        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
+
         measure_data.end_postprocess[i] = get_time_in_ms();
         measure_data.e_postprocess[i] = measure_data.end_postprocess[i] - measure_data.start_postprocess[i];
         measure_data.execution_time[i] = measure_data.end_postprocess[i] - measure_data.start_preprocess[i];
         measure_data.cycle_time[i] = data.R;
         measure_data.frame_rate[i] = 1000 / data.R;
         measure_data.start_gap[i] = 0;
-        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, measure_data.e_infer[i]);
-#else
-        data.execution_time[i] = get_time_in_ms() - time;
-        data.frame_rate[i] = 1000.0 / (data.execution_time[i] / num_process); // N process
-        printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, data.execution_time[i], measure_data.frame_rate[i]);
-#endif
 
         measure_data.execution_time_max_value[i] = data.R * data.num_process;
-
         // Jitter compensation for R
-        if (data.isTest) {
-            remaining_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
+        // if (data.isTest) {
+        //     remaining_time = (data.R * data.num_process  - (get_time_in_ms() - measure_data.start_preprocess[i]));
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+        // }
+
         measure_data.execution_time_max[i] = get_time_in_ms() - measure_data.start_preprocess[i];
 
-        if(data.isTest) {
-            if(i == START_SYNC-1) {
-                (*start_counter)++;
-            }
+        
+        lock_resource(2);
+        if (*start_counter == data.num_process && *start_counter != 0) *start_counter = 0;
+        (*start_counter)++;
+        if (*start_counter == data.num_process) {
+            *gpu_counter = 0;
+            *reclaim_counter = 0;
         }
+        unlock_resource(2);
+
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
@@ -729,15 +692,13 @@ static void processFunc(process_data_t data)
 
     }
 
-#ifdef MEASURE
-
     // write(write_fd, &measure_data, sizeof(measure_data_t));
     ssize_t nbytes;
     nbytes = write_full(write_fd, &measure_data, sizeof(measure_data_t));
     if (nbytes != sizeof(measure_data_t)) {
         fprintf(stderr, "write error: expected %lu, got %zd\n", sizeof(measure_data_t), nbytes);
     }
-#endif
+
 
     // free memory
     free_detections(dets, nboxes);
@@ -759,41 +720,85 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
     pid_t pids[num_process];
     int status;
 
-    key_t key = ftok("shmfile", 65);
-    int shm_id;
+    key_t key1, key2, key3;
+    int shm_id1, shm_id2, shm_id3;
+    
+    // system("touch shmfile"); // Create shmfile
+    FILE *fp = fopen("shmfile", "w");
+    if (fp == NULL) {
+        perror("Failed to create file");
+        exit(EXIT_FAILURE);
+    }
+    fclose(fp);
 
-    shm_id = shmget(key, sizeof(int), 0666 | IPC_CREAT);
-    if (shm_id == -1) {
-        perror("shmget failed");
+    key1 = ftok("shmfile", 65);
+    key2 = ftok("shmfile", 66);
+    key3 = ftok("shmfile", 67);
+
+    printf("\nKey1: %d, Key2: %d, Key3: %d\n", key1, key2, key3); // 키 값 로깅
+
+    int shm_size = 4096;
+
+    // Shared memory 1
+    shm_id1 = shmget(key1, shm_size, 0666 | IPC_CREAT);
+    if (shm_id1 == -1) {
+        perror("shmget failed for key1");
         exit(1);
     }
+    start_counter = (int*) shmat(shm_id1, NULL, 0);
 
-    start_counter = (int*) shmat(shm_id, NULL, 0);
-    if (start_counter == (int*)(-1)) {
-        perror("shmat failed");
+    // Shared memory 2
+    shm_id2 = shmget(key2, shm_size, 0666 | IPC_CREAT);
+    if (shm_id2 == -1) {
+        perror("shmget failed for key2");
         exit(1);
     }
+    gpu_counter = (int*) shmat(shm_id2, NULL, 0);
+
+    // Shared memory 3
+    shm_id3 = shmget(key3, shm_size, 0666 | IPC_CREAT);
+    if (shm_id3 == -1) {
+        perror("shmget failed for key3");
+        exit(1);
+    }
+    reclaim_counter = (int*) shmat(shm_id3, NULL, 0);
+
+    // Initialize shared memory
     *start_counter = 0;
+    *gpu_counter = 0;
+    *reclaim_counter = 0;
 
-    // Create semaphore set with NUM_PROCESSES semaphores
-    sem_id = semget(key, 2, IPC_CREAT | 0666);
+    // Check value
+    (*gpu_counter)++;
+    printf("Start Counter: %d\n", *start_counter);
+    printf("GPU Counter: %d\n", *gpu_counter);
+    printf("Reclaim Counter: %d\n", *reclaim_counter);
+    
+    // Create 4 semaphore set for lock_resource
+    sem_id = semget(key, 4, IPC_CREAT | 0666);
 
     if (sem_id == -1) {
         perror("semget");
         exit(1);
     }
 
-    // Initialize semaphores
+    // Initialize 4 semaphores
     union semun arg;
-    unsigned short values[2] = {1, 1};  // Initialize both semaphores to 1
+    unsigned short values[4] = {1, 1, 1, 1};
     arg.array = values;
-    semctl(sem_id, 0, SETALL, arg);
+    if (semctl(sem_id, 0, SETALL, arg) == -1) {
+        perror("semctl - SETALL failed");
+        exit(1);
+    }
 
     // Sync :: optimal_core = 11 process
     int optimal_core = 11;
     *start_counter = 0;
+    *gpu_counter = 0;
+    *reclaim_counter = 0;
 
-    printf("\n\n::Sync:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
+
+    printf("\n::Sync:: CPU-Reclaiming-MP with %d processes with %d gpu-layer & %d reclaim-layer\n", optimal_core, gLayer, rLayer);
     int fd[optimal_core][2];
     process_data_t data[optimal_core];
 
@@ -821,23 +826,17 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
     for (i = 0; i < optimal_core; i++) {
 
-#ifdef MEASURE
         if (pipe(fd[i]) == -1) {
             perror("pipe");
             exit(1);
         }
-#endif
 
         pids[i] = fork();
         if (pids[i] == 0) { // child process
 
-#ifdef MEASURE
             close(fd[i][0]); // close reading end in the child
             processFunc(data[i], fd[i][1]);
             close(fd[i][1]);
-#else
-            processFunc(data[i]);
-#endif
 
             exit(0);
         } else if (pids[i] < 0) {
@@ -846,7 +845,6 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         }
     }
 
-#ifdef MEASURE
     measure_data_t receivedData[optimal_core];
 
     // In the parent process, read data from all child processes
@@ -858,13 +856,11 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         }
         close(fd[i][0]);
     }
-#endif
 
     for (i = 0; i < optimal_core; i++) {
         wait(&status);
     }
 
-#ifdef MEASURE
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);
@@ -891,16 +887,34 @@ void cpu_reclaiming_mp(char *datacfg, char *cfgfile, char *weightfile, char *fil
         /* return error */
         exit(0);
     }
-#endif
 
-   if (shmdt(start_counter) == -1) {
-        perror("shmdt failed");
-        exit(1);
+    // Detach shared memory segments
+    if (shmdt(start_counter) == -1) {
+        perror("shmdt start_counter");
     }
-    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
-        perror("shmctl IPC_RMID failed");
-        exit(1);
+    if (shmdt(gpu_counter) == -1) {
+        perror("shmdt gpu_counter");
     }
+    if (shmdt(reclaim_counter) == -1) {
+        perror("shmdt reclaim_counter");
+    }
+
+    // Remove shared memory segments
+    if (shmctl(shm_id1, IPC_RMID, NULL) == -1) {
+        perror("shmctl IPC_RMID shm_id1");
+    }
+    if (shmctl(shm_id2, IPC_RMID, NULL) == -1) {
+        perror("shmctl IPC_RMID shm_id2");
+    }
+    if (shmctl(shm_id3, IPC_RMID, NULL) == -1) {
+        perror("shmctl IPC_RMID shm_id3");
+    }
+
+    // Remove semaphore set
+    if (semctl(sem_id, 0, IPC_RMID) == -1) {
+        perror("semctl IPC_RMID sem_id");
+    }
+
 
     return 0;
 
