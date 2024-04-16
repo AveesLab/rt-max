@@ -32,6 +32,7 @@ fig, ax = plt.subplots(figsize=(20, 5))
 colors = {'Preprocess': 'skyblue', 'GPU Inference': 'limegreen', 'Reclaim Inference': 'violet', 'CPU Inference': 'orange', 'Postprocess': 'salmon'}
 core_ids = df['core_id'].unique()
 core_ids.sort()
+core_ids = core_ids[::-1]  # Reverse the array after sorting
 y_ticks = np.arange(len(core_ids))
 
 # Draw each process for each core
