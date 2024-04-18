@@ -219,7 +219,9 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
+#ifndef MEASURE
         printf("\nThread %d is set to CPU core %d\n", coreIDOrder[1], sched_getcpu());
+#endif
 
         time = get_time_in_ms();
         // __Preprocess__
@@ -241,39 +243,18 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
 #ifdef MEASURE
         start_infer[i] = get_time_in_ms();
 #endif
-        // openblas_set_num_threads(num_blas);
-        // CPU_ZERO(&cpuset);
-        // CPU_SET(coreIDOrder[i%6 +1], &cpuset);
-        // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-
-        // int Rcores[3];
-        // if (i%2 == 0) {
-        //     Rcores[0] = 9;
-        //     Rcores[1] = 10; 
-        //     Rcores[2] = 11;
-        // } 
-        // else {
-        //     Rcores[0] = 6;
-        //     Rcores[1] = 7; 
-        //     Rcores[2] = 8;
-        // }
-        // for(int i = 0; i < num_blas-1; i++) {
-        //         CPU_ZERO(&cpuset);
-        //         CPU_SET(Rcores[i], &cpuset);
-        //         openblas_setaffinity(i, sizeof(cpuset), &cpuset);
-        // }      
-
+        printf("\n%d Thread %d is set to CPU core %d\n", i, coreIDOrder[1], sched_getcpu());
         openblas_set_num_threads(num_blas);
         CPU_ZERO(&cpuset);
         CPU_SET(coreIDOrder[i%6 +1], &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-
+        printf("\n%d Thread %d is set to CPU core %d\n", i, coreIDOrder[i%6 +1], sched_getcpu());
         for(int i = 1; i < num_blas; i++) {
                 CPU_ZERO(&cpuset);
                 CPU_SET(MAXCORES - coreIDOrder[i], &cpuset);
                 openblas_setaffinity(i-1, sizeof(cpuset), &cpuset);
         }
-
+        
         if (device) predictions = network_predict(net, X);
         else {
             extern int gpu_yolo;

@@ -24,7 +24,8 @@
 #endif
 #endif
 
-static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+// static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[MAXCORES] = {1,2,3,4,5,6,7,8,9,10,11};
 
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
@@ -682,6 +683,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
+        printf("data[i].thread_id: %d\n", data[i].thread_id);
         data[i].num_thread = num_thread;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {

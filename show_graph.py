@@ -13,7 +13,7 @@ args = parser.parse_args()
 
 # Determine the CSV file path based on the input arguments
 if args.rlayer is not None and args.glayer is not None:
-    file_path = f"./measure/cpu-reclaiming-mp/densenet201/{args.glayer}glayer/cpu-reclaiming-mp_{args.rlayer}rlayer.csv"
+    file_path = f"./measure/cpu-reclaiming/densenet201/{args.glayer}glayer/cpu-reclaiming_{args.rlayer}rlayer.csv"
 elif args.glayer is not None:
     file_path = f"./measure/gpu-accel-mp/densenet201/gpu-accel-mp_{args.glayer}glayer.csv"
 else:
