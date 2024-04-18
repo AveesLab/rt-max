@@ -23,10 +23,10 @@
 #include <sys/time.h>
 #endif
 #endif
-
-// static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
-static int coreIDOrder[MAXCORES] = {1,2,3,4,5,6,7,8,9,10,11};
-
+pthread_barrier_t barrier;
+static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+// static int coreIDOrder[MAXCORES] = {1,2,3,4,5,6,7,8,9,10,11};
+int openblas_thread;
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -59,9 +59,11 @@ static double start_infer[1000];
 static double start_gpu_waiting[1000];
 static double start_gpu_infer[1000];
 static double end_gpu_infer[1000];
+static double start_reclaim_waiting[1000];
 static double start_reclaim_infer[1000];
 static double end_reclaim_infer[1000];
 static double start_cpu_infer[1000];
+static double end_cpu_infer[1000];
 static double end_infer[1000];
 
 static double waiting_gpu[1000];
@@ -142,8 +144,8 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][24];
-    for(i = 0; i < num_exp * optimal_core; i++)
+    double sum_measure_data[num_exp * num_thread][25];
+    for(i = 0; i < num_exp * num_thread; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
         sum_measure_data[i][1] = start_preprocess[i];     
@@ -160,15 +162,16 @@ static int write_result(char *file_path)
         sum_measure_data[i][12] = e_reclaim_infer[i];    
         sum_measure_data[i][13] = end_reclaim_infer[i];
         sum_measure_data[i][14] = start_cpu_infer[i];     
-        sum_measure_data[i][15] = e_cpu_infer[i];     
-        sum_measure_data[i][16] = end_infer[i];
-        sum_measure_data[i][17] = e_infer[i];
-        sum_measure_data[i][18] = start_postprocess[i];     
-        sum_measure_data[i][19] = e_postprocess[i];      
-        sum_measure_data[i][20] = end_postprocess[i];
-        sum_measure_data[i][21] = execution_time[i];          
-        sum_measure_data[i][22] = 0.0;      
-        sum_measure_data[i][23] = 0.0;
+        sum_measure_data[i][15] = e_cpu_infer[i];  
+        sum_measure_data[i][16] = end_cpu_infer[i];  
+        sum_measure_data[i][17] = end_infer[i];
+        sum_measure_data[i][18] = e_infer[i];
+        sum_measure_data[i][19] = start_postprocess[i];     
+        sum_measure_data[i][20] = e_postprocess[i];      
+        sum_measure_data[i][21] = end_postprocess[i];
+        sum_measure_data[i][22] = execution_time[i];          
+        sum_measure_data[i][23] = 0.0;      
+        sum_measure_data[i][24] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -184,7 +187,7 @@ static int write_result(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
@@ -192,7 +195,7 @@ static int write_result(char *file_path)
             "start_gpu_infer", "e_gpu_infer", "end_gpu_infer",
             "waiting_reclaim",
             "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
-            "start_cpu_infer", "e_cpu_infer", "end_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "frame_rate", "optimal_core");
@@ -201,10 +204,10 @@ static int write_result(char *file_path)
 
     for(i = 0; i < num_exp * num_thread; i++)
     {
-        new_sum_measure_data[i][22] = frame_rate;
-        new_sum_measure_data[i][23] = (double)optimal_core;
+        new_sum_measure_data[i][23] = frame_rate;
+        new_sum_measure_data[i][24] = (double)optimal_core;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
                 new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
                 new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
@@ -212,7 +215,8 @@ static int write_result(char *file_path)
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], 
                 new_sum_measure_data[i][15], new_sum_measure_data[i][16], new_sum_measure_data[i][17], 
                 new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
-                new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23]);
+                new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23],
+                new_sum_measure_data[i][24]);
     }
     
     fclose(fp);
@@ -227,7 +231,7 @@ static void threadFunc(thread_data_t data)
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(coreIDOrder[data.thread_id-1], &cpuset); // cpu core index
+    CPU_SET(coreIDOrder[data.thread_id], &cpuset); // cpu core index
     int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
     if (ret != 0) {
         fprintf(stderr, "pthread_setaffinity_np() failed \n");
@@ -276,7 +280,6 @@ static void threadFunc(thread_data_t data)
     int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 1; // Choose CPU or GPU
-    extern int skip_layers[1000][10];
     extern gpu_yolo;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
@@ -290,13 +293,27 @@ static void threadFunc(thread_data_t data)
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
+    extern int skip_layers[1000][10];
+    int skipped_layers[1000] = {0, };
+
+    for(i = gLayer; i < net.n; i++) {
+        for(j = 0; j < 10; j++) {
+            if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
+                skipped_layers[skip_layers[i][j]] = 1;
+                // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
+            }
+        }
+    }
     srand(2222222);
 
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
     for (i = 0; i < num_exp; i++) {
-
+        if (i == 5) {
+            pthread_barrier_wait(&barrier);
+            //usleep(R * (data.thread_id - 1) * 1000);
+        }
 #ifdef MEASURE
         int count = i * data.num_thread + data.thread_id - 1;
 #endif
@@ -309,16 +326,12 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
-        printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
+        //printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
 
-        pthread_mutex_lock(&mutex_gpu);
 
-        while(data.thread_id != current_thread) {
-            pthread_cond_wait(&cond, &mutex_gpu);
-        }
 
         time = get_time_in_ms();
         // __Preprocess__
@@ -359,7 +372,11 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         start_gpu_waiting[count] = get_time_in_ms();
 #endif
+        pthread_mutex_lock(&mutex_gpu);
 
+        // while(data.thread_id != current_thread) {
+        //     pthread_cond_wait(&cond, &mutex_gpu);
+        // }
         // GPU Inference
 
 #ifdef NVTX
@@ -383,7 +400,7 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
-            if (skip_layers[j]){
+            if (skipped_layers[j]){
                 cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output_gpu;
@@ -402,18 +419,20 @@ static void threadFunc(thread_data_t data)
         end_gpu_infer[count] = get_time_in_ms();
 #endif
 
-        if (data.thread_id == data.num_thread) {
-            current_thread = 1;
-        } else {
-            current_thread++;
-        }
+        // if (data.thread_id == data.num_thread) {
+        //     current_thread = 1;
+        // } else {
+        //     current_thread++;
+        // }
 
-        pthread_cond_broadcast(&cond);
+        // pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
 
         // Reclaiming Inference
 
-        pthread_mutex_lock(&mutex_reclaim);
+#ifdef MEASURE
+        start_reclaim_waiting[count] = get_time_in_ms();
+#endif
 
 #ifdef NVTX
         char task_reclaiming[100];
@@ -422,42 +441,26 @@ static void threadFunc(thread_data_t data)
         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
 #endif
 
+        pthread_mutex_lock(&mutex_reclaim);
+
 #ifdef MEASURE
         start_reclaim_infer[count] = get_time_in_ms();
 #endif
-        openblas_set_num_threads(3);
+
+        openblas_thread = (MAXCORES - 1) - num_thread + 1;
+        openblas_set_num_threads(openblas_thread);
         CPU_ZERO(&cpuset);
-        CPU_SET(data.thread_id, &cpuset);
+        CPU_SET(coreIDOrder[data.thread_id], &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-
-        CPU_ZERO(&cpuset);
-        CPU_SET(10, &cpuset);
-        openblas_setaffinity(0, sizeof(cpuset), &cpuset);
-        
-        CPU_ZERO(&cpuset);
-        CPU_SET(11, &cpuset);
-        openblas_setaffinity(1, sizeof(cpuset), &cpuset);
-
-        // if(data.num_thread == 1) {
-        //     openblas_set_num_threads(1);
-        // }
-        // else {
-        //     openblas_set_num_threads(11 - optimal_core + 1);
-
-        //     CPU_ZERO(&cpuset);
-        //     CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-        //     pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-
-        //     for(int i = optimal_core; i < 11; i++){
-        //         CPU_ZERO(&cpuset);
-        //         CPU_SET(coreIDOrder[i], &cpuset);
-        //         openblas_setaffinity(i - optimal_core, sizeof(cpuset), &cpuset);
-        //     }
-
-        // }
+        for (int k = 0; k < openblas_thread - 1; k++) {
+            CPU_ZERO(&cpuset);
+            CPU_SET(coreIDOrder[11 - k], &cpuset);
+            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+        }
         
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
+
         for(j = gLayer; j < rLayer; ++j){
             state.index = j;
             l = net.layers[j];
@@ -470,13 +473,15 @@ static void threadFunc(thread_data_t data)
 
         pthread_mutex_unlock(&mutex_reclaim);
 
+#ifdef MEASURE
+        end_reclaim_infer[count] = get_time_in_ms();
+#endif
+
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_reclaiming);
 #endif
 
-#ifdef MEASURE
-        end_reclaim_infer[count] = get_time_in_ms();
-#endif
+
 
         // CPU Inference
 #ifdef NVTX
@@ -492,7 +497,7 @@ static void threadFunc(thread_data_t data)
 
         openblas_set_num_threads(1);
         CPU_ZERO(&cpuset);
-        CPU_SET(data.thread_id, &cpuset);
+        CPU_SET(coreIDOrder[data.thread_id], &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
 
         for(j = rLayer; j < net.n; ++j){
@@ -515,16 +520,17 @@ static void threadFunc(thread_data_t data)
 #endif
 
 #ifdef MEASURE
+        end_cpu_infer[count] = get_time_in_ms();
         end_infer[count] = get_time_in_ms();
         waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
         e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
-        waiting_reclaim[count] = start_reclaim_infer[i] - end_gpu_infer[i];
+        waiting_reclaim[count] = start_reclaim_infer[count] - end_gpu_infer[count];//start_reclaim_waiting[i];
         e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
-        e_cpu_infer[count] = end_infer[count] - start_cpu_infer[count];
+        e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
-        printf("gpu : %0.2f, reclaim : %0.2f, cpu : %0.2f \n", e_gpu_infer[count], e_reclaim_infer[count], e_cpu_infer[count]);
+        // printf("gpu : %0.2f, reclaim : %0.2f, cpu : %0.2f \n", e_gpu_infer[count], e_reclaim_infer[count], e_cpu_infer[count]);
 #endif
-
+        // printf("%0.2f %0.2f %0.2f\n",end_gpu_infer[count], waiting_reclaim[count], start_reclaim_infer[count]);
         // __Postprecess__
 #ifdef MEASURE
         start_postprocess[count] = get_time_in_ms();
@@ -558,6 +564,11 @@ static void threadFunc(thread_data_t data)
         //     wait_key_cv(1);
         // }
 
+        // free memory
+        free_image(im);
+        free_image(resized);
+        free_image(cropped);
+
 #ifdef MEASURE
         end_postprocess[count] = get_time_in_ms();
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
@@ -569,10 +580,6 @@ static void threadFunc(thread_data_t data)
         frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
-        // free memory
-        free_image(im);
-        free_image(resized);
-        free_image(cropped);
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
@@ -669,6 +676,8 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 //             pthread_join(threads[i], NULL);
 //         }
 // #else
+    pthread_barrier_init(&barrier, NULL, num_thread);
+
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
