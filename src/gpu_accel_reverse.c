@@ -62,7 +62,7 @@ static double e_preprocess_max[1000];
 static double start_infer[1000];
 static double start_gpu_waiting[1000];
 static double start_gpu_infer[1000];
-static double end_cpu_infer[1000];
+static double end_gpu_infer[1000];
 static double start_cpu_infer[1000];
 static double end_infer[1000];
 
@@ -158,15 +158,15 @@ static int write_result(char *file_path)
         sum_measure_data[i][4] = e_preprocess_max[i];
         sum_measure_data[i][5] = max_preprocess_time;
         sum_measure_data[i][6] = start_infer[i]; 
-        sum_measure_data[i][7] = start_cpu_infer[i];
-        sum_measure_data[i][8] = e_cpu_infer[i];
-        sum_measure_data[i][9] = end_cpu_infer[i];
-        sum_measure_data[i][10] = start_gpu_waiting[i];
-        sum_measure_data[i][11] = waiting_gpu[i];
-        sum_measure_data[i][12] = start_gpu_infer[i];
-        sum_measure_data[i][13] = e_gpu_infer[i];
-        sum_measure_data[i][14] = e_gpu_infer_max[i];
-        sum_measure_data[i][15] = max_gpu_infer_time;
+        sum_measure_data[i][7] = start_gpu_waiting[i];
+        sum_measure_data[i][8] = waiting_gpu[i];
+        sum_measure_data[i][9] = start_gpu_infer[i];
+        sum_measure_data[i][10] = e_gpu_infer[i];
+        sum_measure_data[i][11] = end_gpu_infer[i];
+        sum_measure_data[i][12] = e_gpu_infer_max[i];
+        sum_measure_data[i][13] = max_gpu_infer_time;
+        sum_measure_data[i][14] = start_cpu_infer[i];
+        sum_measure_data[i][15] = e_cpu_infer[i];
         sum_measure_data[i][16] = end_infer[i];
         sum_measure_data[i][17] = e_infer[i];
         sum_measure_data[i][18] = start_postprocess[i];
@@ -197,9 +197,9 @@ static int write_result(char *file_path)
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
             "start_infer", 
-            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value", "end_infer",
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
+            "start_cpu_infer", "e_cpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
@@ -350,22 +350,12 @@ static void threadFunc(thread_data_t data)
                 // }
 
             }
-            
         }
 
         // __Preprocess__
 #ifdef MEASURE
         start_task_time = get_time_in_ms();
         int count = i * data.num_thread + data.thread_id - 1;
-        // if(!data.isTest) {
-        //     if(i > 2){
-        //         double starttime = get_time_in_ms();
-        //         if((starttime- start_preprocess[count - 1]) < R) {
-        //             printf("%d waiting %.2f %.2f %.2f \n", count, starttime, start_preprocess[count - 1], (R - (starttime - start_preprocess[count - 1])));
-        //             usleep(((R) - (starttime - start_preprocess[count - 1])) * 1000);
-        //         }
-        //     }
-        // }
         start_preprocess[count] = start_task_time;
 
 #endif
@@ -382,6 +372,10 @@ static void threadFunc(thread_data_t data)
 #else
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
+
+        // while(data.thread_id != current_thread) {
+        //     pthread_cond_wait(&cond, &mutex_gpu);
+        // }
     
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -419,82 +413,25 @@ static void threadFunc(thread_data_t data)
         start_infer[count] = get_time_in_ms();
 #endif
 
+        if (net.gpu_index != cuda_get_device())
+            cuda_set_device(net.gpu_index);
+        int size = get_network_input_size(net) * net.batch;
         network_state state;
         state.index = 0;
         state.net = net;
-        state.input = X;
-        // state.input = net.input_state_gpu;
-        // memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+        // state.input = X;
+        state.input = net.input_state_gpu;
+        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
 
-
-        // CPU Inference
-
-
-#ifdef NVTX
-        char task_cpu[100];
-        sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", data.thread_id);
-        nvtxRangeId_t nvtx_task_cpu;
-        nvtx_task_cpu = nvtxRangeStartA(task_cpu);
-#endif
-
 #ifdef MEASURE
-        start_cpu_infer[count] = get_time_in_ms();
-#endif
-
-        state.workspace = net.workspace_cpu;
-        for(j = 0; j < gLayer; ++j){
-            state.index = j;
-            l = net.layers[j];
-            if(l.delta && state.train && l.train){
-                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-            }
-            l.forward(l, state);
-            if (skipped_layers[j]){
-                cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
-            }
-            state.input = l.output;
-        }
-
-
-
-#ifdef MEASURE
-        end_cpu_infer[count] = get_time_in_ms();
-        //         if (!data.isTest) {
-        //     remaining_time = (max_execution_time - max_gpu_infer_time - max_preprocess_time) - (get_time_in_ms() - start_cpu_infer[count]); // [+] Waiting_GPU Time !!
-        //     if (remaining_time > 0) usleep(remaining_time * 1000);
-
-        //     // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-            
-        //     // if (remaining_time > 0) {
-        //     //     wait_start = get_time_in_ms();
-        //     //     wait_end;
-        //     //     do {
-        //     //         wait_end = get_time_in_ms();
-        //     //         work_time = wait_end - wait_start;
-        //     //     } while(work_time < remaining_time);
-        //     // }
-        // }
         start_gpu_waiting[count] = get_time_in_ms();
 #endif
 
         // GPU Inference
         pthread_mutex_lock(&mutex_gpu);
-        while(data.thread_id != current_thread) {
-            pthread_cond_wait(&cond, &mutex_gpu);
-        }
-
-        if (net.gpu_index != cuda_get_device())
-            cuda_set_device(net.gpu_index);
-        cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
-        state.input = l.output_gpu;
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_cpu);
-#endif
-
 
 #ifdef NVTX
         char task_gpu[100];
@@ -507,8 +444,10 @@ static void threadFunc(thread_data_t data)
         start_gpu_infer[count] = get_time_in_ms();
 #endif
 
+
+        cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
-        for(j = gLayer; j < net.n; ++j){
+        for(j = 0; j < gLayer; ++j){
             state.index = j;
             l = net.layers[j];
             if(l.delta_gpu && state.train){
@@ -516,35 +455,85 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
+
+            if (skipped_layers[j] == 1){
+                // printf("skip layer : %d,  \n", j);
+                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            }
+
             state.input = l.output_gpu;
 
         }
 
+        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        state.input = l.output;
+
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-        e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
-
-        if (gLayer != net.n) predictions = get_network_output_gpu(net);
-        else predictions = get_network_output(net, 0);
-        reset_wait_stream_events();
-
-        if (data.thread_id == data.num_thread) {
-            current_thread = 1;
-        } else {
-            current_thread++;
-        }
-
-        pthread_cond_broadcast(&cond);
-        pthread_mutex_unlock(&mutex_gpu);
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
 
 #ifdef MEASURE
+        end_gpu_infer[count] = get_time_in_ms();
+#endif
+
+        // Busy wait for the remaining time
+        if (!data.isTest) {
+            remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time !!
+            if (remaining_time > 0) usleep(remaining_time * 1000);
+
+            // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+            
+            // if (remaining_time > 0) {
+            //     wait_start = get_time_in_ms();
+            //     wait_end;
+            //     do {
+            //         wait_end = get_time_in_ms();
+            //         work_time = wait_end - wait_start;
+            //     } while(work_time < remaining_time);
+            // }
+        }
+
+        e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
+
+        // if (data.thread_id == data.num_thread) {
+        //     current_thread = 1;
+        // } else {
+        //     current_thread++;
+        // }
+
+        // pthread_cond_broadcast(&cond);
+        pthread_mutex_unlock(&mutex_gpu);
+
+        // CPU Inference
+
+#ifdef MEASURE
+        start_cpu_infer[count] = get_time_in_ms();
+#endif
+
+        state.workspace = net.workspace_cpu;
+        gpu_yolo = 0;
+        for(j = gLayer; j < net.n; ++j){
+            state.index = j;
+            l = net.layers[j];
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            state.input = l.output;
+        }
+
+        if (gLayer == net.n) predictions = get_network_output_gpu(net);
+        else predictions = get_network_output(net, 0);
+        reset_wait_stream_events();
+        //cuda_free(state.input);   // will be freed in the free_network()
+
+#ifdef MEASURE
         end_infer[count] = get_time_in_ms();
         waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
-        e_gpu_infer[count] = end_infer[count] - start_gpu_infer[count];
-        e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
+        e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
+        e_cpu_infer[count] = end_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
 #endif
 
@@ -568,9 +557,9 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+// #ifndef MEASURE
+                // else printf("%s: %f\n",names[index], predictions[index]);
+// #endif
 
             }
         }
@@ -633,7 +622,7 @@ static void threadFunc(thread_data_t data)
 
 }
 
-void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
@@ -688,7 +677,7 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
         int startIdx = START_SYNC * optimal_core;
         for (i = startIdx; i < optimal_core * num_exp; i++) {
             max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
-            max_gpu_infer_time = MAX(max_gpu_infer_time, e_cpu_infer[i]); // GPU_infer
+            max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
             max_execution_time = MAX(max_execution_time, (e_preprocess[i]+e_gpu_infer[i]+e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
 
             avg_preprocess_time += e_preprocess[i];
@@ -863,12 +852,12 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
         else if (theo_thread == 11) strcat(file_path, "gpu-accel_11thread/");
         else printf("\nError: Please set -theo_thread {thread_num}\n");
     }
-    else strcat(file_path, "gpu-accel-reverse/");
+    else strcat(file_path, "gpu-accel_gpu/");
 
     strcat(file_path, model_name);
     strcat(file_path, "/");
 
-    strcat(file_path, "gpu-accelreverse_");
+    strcat(file_path, "gpu-accel_");
 
     char gpu_portion[20];
     if (theoretical_exp && (theo_thread > 1)) sprintf(gpu_portion, "%03dglayer", gLayer);
