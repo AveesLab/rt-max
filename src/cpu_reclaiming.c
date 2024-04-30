@@ -47,6 +47,7 @@ typedef struct thread_data_t{
     int benchmark_layers;
     int thread_id;
     int num_thread;
+    bool isTest;
 } thread_data_t;
 
 #ifdef MEASURE
@@ -79,6 +80,7 @@ static double end_postprocess[1000];
 static double e_postprocess[1000];
 
 static int optimal_core;
+static float R;
 #endif
 
 static double execution_time[1000];
@@ -90,11 +92,13 @@ static int is_GPU_larger(double a, double b) {
 
 static double average(double arr[]){
     double sum;
+    int total_num_exp = num_exp * optimal_core;
+    int skip_num_exp =  10 * optimal_core;
     int i;
-    for(i = 3; i < num_exp; i++) {
+    for(i = skip_num_exp ; i < total_num_exp - skip_num_exp; i++) {
         sum += arr[i];
     }
-    return sum / (num_exp-3);
+    return sum / (total_num_exp-(skip_num_exp) * 2);
 }
 
 #ifdef MEASURE
@@ -106,6 +110,18 @@ static int compare(const void *a, const void *b) {
     if (valueA < valueB) return -1;
     if (valueA > valueB) return 1;
     return 0;
+}
+
+static double maxOfThree(double a, double b, double c) {
+    double max = a;
+
+    if (b > max) {
+        max = b;
+    }
+    if (c > max) { 
+        max = c;
+    }
+    return max; 
 }
 
 static int write_result(char *file_path) 
@@ -144,10 +160,11 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_thread][25];
-    for(i = 0; i < num_exp * num_thread; i++)
+    double sum_measure_data[num_exp * optimal_core][25];
+    for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
+        printf("%d == %.0lf %.0lf\n", i, core_id_list[i], sum_measure_data[i][0]);
         sum_measure_data[i][1] = start_preprocess[i];     
         sum_measure_data[i][2] = e_preprocess[i];       
         sum_measure_data[i][3] = end_preprocess[i];
@@ -176,7 +193,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 10 * optimal_core; // Delete some ROWs
+    int startIdx = 0 * optimal_core; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -202,7 +219,7 @@ static int write_result(char *file_path)
 
     double frame_rate = 1000 / ( (new_sum_measure_data[(sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0]))-1][20]-new_sum_measure_data[0][1]) / (sizeof(new_sum_measure_data)/sizeof(new_sum_measure_data[0])) );
 
-    for(i = 0; i < num_exp * num_thread; i++)
+    for(i = 0; i < num_exp * optimal_core; i++)
     {
         new_sum_measure_data[i][23] = frame_rate;
         new_sum_measure_data[i][24] = (double)optimal_core;
@@ -305,14 +322,17 @@ static void threadFunc(thread_data_t data)
         }
     }
     srand(2222222);
+    double remaining_time = 0.0;
 
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
     for (i = 0; i < num_exp; i++) {
-        if (i == 5) {
-            pthread_barrier_wait(&barrier);
-            //usleep(R * (data.thread_id - 1) * 1000);
+        if(!data.isTest) {
+            if(i < 10) {
+                pthread_barrier_wait(&barrier);
+                usleep(R * (data.thread_id - 1) * 1000);
+            }
         }
 #ifdef MEASURE
         int count = i * data.num_thread + data.thread_id - 1;
@@ -356,6 +376,26 @@ static void threadFunc(thread_data_t data)
         start_infer[count] = get_time_in_ms();
 #endif
 
+        // GPU Inference
+
+#ifdef NVTX
+        char task_gpu[100];
+        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.thread_id);
+        nvtxRangeId_t nvtx_task_gpu;
+        nvtx_task_gpu = nvtxRangeStartA(task_gpu);
+#endif
+
+
+#ifdef MEASURE
+        start_gpu_waiting[count] = get_time_in_ms();
+#endif
+
+        pthread_mutex_lock(&mutex_gpu);
+
+#ifdef MEASURE
+        start_gpu_infer[count] = get_time_in_ms();
+#endif
+
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
         int size = get_network_input_size(net) * net.batch;
@@ -369,26 +409,10 @@ static void threadFunc(thread_data_t data)
         state.train = 0;
         state.delta = 0;
 
-#ifdef MEASURE
-        start_gpu_waiting[count] = get_time_in_ms();
-#endif
-        pthread_mutex_lock(&mutex_gpu);
-
         // while(data.thread_id != current_thread) {
         //     pthread_cond_wait(&cond, &mutex_gpu);
         // }
-        // GPU Inference
 
-#ifdef NVTX
-        char task_gpu[100];
-        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", data.thread_id);
-        nvtxRangeId_t nvtx_task_gpu;
-        nvtx_task_gpu = nvtxRangeStartA(task_gpu);
-#endif
-
-#ifdef MEASURE
-        start_gpu_infer[count] = get_time_in_ms();
-#endif
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
@@ -454,7 +478,7 @@ static void threadFunc(thread_data_t data)
         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         for (int k = 0; k < openblas_thread - 1; k++) {
             CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[11 - k], &cpuset);
+            CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
         }
         
@@ -574,13 +598,17 @@ static void threadFunc(thread_data_t data)
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
         core_id_list[count] = (double)sched_getcpu();
+        printf("%d -- %.0f\n", count, core_id_list[count]);
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
         frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
-
+        if (!data.isTest) {
+            remaining_time = R *optimal_core - (get_time_in_ms() - start_preprocess[count]);
+            if (remaining_time > 0) usleep(remaining_time * 1000);
+        }
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task);
 #endif
@@ -610,6 +638,117 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     int i;
 
     thread_data_t data[MAXCORES - 1];
+  // // TEST 1
+    // printf("\n\nSequential :: GPU-Accel-Reverse with %d thread with %d gpu-layer\n", 1, gLayer);
+    // optimal_core = 1;
+    // pthread_barrier_init(&barrier, NULL, optimal_core);
+    // R = 0.0;
+    // sleep_time = 0.0;
+    // max_gpu_infer_time = 0.0;
+    // max_execution_time = 0.0;
+    // avg_gpu_infer_time = 0.0;
+    // avg_execution_time = 0.0;                   
+    // for (i = 0; i < optimal_core; i++) {
+    //     data[i].datacfg = datacfg;
+    //     data[i].cfgfile = cfgfile;
+    //     data[i].weightfile = weightfile;
+    //     data[i].filename = filename;
+    //     data[i].thresh = thresh;
+    //     data[i].hier_thresh = hier_thresh;
+    //     data[i].dont_show = dont_show;
+    //     data[i].ext_output = ext_output;
+    //     data[i].save_labels = save_labels;
+    //     data[i].outfile = outfile;
+    //     data[i].letter_box = letter_box;
+    //     data[i].benchmark_layers = benchmark_layers;
+    //     data[i].thread_id = i + 1;
+    //     data[i].num_thread = optimal_core;
+    //     data[i].isTest = true;
+    //     rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+    //     if (rc) {
+    //         printf("Error: Unable to create thread, %d\n", rc);
+    //         exit(-1);
+    //     }
+    // }
+
+    // for (i = 0; i < optimal_core; i++) {
+    //     pthread_join(threads[i], NULL);
+    //     pthread_detach(threads[i]);
+    // }
+    
+    // TEST 2
+
+    // printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(execution_time)/optimal_core);
+    optimal_core = MAXCORES - 1;
+
+    printf("\n\nFinding Optimal Core :: CPU-Reclaiming with %d threads with %d gpu-layer & %d recaliming-layer [%.2lf]\n", optimal_core, gLayer, rLayer, R);
+    pthread_barrier_init(&barrier, NULL, optimal_core);
+
+    for (i = 0; i < optimal_core; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = optimal_core;
+        data[i].isTest = true;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < optimal_core; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    // EXP 1
+    double execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
+    printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+
+    R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+    // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+    optimal_core = (int)ceil(execution_time_wo_waiting / R);
+    if (optimal_core > MAXCORES -1) optimal_core = MAXCORES -1;
+
+    printf("\n\nEXP :: CPU-Reclaiming with %d threads with %d gpu-layer & %d recaliming-layer [%.2lf]\n", optimal_core, gLayer, rLayer, R);
+    pthread_barrier_init(&barrier, NULL, optimal_core);
+
+    for (i = 0; i < optimal_core; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = optimal_core;
+        data[i].isTest = false;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < optimal_core; i++) {
+        pthread_join(threads[i], NULL);
+    }
 
 // #ifdef MEASURE
 //     printf("\n\nFinding Optimal Core when CPU-Reclaiming with 1 thread with %d gpu-layer\n", gLayer);
@@ -676,35 +815,35 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 //             pthread_join(threads[i], NULL);
 //         }
 // #else
-    pthread_barrier_init(&barrier, NULL, num_thread);
+//     pthread_barrier_init(&barrier, NULL, num_thread);
 
-    for (i = 0; i < num_thread; i++) {
-        data[i].datacfg = datacfg;
-        data[i].cfgfile = cfgfile;
-        data[i].weightfile = weightfile;
-        data[i].filename = filename;
-        data[i].thresh = thresh;
-        data[i].hier_thresh = hier_thresh;
-        data[i].dont_show = dont_show;
-        data[i].ext_output = ext_output;
-        data[i].save_labels = save_labels;
-        data[i].outfile = outfile;
-        data[i].letter_box = letter_box;
-        data[i].benchmark_layers = benchmark_layers;
-        data[i].thread_id = i + 1;
-        printf("data[i].thread_id: %d\n", data[i].thread_id);
-        data[i].num_thread = num_thread;
-        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-        if (rc) {
-            printf("Error: Unable to create thread, %d\n", rc);
-            exit(-1);
-        }
-    }
+//     for (i = 0; i < num_thread; i++) {
+//         data[i].datacfg = datacfg;
+//         data[i].cfgfile = cfgfile;
+//         data[i].weightfile = weightfile;
+//         data[i].filename = filename;
+//         data[i].thresh = thresh;
+//         data[i].hier_thresh = hier_thresh;
+//         data[i].dont_show = dont_show;
+//         data[i].ext_output = ext_output;
+//         data[i].save_labels = save_labels;
+//         data[i].outfile = outfile;
+//         data[i].letter_box = letter_box;
+//         data[i].benchmark_layers = benchmark_layers;
+//         data[i].thread_id = i + 1;
+//         printf("data[i].thread_id: %d\n", data[i].thread_id);
+//         data[i].num_thread = num_thread;
+//         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+//         if (rc) {
+//             printf("Error: Unable to create thread, %d\n", rc);
+//             exit(-1);
+//         }
+//     }
 
-    for (i = 0; i < num_thread; i++) {
-        pthread_join(threads[i], NULL);
-    }
-// #endif
+//     for (i = 0; i < num_thread; i++) {
+//         pthread_join(threads[i], NULL);
+//     }
+// // #endif
 
 #ifdef MEASURE
         char file_path[256] = "measure/";

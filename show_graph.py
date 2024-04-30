@@ -7,17 +7,22 @@ from datetime import datetime
 
 # Argument parser setup
 parser = argparse.ArgumentParser(description='Visualize system operation per CPU core.')
+parser.add_argument('-reverse', type=int, help='is Reverse?')
 parser.add_argument('-glayer', type=int, required=True, help='GPU layer value')
 parser.add_argument('-rlayer', type=int, help='Reclaiming layer value')
 args = parser.parse_args()
 
 # Determine the CSV file path based on the input arguments
 if args.rlayer is not None and args.glayer is not None:
-    file_path = f"./measure/cpu-reclaiming/densenet201/{args.glayer}glayer/cpu-reclaiming_{args.rlayer}rlayer.csv"
-elif args.glayer is not None:
-    file_path = f"./measure/gpu-accel_gpu/densenet201/gpu-accel_170glayer.csv"
+    file_path = f"./measure/cpu-reclaiming/densenet201/{str(args.glayer).zfill(3)}glayer/cpu-reclaiming_{str(args.rlayer).zfill(3)}rlayer.csv"
+elif args.glayer is not None and args.rlayer is None:
+    if args.reverse is None:
+        file_path = f"./measure/gpu-accel_gpu/densenet201/gpu-accel_{str(args.glayer).zfill(3)}glayer.csv"
+    else:
+        file_path = f"./measure/gpu-accel-reverse/densenet201/gpu-accel-reverse_{str(args.glayer).zfill(3)}glayer.csv"
 else:
     raise ValueError("The 'glayer' argument must be provided.")
+
 
 # Load the CSV file
 df = pd.read_csv(file_path)
@@ -41,7 +46,7 @@ for i, core_id in enumerate(core_ids):
         core_data = df[df['core_id'] == core_id].iloc[j]
         draw_process(ax, i, core_data['start_preprocess'], core_data['end_preprocess'], 'Preprocess', colors['Preprocess'])
         draw_process(ax, i, core_data['start_gpu_infer'], core_data['end_gpu_infer'], 'GPU Inference', colors['GPU Inference'])        
-        draw_process(ax, i, core_data['start_cpu_infer'], core_data['end_infer'], 'CPU Inference', colors['CPU Inference'])        
+        draw_process(ax, i, core_data['start_cpu_infer'], core_data['end_cpu_infer'], 'CPU Inference', colors['CPU Inference'])        
         if args.rlayer is not None:  # Draw this process only if rlayer is provided
             draw_process(ax, i, core_data['start_reclaim_infer'], core_data['end_reclaim_infer'], 'Reclaim Inference', colors['Reclaim Inference'])
         draw_process(ax, i, core_data['start_postprocess'], core_data['end_postprocess'], 'Postprocess', colors['Postprocess'])

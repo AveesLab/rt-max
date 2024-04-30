@@ -119,7 +119,7 @@ static int compare(const void *a, const void *b) {
     return 0;
 }
 
-double maxOfThree(double a, double b, double c) {
+static double maxOfThree(double a, double b, double c) {
     double max = a;
 
     if (b > max) {

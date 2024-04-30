@@ -59,8 +59,9 @@ static double e_preprocess[1000];
 static double start_infer[1000];
 static double start_gpu_waiting[1000];
 static double start_gpu_infer[1000];
-static double end_cpu_infer[1000];
+static double end_gpu_infer[1000];
 static double start_cpu_infer[1000];
+static double end_cpu_infer[1000];
 static double end_infer[1000];
 
 static double waiting_gpu[1000];
@@ -143,7 +144,7 @@ static int write_result(char *file_path)
     }
     else printf("\nWrite output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][26];
+    double sum_measure_data[num_exp * optimal_core][25];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -159,17 +160,18 @@ static int write_result(char *file_path)
         sum_measure_data[i][10] = start_gpu_infer[i];
         sum_measure_data[i][11] = e_gpu_infer[i];
         sum_measure_data[i][12] = max_gpu_infer_time;
-        sum_measure_data[i][13] = end_infer[i];
-        sum_measure_data[i][14] = e_infer[i];
-        sum_measure_data[i][15] = start_postprocess[i];
-        sum_measure_data[i][16] = e_postprocess[i];
-        sum_measure_data[i][17] = end_postprocess[i];
-        sum_measure_data[i][18] = execution_time[i];
-        sum_measure_data[i][19] = execution_time_max[i];
-        sum_measure_data[i][20] = max_execution_time;
-        sum_measure_data[i][21] = 0.0;
+        sum_measure_data[i][13] = end_gpu_infer[i];
+        sum_measure_data[i][14] = end_infer[i];
+        sum_measure_data[i][15] = e_infer[i];
+        sum_measure_data[i][16] = start_postprocess[i];
+        sum_measure_data[i][17] = e_postprocess[i];
+        sum_measure_data[i][18] = end_postprocess[i];
+        sum_measure_data[i][19] = execution_time[i];
+        sum_measure_data[i][20] = execution_time_max[i];
+        sum_measure_data[i][21] = max_execution_time;
         sum_measure_data[i][22] = 0.0;
         sum_measure_data[i][23] = 0.0;
+        sum_measure_data[i][24] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -185,12 +187,12 @@ static int write_result(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", "start_cpu_infer", "e_cpu_infer", "end_cpu_infer",
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "e_gpu_infer_max_value", "end_infer", 
+            "start_gpu_infer", "e_gpu_infer", "e_gpu_infer_max_value", "end_gpu_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
@@ -212,13 +214,13 @@ static int write_result(char *file_path)
         new_sum_measure_data[i][22] = frame_rate;
         new_sum_measure_data[i][23] = (double)optimal_core;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
                 new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
-                new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23]
+                new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], new_sum_measure_data[i][24]
                 );
     }
     
@@ -413,9 +415,6 @@ static void threadFunc(thread_data_t data)
         nvtxRangeEnd(nvtx_task_cpu);
 #endif
 
-
-
-
         pthread_mutex_lock(&mutex_gpu);
         // GPU Inference
 #ifdef NVTX
@@ -468,6 +467,7 @@ static void threadFunc(thread_data_t data)
         
         // pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
+        end_gpu_infer[count] = get_time_in_ms();
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
@@ -648,10 +648,14 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
     }
 
     // EXP 1
-    printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess))/(MAXCORES - 1));
+    double execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
+    printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
     
-    R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
-    optimal_core = (int)ceil(average(execution_time) / R);
+    // here!
+    R = MAX((average(e_gpu_infer)), execution_time_wo_waiting / MAXCORES -1); 
+    // R = MAX((average(e_gpu_infer)), execution_time_wo_waiting / MAXCORES -1) * 1.1;     
+    
+    optimal_core = (int)ceil(execution_time_wo_waiting / R);
     if (optimal_core > MAXCORES -1) optimal_core = MAXCORES -1;
 
     printf("\n\nEXP :: GPU-Accel-Reverse with %d threads with %d gpu-layer [%.2lf]\n", optimal_core, gLayer, R);
