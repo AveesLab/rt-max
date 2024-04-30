@@ -15,7 +15,7 @@ args = parser.parse_args()
 if args.rlayer is not None and args.glayer is not None:
     file_path = f"./measure/cpu-reclaiming/densenet201/{args.glayer}glayer/cpu-reclaiming_{args.rlayer}rlayer.csv"
 elif args.glayer is not None:
-    file_path = f"./measure/gpu-accel-reverse/densenet201/gpu-accel-reverse_013glayer.csv"
+    file_path = f"./measure/gpu-accel_gpu/densenet201/gpu-accel_170glayer.csv"
 else:
     raise ValueError("The 'glayer' argument must be provided.")
 
@@ -40,10 +40,10 @@ for i, core_id in enumerate(core_ids):
     for j in range(9, 15):
         core_data = df[df['core_id'] == core_id].iloc[j]
         draw_process(ax, i, core_data['start_preprocess'], core_data['end_preprocess'], 'Preprocess', colors['Preprocess'])
-        draw_process(ax, i, core_data['start_cpu_infer'], core_data['end_cpu_infer'], 'CPU Inference', colors['CPU Inference'])        
+        draw_process(ax, i, core_data['start_gpu_infer'], core_data['end_gpu_infer'], 'GPU Inference', colors['GPU Inference'])        
+        draw_process(ax, i, core_data['start_cpu_infer'], core_data['end_infer'], 'CPU Inference', colors['CPU Inference'])        
         if args.rlayer is not None:  # Draw this process only if rlayer is provided
             draw_process(ax, i, core_data['start_reclaim_infer'], core_data['end_reclaim_infer'], 'Reclaim Inference', colors['Reclaim Inference'])
-        draw_process(ax, i, core_data['start_gpu_infer'], core_data['end_infer'], 'GPU Inference', colors['GPU Inference'])
         draw_process(ax, i, core_data['start_postprocess'], core_data['end_postprocess'], 'Postprocess', colors['Postprocess'])
 
 # Formatting the plot

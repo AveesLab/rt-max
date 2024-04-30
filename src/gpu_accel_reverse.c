@@ -539,7 +539,7 @@ static void threadFunc(thread_data_t data)
             if (remaining_time > 0) usleep(remaining_time * 1000);
         }
 
-            printf("%.2f   %.2f   %.2f\n", execution_time[count], R*optimal_core, (get_time_in_ms() - start_preprocess[count]));
+            // printf("%.2f   %.2f   %.2f\n", execution_time[count], R*optimal_core, (get_time_in_ms() - start_preprocess[count]));
 
         // free memory
         free_image(im);
@@ -574,47 +574,47 @@ void gpu_accel_reverse(char *datacfg, char *cfgfile, char *weightfile, char *fil
 
 #ifdef MEASURE
 
-    // TEST 1
-    printf("\n\nSequential :: GPU-Accel-Reverse with %d thread with %d gpu-layer\n", 1, gLayer);
-    optimal_core = 1;
-    pthread_barrier_init(&barrier, NULL, optimal_core);
-    R = 0.0;
-    sleep_time = 0.0;
-    max_gpu_infer_time = 0.0;
-    max_execution_time = 0.0;
-    avg_gpu_infer_time = 0.0;
-    avg_execution_time = 0.0;                   
-    for (i = 0; i < optimal_core; i++) {
-        data[i].datacfg = datacfg;
-        data[i].cfgfile = cfgfile;
-        data[i].weightfile = weightfile;
-        data[i].filename = filename;
-        data[i].thresh = thresh;
-        data[i].hier_thresh = hier_thresh;
-        data[i].dont_show = dont_show;
-        data[i].ext_output = ext_output;
-        data[i].save_labels = save_labels;
-        data[i].outfile = outfile;
-        data[i].letter_box = letter_box;
-        data[i].benchmark_layers = benchmark_layers;
-        data[i].thread_id = i + 1;
-        data[i].num_thread = optimal_core;
-        data[i].isTest = true;
-        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-        if (rc) {
-            printf("Error: Unable to create thread, %d\n", rc);
-            exit(-1);
-        }
-    }
+    // // TEST 1
+    // printf("\n\nSequential :: GPU-Accel-Reverse with %d thread with %d gpu-layer\n", 1, gLayer);
+    // optimal_core = 1;
+    // pthread_barrier_init(&barrier, NULL, optimal_core);
+    // R = 0.0;
+    // sleep_time = 0.0;
+    // max_gpu_infer_time = 0.0;
+    // max_execution_time = 0.0;
+    // avg_gpu_infer_time = 0.0;
+    // avg_execution_time = 0.0;                   
+    // for (i = 0; i < optimal_core; i++) {
+    //     data[i].datacfg = datacfg;
+    //     data[i].cfgfile = cfgfile;
+    //     data[i].weightfile = weightfile;
+    //     data[i].filename = filename;
+    //     data[i].thresh = thresh;
+    //     data[i].hier_thresh = hier_thresh;
+    //     data[i].dont_show = dont_show;
+    //     data[i].ext_output = ext_output;
+    //     data[i].save_labels = save_labels;
+    //     data[i].outfile = outfile;
+    //     data[i].letter_box = letter_box;
+    //     data[i].benchmark_layers = benchmark_layers;
+    //     data[i].thread_id = i + 1;
+    //     data[i].num_thread = optimal_core;
+    //     data[i].isTest = true;
+    //     rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+    //     if (rc) {
+    //         printf("Error: Unable to create thread, %d\n", rc);
+    //         exit(-1);
+    //     }
+    // }
 
-    for (i = 0; i < optimal_core; i++) {
-        pthread_join(threads[i], NULL);
-        pthread_detach(threads[i]);
-    }
+    // for (i = 0; i < optimal_core; i++) {
+    //     pthread_join(threads[i], NULL);
+    //     pthread_detach(threads[i]);
+    // }
     
     // TEST 2
 
-    printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(execution_time)/optimal_core);
+    // printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(execution_time)/optimal_core);
     optimal_core = MAXCORES - 1;
 
     printf("\n\nFinding Optimal Core :: GPU-Accel-Reverse with %d threads with %d gpu-layer [%.2lf]\n", optimal_core, gLayer, R);

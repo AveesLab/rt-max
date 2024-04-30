@@ -95,11 +95,13 @@ static float R;
 
 static double average(double arr[]){
     double sum;
+    int total_num_exp = num_exp * optimal_core;
+    int skip_num_exp =  10 * optimal_core;
     int i;
-    for(i = 3; i < num_exp; i++) {
+    for(i = skip_num_exp ; i < total_num_exp - skip_num_exp; i++) {
         sum += arr[i];
     }
-    return sum / (num_exp-3);
+    return sum / (total_num_exp-(skip_num_exp) * 2);
 }
 
 #ifdef MEASURE
@@ -182,7 +184,7 @@ static int write_result(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = optimal_core * STARTIDX; // Delete some ROWs
+    int startIdx = optimal_core * 0; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -331,26 +333,34 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
 
-        if (!data.isTest) {
-            if (i == START_SYNC) {
+        if(!data.isTest) {
+            if(i < 10) {
                 pthread_barrier_wait(&barrier);
                 usleep(R * (data.thread_id - 1) * 1000);
-
-                // Busy wait for the remaining time
-                // remaining_time = R * (data.thread_id - 1);
-                // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-                
-                // if (remaining_time > 0) {
-                //     wait_start = get_time_in_ms();
-                //     wait_end;
-                //     do {
-                //         wait_end = get_time_in_ms();
-                //         work_time = wait_end - wait_start;
-                //     } while(work_time < remaining_time);
-                // }
-
             }
         }
+        // else pthread_barrier_wait(&barrier);
+
+        // if (!data.isTest) {
+        //     if (i == START_SYNC) {
+        //         pthread_barrier_wait(&barrier);
+        //         usleep(R * (data.thread_id - 1) * 1000);
+
+        //         // Busy wait for the remaining time
+        //         // remaining_time = R * (data.thread_id - 1);
+        //         // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+                
+        //         // if (remaining_time > 0) {
+        //         //     wait_start = get_time_in_ms();
+        //         //     wait_end;
+        //         //     do {
+        //         //         wait_end = get_time_in_ms();
+        //         //         work_time = wait_end - wait_start;
+        //         //     } while(work_time < remaining_time);
+        //         // }
+
+        //     }
+        // }
 
         // __Preprocess__
 #ifdef MEASURE
@@ -388,21 +398,21 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // Busy wait for the remaining time
-        if (!data.isTest) {
-            remaining_time = max_preprocess_time - (get_time_in_ms() - start_preprocess[count]);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
+        // if (!data.isTest) {
+        //     remaining_time = max_preprocess_time - (get_time_in_ms() - start_preprocess[count]);
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
 
-            // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+        //     // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
             
-            // if (remaining_time > 0) {
-            //     wait_start = get_time_in_ms();
-            //     wait_end;
-            //     do {
-            //         wait_end = get_time_in_ms();
-            //         work_time = wait_end - wait_start;
-            //     } while(work_time < remaining_time);
-            // }
-        }
+        //     // if (remaining_time > 0) {
+        //     //     wait_start = get_time_in_ms();
+        //     //     wait_end;
+        //     //     do {
+        //     //         wait_end = get_time_in_ms();
+        //     //         work_time = wait_end - wait_start;
+        //     //     } while(work_time < remaining_time);
+        //     // }
+        // }
         e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         // __Inference__
@@ -479,21 +489,21 @@ static void threadFunc(thread_data_t data)
 #endif
 
         // Busy wait for the remaining time
-        if (!data.isTest) {
-            remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time !!
-            if (remaining_time > 0) usleep(remaining_time * 1000);
+        // if (!data.isTest) {
+        //     remaining_time = max_gpu_infer_time - (get_time_in_ms() - start_gpu_waiting[count]); // [+] Waiting_GPU Time !!
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
 
-            // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+        //     // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
             
-            // if (remaining_time > 0) {
-            //     wait_start = get_time_in_ms();
-            //     wait_end;
-            //     do {
-            //         wait_end = get_time_in_ms();
-            //         work_time = wait_end - wait_start;
-            //     } while(work_time < remaining_time);
-            // }
-        }
+        //     // if (remaining_time > 0) {
+        //     //     wait_start = get_time_in_ms();
+        //     //     wait_end;
+        //     //     do {
+        //     //         wait_end = get_time_in_ms();
+        //     //         work_time = wait_end - wait_start;
+        //     //     } while(work_time < remaining_time);
+        //     // }
+        // }
 
         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
 
@@ -583,22 +593,27 @@ static void threadFunc(thread_data_t data)
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #endif
 
-        // Busy wait for the remaining time
         if (!data.isTest) {
-            remaining_time = R * optimal_core - (get_time_in_ms() - start_preprocess[count]);
+            remaining_time = R *optimal_core - (get_time_in_ms() - start_preprocess[count]);
             if (remaining_time > 0) usleep(remaining_time * 1000);
-
-            // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-            
-            // if (remaining_time > 0) {
-            //     wait_start = get_time_in_ms();
-            //     wait_end;
-            //     do {
-            //         wait_end = get_time_in_ms();
-            //         work_time = wait_end - wait_start;
-            //     } while(work_time < remaining_time);
-            // }
         }
+
+        // // Busy wait for the remaining time
+        // if (!data.isTest) {
+        //     remaining_time = R * optimal_core - (get_time_in_ms() - start_preprocess[count]);
+        //     if (remaining_time > 0) usleep(remaining_time * 1000);
+
+        //     // wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
+            
+        //     // if (remaining_time > 0) {
+        //     //     wait_start = get_time_in_ms();
+        //     //     wait_end;
+        //     //     do {
+        //     //         wait_end = get_time_in_ms();
+        //     //         work_time = wait_end - wait_start;
+        //     //     } while(work_time < remaining_time);
+        //     // }
+        // }
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
@@ -633,179 +648,54 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     thread_data_t data[MAXCORES - 1];
 #ifdef MEASURE
 
-        optimal_core = 11;
 
-        R = 0.0;
-        sleep_time = 0.0;
-        max_preprocess_time = 0.0;
-        max_gpu_infer_time = 0.0;
-        max_execution_time = 0.0;
-        avg_preprocess_time = 0.0;
-        avg_gpu_infer_time = 0.0;
-        avg_execution_time = 0.0;
+   // // TEST 1
+    // printf("\n\nSequential :: GPU-Accel-Reverse with %d thread with %d gpu-layer\n", 1, gLayer);
+    // optimal_core = 1;
+    // pthread_barrier_init(&barrier, NULL, optimal_core);
+    // R = 0.0;
+    // sleep_time = 0.0;
+    // max_gpu_infer_time = 0.0;
+    // max_execution_time = 0.0;
+    // avg_gpu_infer_time = 0.0;
+    // avg_execution_time = 0.0;                   
+    // for (i = 0; i < optimal_core; i++) {
+    //     data[i].datacfg = datacfg;
+    //     data[i].cfgfile = cfgfile;
+    //     data[i].weightfile = weightfile;
+    //     data[i].filename = filename;
+    //     data[i].thresh = thresh;
+    //     data[i].hier_thresh = hier_thresh;
+    //     data[i].dont_show = dont_show;
+    //     data[i].ext_output = ext_output;
+    //     data[i].save_labels = save_labels;
+    //     data[i].outfile = outfile;
+    //     data[i].letter_box = letter_box;
+    //     data[i].benchmark_layers = benchmark_layers;
+    //     data[i].thread_id = i + 1;
+    //     data[i].num_thread = optimal_core;
+    //     data[i].isTest = true;
+    //     rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+    //     if (rc) {
+    //         printf("Error: Unable to create thread, %d\n", rc);
+    //         exit(-1);
+    //     }
+    // }
 
-        printf("\n\nGPU-accelerated with Jitter Compensation (CS: \"GPU\")\n");
-        printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+    // for (i = 0; i < optimal_core; i++) {
+    //     pthread_join(threads[i], NULL);
+    //     pthread_detach(threads[i]);
+    // }
+    
+    // TEST 2
 
-        for (i = 0; i < optimal_core; i++) {
-            data[i].datacfg = datacfg;
-            data[i].cfgfile = cfgfile;
-            data[i].weightfile = weightfile;
-            data[i].filename = filename;
-            data[i].thresh = thresh;
-            data[i].hier_thresh = hier_thresh;
-            data[i].dont_show = dont_show;
-            data[i].ext_output = ext_output;
-            data[i].save_labels = save_labels;
-            data[i].outfile = outfile;
-            data[i].letter_box = letter_box;
-            data[i].benchmark_layers = benchmark_layers;
-            data[i].thread_id = i + 1;
-            data[i].num_thread = optimal_core;
-            data[i].isTest = true;
-            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-            if (rc) {
-                printf("Error: Unable to create thread, %d\n", rc);
-                exit(-1);
-            }
-        }
+    // printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(execution_time)/optimal_core);
+    optimal_core = MAXCORES - 1;
 
-        for (i = 0; i < optimal_core; i++) {
-            pthread_join(threads[i], NULL);
-        }
+    printf("\n\nFinding Optimal Core :: GPU-Accel-Reverse with %d threads with %d gpu-layer [%.2lf]\n", optimal_core, gLayer, R);
+    pthread_barrier_init(&barrier, NULL, optimal_core);
 
-        int startIdx = START_SYNC * optimal_core;
-        for (i = startIdx; i < optimal_core * num_exp; i++) {
-            max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
-            max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
-            max_execution_time = MAX(max_execution_time, (e_preprocess[i]+e_gpu_infer[i]+e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
-
-            avg_preprocess_time += e_preprocess[i];
-            avg_gpu_infer_time += e_gpu_infer[i];
-            avg_execution_time += (execution_time[i]-waiting_gpu[i]);
-        }
-
-        avg_preprocess_time = avg_preprocess_time / (optimal_core * num_exp - startIdx + 1);
-        avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
-        avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
-
-        double wcet_ratio = 1.07;
-        max_preprocess_time = avg_preprocess_time * wcet_ratio; // Pre
-        max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-        max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
-
-        // max_execution_time = max_preprocess_time + max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
-
-        printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-        printf("WCET ratio : %lf \n", wcet_ratio);
-        printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
-        printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
-
-        R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
-        sleep_time = R * optimal_core - max_execution_time;
-        if (sleep_time < 0) sleep_time = 0.0;
-        printf("R : %lf \n", R);
-        printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
-
-        printf("\n\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
-
-        pthread_barrier_init(&barrier, NULL, optimal_core);
-        for (i = 0; i < optimal_core; i++) {
-            data[i].datacfg = datacfg;
-            data[i].cfgfile = cfgfile;
-            data[i].weightfile = weightfile;
-            data[i].filename = filename;
-            data[i].thresh = thresh;
-            data[i].hier_thresh = hier_thresh;
-            data[i].dont_show = dont_show;
-            data[i].ext_output = ext_output;
-            data[i].save_labels = save_labels;
-            data[i].outfile = outfile;
-            data[i].letter_box = letter_box;
-            data[i].benchmark_layers = benchmark_layers;
-            data[i].thread_id = i + 1;
-            data[i].num_thread = optimal_core;
-            data[i].isTest = false;
-            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-            if (rc) {
-                printf("Error: Unable to create thread, %d\n", rc);
-                exit(-1);
-            }
-        }
-
-        for (i = 0; i < optimal_core; i++) {
-            pthread_join(threads[i], NULL);
-        }
-
-
-        startIdx = START_SYNC * optimal_core;
-        for (i = startIdx; i < optimal_core * num_exp; i++) {
-            max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
-            max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
-            max_execution_time = MAX(max_execution_time, (e_preprocess[i]+e_gpu_infer[i]+e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
-
-            avg_preprocess_time += e_preprocess[i];
-            avg_gpu_infer_time += e_gpu_infer[i];
-            avg_execution_time += (execution_time[i]-waiting_gpu[i]);
-        }
-
-        avg_preprocess_time = avg_preprocess_time / (optimal_core * num_exp - startIdx + 1);
-        avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
-        avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
-
-        wcet_ratio = 1.03;
-        max_preprocess_time = avg_preprocess_time * wcet_ratio; // Pre
-        max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
-        max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
-
-        // max_execution_time = max_preprocess_time + max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
-
-        printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
-        printf("WCET ratio : %lf \n", wcet_ratio);
-        printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
-        printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
-
-        R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
-        sleep_time = R * optimal_core - max_execution_time;
-        if (sleep_time < 0) sleep_time = 0.0;
-        optimal_core = ceil(max_execution_time / R);
-        printf("R : %lf \n", R);
-        printf("optimal_core : %d \n", optimal_core);
-        printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
-
-        printf("\n\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
-
-        pthread_barrier_init(&barrier, NULL, optimal_core);
-        for (i = 0; i < optimal_core; i++) {
-            data[i].datacfg = datacfg;
-            data[i].cfgfile = cfgfile;
-            data[i].weightfile = weightfile;
-            data[i].filename = filename;
-            data[i].thresh = thresh;
-            data[i].hier_thresh = hier_thresh;
-            data[i].dont_show = dont_show;
-            data[i].ext_output = ext_output;
-            data[i].save_labels = save_labels;
-            data[i].outfile = outfile;
-            data[i].letter_box = letter_box;
-            data[i].benchmark_layers = benchmark_layers;
-            data[i].thread_id = i + 1;
-            data[i].num_thread = optimal_core;
-            data[i].isTest = false;
-            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-            if (rc) {
-                printf("Error: Unable to create thread, %d\n", rc);
-                exit(-1);
-            }
-        }
-
-        for (i = 0; i < optimal_core; i++) {
-            pthread_join(threads[i], NULL);
-        }
-
-#else
-    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
-    for (i = 0; i < num_thread; i++) {
+    for (i = 0; i < optimal_core; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
         data[i].weightfile = weightfile;
@@ -819,6 +709,8 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
+        data[i].num_thread = optimal_core;
+        data[i].isTest = true;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
@@ -826,9 +718,247 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         }
     }
 
-    for (i = 0; i < num_thread; i++) {
+    for (i = 0; i < optimal_core; i++) {
         pthread_join(threads[i], NULL);
     }
+
+    // EXP 1
+    printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess))/(MAXCORES - 1));
+    
+    R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+    optimal_core = (int)ceil(average(execution_time) / R);
+    if (optimal_core > MAXCORES -1) optimal_core = MAXCORES -1;
+
+    printf("\n\nEXP :: GPU-Accel-Reverse with %d threads with %d gpu-layer [%.2lf]\n", optimal_core, gLayer, R);
+    pthread_barrier_init(&barrier, NULL, optimal_core);
+
+    for (i = 0; i < optimal_core; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].num_thread = optimal_core;
+        data[i].isTest = false;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < optimal_core; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+
+
+// ===============BEFORE===============
+//         optimal_core = 11;
+
+//         R = 0.0;
+//         sleep_time = 0.0;
+//         max_preprocess_time = 0.0;
+//         max_gpu_infer_time = 0.0;
+//         max_execution_time = 0.0;
+//         avg_preprocess_time = 0.0;
+//         avg_gpu_infer_time = 0.0;
+//         avg_execution_time = 0.0;
+
+//         printf("\n\nGPU-accelerated with Jitter Compensation (CS: \"GPU\")\n");
+//         printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+
+//         for (i = 0; i < optimal_core; i++) {
+//             data[i].datacfg = datacfg;
+//             data[i].cfgfile = cfgfile;
+//             data[i].weightfile = weightfile;
+//             data[i].filename = filename;
+//             data[i].thresh = thresh;
+//             data[i].hier_thresh = hier_thresh;
+//             data[i].dont_show = dont_show;
+//             data[i].ext_output = ext_output;
+//             data[i].save_labels = save_labels;
+//             data[i].outfile = outfile;
+//             data[i].letter_box = letter_box;
+//             data[i].benchmark_layers = benchmark_layers;
+//             data[i].thread_id = i + 1;
+//             data[i].num_thread = optimal_core;
+//             data[i].isTest = true;
+//             rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+//             if (rc) {
+//                 printf("Error: Unable to create thread, %d\n", rc);
+//                 exit(-1);
+//             }
+//         }
+
+//         for (i = 0; i < optimal_core; i++) {
+//             pthread_join(threads[i], NULL);
+//         }
+
+//         int startIdx = START_SYNC * optimal_core;
+//         for (i = startIdx; i < optimal_core * num_exp; i++) {
+//             max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
+//             max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
+//             max_execution_time = MAX(max_execution_time, (e_preprocess[i]+e_gpu_infer[i]+e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
+
+//             avg_preprocess_time += e_preprocess[i];
+//             avg_gpu_infer_time += e_gpu_infer[i];
+//             avg_execution_time += (execution_time[i]-waiting_gpu[i]);
+//         }
+
+//         avg_preprocess_time = avg_preprocess_time / (optimal_core * num_exp - startIdx + 1);
+//         avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
+//         avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
+
+//         double wcet_ratio = 1.07;
+//         max_preprocess_time = avg_preprocess_time * wcet_ratio; // Pre
+//         max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
+//         max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
+
+//         max_execution_time = max_preprocess_time + max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
+
+//         printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
+//         printf("WCET ratio : %lf \n", wcet_ratio);
+//         printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
+//         printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
+
+//         R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
+//         sleep_time = R * optimal_core - max_execution_time;
+//         if (sleep_time < 0) sleep_time = 0.0;
+//         printf("R : %lf \n", R);
+//         printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
+
+//         printf("\n\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+
+//         pthread_barrier_init(&barrier, NULL, optimal_core);
+//         for (i = 0; i < optimal_core; i++) {
+//             data[i].datacfg = datacfg;
+//             data[i].cfgfile = cfgfile;
+//             data[i].weightfile = weightfile;
+//             data[i].filename = filename;
+//             data[i].thresh = thresh;
+//             data[i].hier_thresh = hier_thresh;
+//             data[i].dont_show = dont_show;
+//             data[i].ext_output = ext_output;
+//             data[i].save_labels = save_labels;
+//             data[i].outfile = outfile;
+//             data[i].letter_box = letter_box;
+//             data[i].benchmark_layers = benchmark_layers;
+//             data[i].thread_id = i + 1;
+//             data[i].num_thread = optimal_core;
+//             data[i].isTest = false;
+//             rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+//             if (rc) {
+//                 printf("Error: Unable to create thread, %d\n", rc);
+//                 exit(-1);
+//             }
+//         }
+
+//         for (i = 0; i < optimal_core; i++) {
+//             pthread_join(threads[i], NULL);
+//         }
+
+
+//         startIdx = START_SYNC * optimal_core;
+//         for (i = startIdx; i < optimal_core * num_exp; i++) {
+//             max_preprocess_time = MAX(max_preprocess_time, e_preprocess[i]); // Pre
+//             max_gpu_infer_time = MAX(max_gpu_infer_time, e_gpu_infer[i]); // GPU_infer
+//             max_execution_time = MAX(max_execution_time, (e_preprocess[i]+e_gpu_infer[i]+e_cpu_infer[i]+e_postprocess[i])); // CPU_infer + Post
+
+//             avg_preprocess_time += e_preprocess[i];
+//             avg_gpu_infer_time += e_gpu_infer[i];
+//             avg_execution_time += (execution_time[i]-waiting_gpu[i]);
+//         }
+
+//         avg_preprocess_time = avg_preprocess_time / (optimal_core * num_exp - startIdx + 1);
+//         avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
+//         avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
+
+//         wcet_ratio = 1.03;
+//         max_preprocess_time = avg_preprocess_time * wcet_ratio; // Pre
+//         max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
+//         max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
+
+//         // max_execution_time = max_preprocess_time + max_gpu_infer_time + max_execution_time; // Pre + GPU_infer + CPU_infer + Post
+
+//         printf("\navg preprocess time (max) : %0.2lf (%0.2lf) \n", avg_preprocess_time, max_preprocess_time);
+//         printf("WCET ratio : %lf \n", wcet_ratio);
+//         printf("avg gpu inference time (max) : %0.2lf (%0.2lf) \n", avg_gpu_infer_time, max_gpu_infer_time);
+//         printf("avg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
+
+//         R = MAX(max_gpu_infer_time, max_execution_time / optimal_core);
+//         sleep_time = R * optimal_core - max_execution_time;
+//         if (sleep_time < 0) sleep_time = 0.0;
+//         optimal_core = ceil(max_execution_time / R);
+//         printf("R : %lf \n", R);
+//         printf("optimal_core : %d \n", optimal_core);
+//         printf("sleep_time (R * n) : %lf (%lf) \n", sleep_time , R * optimal_core);
+
+//         printf("\n\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+
+//         pthread_barrier_init(&barrier, NULL, optimal_core);
+//         for (i = 0; i < optimal_core; i++) {
+//             data[i].datacfg = datacfg;
+//             data[i].cfgfile = cfgfile;
+//             data[i].weightfile = weightfile;
+//             data[i].filename = filename;
+//             data[i].thresh = thresh;
+//             data[i].hier_thresh = hier_thresh;
+//             data[i].dont_show = dont_show;
+//             data[i].ext_output = ext_output;
+//             data[i].save_labels = save_labels;
+//             data[i].outfile = outfile;
+//             data[i].letter_box = letter_box;
+//             data[i].benchmark_layers = benchmark_layers;
+//             data[i].thread_id = i + 1;
+//             data[i].num_thread = optimal_core;
+//             data[i].isTest = false;
+//             rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+//             if (rc) {
+//                 printf("Error: Unable to create thread, %d\n", rc);
+//                 exit(-1);
+//             }
+//         }
+
+//         for (i = 0; i < optimal_core; i++) {
+//             pthread_join(threads[i], NULL);
+//         }
+
+// #else
+//     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+//     for (i = 0; i < num_thread; i++) {
+//         data[i].datacfg = datacfg;
+//         data[i].cfgfile = cfgfile;
+//         data[i].weightfile = weightfile;
+//         data[i].filename = filename;
+//         data[i].thresh = thresh;
+//         data[i].hier_thresh = hier_thresh;
+//         data[i].dont_show = dont_show;
+//         data[i].ext_output = ext_output;
+//         data[i].save_labels = save_labels;
+//         data[i].outfile = outfile;
+//         data[i].letter_box = letter_box;
+//         data[i].benchmark_layers = benchmark_layers;
+//         data[i].thread_id = i + 1;
+//         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+//         if (rc) {
+//             printf("Error: Unable to create thread, %d\n", rc);
+//             exit(-1);
+//         }
+//     }
+
+//     for (i = 0; i < num_thread; i++) {
+//         pthread_join(threads[i], NULL);
+//     }
+// ===============BEFORE===============
 #endif
 
 #ifdef MEASURE
