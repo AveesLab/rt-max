@@ -164,7 +164,7 @@ static int write_result(char *file_path)
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
-        printf("%d == %.0lf %.0lf\n", i, core_id_list[i], sum_measure_data[i][0]);
+        // printf("%d == %.0lf %.0lf\n", i, core_id_list[i], sum_measure_data[i][0]);
         sum_measure_data[i][1] = start_preprocess[i];     
         sum_measure_data[i][2] = e_preprocess[i];       
         sum_measure_data[i][3] = end_preprocess[i];
@@ -598,7 +598,7 @@ static void threadFunc(thread_data_t data)
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
         core_id_list[count] = (double)sched_getcpu();
-        printf("%d -- %.0f\n", count, core_id_list[count]);
+        // printf("%d -- %.0f\n", count, core_id_list[count]);
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
 #else
         execution_time[i] = get_time_in_ms() - time;
