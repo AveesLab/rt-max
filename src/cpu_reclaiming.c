@@ -24,8 +24,11 @@
 #endif
 #endif
 pthread_barrier_t barrier;
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
-// static int coreIDOrder[MAXCORES] = {1,2,3,4,5,6,7,8,9,10,11};
+// static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
+static network net_list[MAXCORES];
+static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
+
 int openblas_thread;
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
@@ -48,6 +51,7 @@ typedef struct thread_data_t{
     int thread_id;
     int num_thread;
     bool isTest;
+    bool isSet;
 } thread_data_t;
 
 #ifdef MEASURE
@@ -299,7 +303,14 @@ static void threadFunc(thread_data_t data)
     int device = 1; // Choose CPU or GPU
     extern gpu_yolo;
 
-    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
+    pthread_mutex_lock(&mutex_init);
+    // double start_1 = get_time_in_ms();
+    if (!data.isSet) net_list[data.thread_id] = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
+    network net = net_list[data.thread_id];
+    // network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device);
+    // printf("parse_network_cfg_custom : %.3lf ms\n", get_time_in_ms() - start_1);
+    pthread_mutex_unlock(&mutex_init);
+
     layer l = net.layers[net.n - 1];
 
     if (data.weightfile) {
@@ -700,6 +711,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         data[i].thread_id = i + 1;
         data[i].num_thread = optimal_core;
         data[i].isTest = true;
+        data[i].isSet = false;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
@@ -739,6 +751,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         data[i].thread_id = i + 1;
         data[i].num_thread = optimal_core;
         data[i].isTest = false;
+        data[i].isSet = true;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
