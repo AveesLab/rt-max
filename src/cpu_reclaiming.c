@@ -471,7 +471,7 @@ static void threadFunc(thread_data_t data)
         start_reclaim_infer[count] = get_time_in_ms();
 #endif
 
-        openblas_thread = (MAXCORES - 1) - num_thread + 1;
+        openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
         openblas_set_num_threads(openblas_thread);
         CPU_ZERO(&cpuset);
         CPU_SET(coreIDOrder[data.thread_id], &cpuset);
