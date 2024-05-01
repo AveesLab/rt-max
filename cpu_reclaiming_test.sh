@@ -21,7 +21,7 @@ done
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
-    layer_start=40
+    layer_start=0
     layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
@@ -66,6 +66,6 @@ fi
 # GPU-accelerated with optimal_core
 for glayer in $(seq $layer_start $layer_num); do
     for ((rlayer = glayer + 1; rlayer < $layer_num; rlayer++)); do
-        ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -glayer $glayer -rlayer $rlayer -num_exp 30
+        ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
     done
 done
