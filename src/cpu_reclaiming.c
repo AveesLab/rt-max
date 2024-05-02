@@ -446,21 +446,25 @@ static void threadFunc(thread_data_t data)
 
     pthread_mutex_lock(&mutex_init);
     // double start_1 = get_time_in_ms();
-    if (!data.isSet) net_list[data.thread_id] = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
+    if (!data.isSet) {
+        network net_init = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
+
+        if (data.weightfile) {
+            load_weights(&net_init, data.weightfile);
+        }
+        if (net_init.letter_box) data.letter_box = 1;
+        net_init.benchmark_layers = data.benchmark_layers;
+        fuse_conv_batchnorm(net_init);
+        calculate_binary_weights(net_init);
+
+        net_list[data.thread_id] = net_init;
+    }
     network net = net_list[data.thread_id];
     // network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device);
     // printf("parse_network_cfg_custom : %.3lf ms\n", get_time_in_ms() - start_1);
     pthread_mutex_unlock(&mutex_init);
 
     layer l = net.layers[net.n - 1];
-
-    if (data.weightfile) {
-        load_weights(&net, data.weightfile);
-    }
-    if (net.letter_box) data.letter_box = 1;
-    net.benchmark_layers = data.benchmark_layers;
-    fuse_conv_batchnorm(net);
-    calculate_binary_weights(net);
 
     extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
@@ -743,10 +747,7 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+                // else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
 
             }
         }
