@@ -42,7 +42,7 @@ y_ticks = np.arange(len(core_ids))
 
 # Draw each process for each core
 for i, core_id in enumerate(core_ids):
-    for j in range(9, 15):
+    for j in range(15, 20):
         core_data = df[df['core_id'] == core_id].iloc[j]
         draw_process(ax, i, core_data['start_preprocess'], core_data['end_preprocess'], 'Preprocess', colors['Preprocess'])
         draw_process(ax, i, core_data['start_gpu_infer'], core_data['end_gpu_infer'], 'GPU Inference', colors['GPU Inference'])        
