@@ -24,7 +24,7 @@ calculate_average() {
     }
     END {
         if (count > 0) {
-            printf "%f", sum / count  # 평균을 출력하지 않고 printf를 통해 형식을 지정하여 반환
+            printf "%d", sum / count  # 평균을 출력하지 않고 printf를 통해 형식을 지정하여 반환
         } else {
             print "NaN"  # 데이터가 없는 경우 NaN 반환
         }
@@ -54,7 +54,7 @@ done
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
-    layer_start=1
+    layer_start=0
     layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
@@ -109,8 +109,8 @@ optimal_core="NULL"
 
 # GPU-accelerated & CPU-reclaiming with optimal_core
 for glayer in $(seq $layer_start $layer_num); do
+    optimal_core="NULL"
     for ((rlayer = glayer + 1; rlayer <= $layer_num; rlayer++)); do
-        echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
         if [[ "$optimal_core" == "NULL" ]]; then
             formatted_glayer=$(printf "%03d" $glayer)
             file_path="measure/gpu-accel_gpu/${model}/gpu-accel_${formatted_glayer}glayer.csv"
@@ -121,14 +121,15 @@ for glayer in $(seq $layer_start $layer_num); do
                 echo "--> No optimal_core: $optimal_core [$file_path]"
             fi
         fi
+        echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
         if [[ "$optimal_core" == "NULL" ]]; then
             sleep 3s
-            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
+            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 60
             sleep 3s
         else
             if (( optimal_core < 11 )); then
                 sleep 3s
-                ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
+                ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 60 -opt_core $optimal_core
                 sleep 3s
             else
                 break
