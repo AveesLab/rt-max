@@ -85,7 +85,7 @@ done
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
-    layer_start=180
+    layer_start=0
     layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
