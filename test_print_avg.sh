@@ -25,7 +25,7 @@ calculate_average() {
     }
     END {
         if (count > 0) {
-            printf "%f", sum / count  # 평균을 출력하지 않고 printf를 통해 형식을 지정하여 반환
+            printf "%d", sum / count  # 평균을 출력하지 않고 printf를 통해 형식을 지정하여 반환
         } else {
             print "NaN"  # 데이터가 없는 경우 NaN 반환
         }
@@ -33,7 +33,7 @@ calculate_average() {
 }
 
 # 함수 사용 예
-file_path="measure/gpu-accel_gpu/densenet201/gpu-accel_200glayer.csv"
+file_path="./measure/gpu-accel_gpu/densenet201/gpu-accel_000glayer.csv"
 average=$(calculate_average "$file_path" 28)
 
 # 반환된 평균값 출력

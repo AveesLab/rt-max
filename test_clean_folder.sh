@@ -38,3 +38,4 @@ fi
 rm -rf "$folder_path"*
 
 echo "All files in '$folder_path' have been deleted."
+echo "========================================================================="
