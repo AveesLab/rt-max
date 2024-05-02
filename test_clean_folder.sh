@@ -25,6 +25,7 @@ fi
 
 # 폴더 경로 설정
 folder_path="measure/gpu-accel_gpu/${model}/"
+folder_path2="measure/cpu-reclaiming/${model}/"
 
 # 폴더 존재 여부 확인
 if [ ! -d "$folder_path" ]; then
@@ -38,4 +39,17 @@ fi
 rm -rf "$folder_path"*
 
 echo "All files in '$folder_path' have been deleted."
+
+# 새로운 폴더 경로의 존재 여부 확인
+if [ ! -d "$folder_path2" ]; then
+    echo "Error: Directory '$folder_path2' does not exist."
+    exit 1
+fi
+
+# 하위 폴더 안의 파일만 삭제
+for dir in "$folder_path2"*/; do
+    find "$dir" -type f -exec rm -f {} +
+done
+
+echo "All files within subfolders of '$folder_path2' have been deleted."
 echo "========================================================================="
