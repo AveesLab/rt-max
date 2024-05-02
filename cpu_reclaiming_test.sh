@@ -116,9 +116,9 @@ for glayer in $(seq $layer_start $layer_num); do
             file_path="measure/gpu-accel_gpu/${model}/gpu-accel_${formatted_glayer}glayer.csv"
             if [[ -f "$file_path" ]]; then
                 optimal_core=$(calculate_average "$file_path" 28)
-                echo "--> optimal_core: $optimal_core"
-            else
-                echo "--> No optimal_core: $optimal_core [$file_path]"
+            #     echo "--> optimal_core: $optimal_core"
+            # else
+            #     echo "--> No optimal_core: $optimal_core [$file_path]"
             fi
         fi
         echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
