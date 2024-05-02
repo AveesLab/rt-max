@@ -24,6 +24,7 @@
 #endif
 #endif
 pthread_barrier_t barrier;
+pthread_barrier_t barrier_reclaiming;
 // static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
 static network net_list[MAXCORES];
@@ -499,8 +500,14 @@ static void threadFunc(thread_data_t data)
     for (i = 0; i < num_exp; i++) {
         if(!data.isTest) {
             if(i < 10) {
-                pthread_barrier_wait(&barrier);
-                usleep(R * (data.thread_id - 1) * 1000);
+            	if (data.isReclaiming){
+		        pthread_barrier_wait(&barrier_reclaiming);
+		        usleep(R * (data.thread_id - 1) * 1000);
+            	}
+            	else {
+		        pthread_barrier_wait(&barrier);
+		        usleep(R * (data.thread_id - 1) * 1000);
+            	}
             }
         }
 #ifdef MEASURE
@@ -1115,7 +1122,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         // =====================RECLAMING=====================
         if (visible_exp) printf("\n::EXP-4:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
 
-        pthread_barrier_init(&barrier, NULL, optimal_core);
+        pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;
@@ -1161,7 +1168,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-5:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
-        pthread_barrier_init(&barrier, NULL, optimal_core);
+        pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
 
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
@@ -1180,6 +1187,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             data[i].num_thread = optimal_core;
             data[i].isTest = false;
             data[i].isSet = true;
+            data[i].isReclaiming = true;
             rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
             if (rc) {
                 printf("Error: Unable to create thread, %d\n", rc);
