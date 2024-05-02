@@ -1164,7 +1164,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
         // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > MAXCORES -1) optimal_core = MAXCORES -1;
+        if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-5:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
@@ -1227,6 +1227,9 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
     }
 
+    pthread_barrier_destroy(&barrier);
+    pthread_barrier_destroy(&barrier_reclaiming);
+    
     // pthread_mutex_destroy(&mutex);
     // pthread_cond_destroy(&cond);
 
