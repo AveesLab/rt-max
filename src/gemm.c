@@ -127,10 +127,10 @@ void gemm (int TA ,int TB ,int M ,int N ,int K ,float ALPHA ,
             BLIS_NO_TRANSPOSE, BLIS_NO_TRANSPOSE,
             M, N, K,
             &ALPHA,
-            A, 1, M,  // A 행렬: 데이터, 행 간격, 열 간격
-            B, 1, K,  // B 행렬: 데이터, 행 간격, 열 간격
+            A, lda, 1,  // A 행렬: 데이터, 열 간격, 행 간격 수정
+            B, ldb, 1,  // B 행렬: 데이터, 열 간격, 행 간격 수정
             &BETA,
-            C, 1, M   // C 행렬: 데이터, 행 간격, 열 간격
+            C, ldc, 1   // C 행렬: 데이터, 열 간격, 행 간격 수정
         );
     }
 #else  
