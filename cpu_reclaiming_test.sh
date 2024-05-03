@@ -87,38 +87,47 @@ done
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
     layer_start=0
-    layer_num=210
+    layer_end=306
+    layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
     layer_start=0
+    layer_end=206
     layer_num=206
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
     layer_start=0
+    layer_end=136
     layer_num=136
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
     layer_start=0
+    layer_end=81
     layer_num=81
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
     layer_start=0
+    layer_end=50
     layer_num=50
 elif [ "$model" == "yolov7" ]; then
     data_file="coco"
     layer_start=0
+    layer_end=143
     layer_num=143
 elif [ "$model" == "yolov7-tiny" ]; then
     data_file="coco"
     layer_start=0
+    layer_end=99
     layer_num=99
 elif [ "$model" == "yolov4" ]; then
     data_file="coco"
     layer_start=0
+    layer_end=162
     layer_num=162
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
     layer_start=0
+    layer_end=38
     layer_num=38
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
@@ -142,7 +151,7 @@ gpu_infer=0.0
 recaliming_infer=0.0
 
 # GPU-accelerated & CPU-reclaiming with optimal_core
-for glayer in $(seq $layer_start $layer_num); do
+for glayer in $(seq $layer_start $layer_end); do
     optimal_core="NULL"
     for ((rlayer = glayer + 1; rlayer <= $layer_num; rlayer++)); do
         if [[ "$optimal_core" == "NULL" ]]; then
