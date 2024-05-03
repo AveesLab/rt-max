@@ -87,7 +87,7 @@ done
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
     layer_start=0
-    layer_num=306
+    layer_num=210
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
     layer_start=0
