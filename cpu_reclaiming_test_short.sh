@@ -157,7 +157,7 @@ for glayer in $(seq $layer_start $layer_num); do
         if [[ "$optimal_core" == "NULL" ]]; then
             sleep 1s
             echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 60
+            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
             sleep 1s
         else
             if (( optimal_core < 11 )); then
@@ -169,7 +169,7 @@ for glayer in $(seq $layer_start $layer_num); do
 		if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
 			sleep 1s
 			echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 60 -opt_core $optimal_core
+			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
 			sleep 1s
 		else
 			break
