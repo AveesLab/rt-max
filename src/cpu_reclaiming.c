@@ -23,6 +23,10 @@
 #include <sys/time.h>
 #endif
 #endif
+
+#define START_INDEX 10
+#define END_INDEX 2
+
 pthread_barrier_t barrier;
 pthread_barrier_t barrier_reclaiming;
 // static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
@@ -114,8 +118,8 @@ static int is_GPU_larger(double a, double b) {
 static double average(double arr[]){
     double sum;
     int total_num_exp = num_exp * optimal_core;
-    int skip_num_exp =  10 * optimal_core;
-    int end_num_exp =  2 * optimal_core;
+    int skip_num_exp =  START_INDEX * optimal_core;
+    int end_num_exp =  END_INDEX * optimal_core;
     int i;
     for(i = skip_num_exp ; i < total_num_exp - end_num_exp; i++) {
         sum += arr[i];
@@ -217,11 +221,12 @@ static int write_result_gpu(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = optimal_core * 0; // Delete some ROWs
-    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
+    int startIdx = optimal_core * START_INDEX; // Delete some ROWs
+    int endIdx = optimal_core * END_INDEX; // Delete some ROWs
+    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx-endIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
-    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
+    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-endIdx; i++) {
         for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
             new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
         }
@@ -244,7 +249,7 @@ static int write_result_gpu(char *file_path)
     double frame_rate = 0.0;
     double cycle_time = 0.0;
 
-    for(i = 0; i < num_exp * optimal_core - startIdx; i++)
+    for(i = 0; i < num_exp * optimal_core - startIdx - endIdx; i++)
     {
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
@@ -344,11 +349,12 @@ static int write_result_reclaiming(char *file_path)
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 0 * optimal_core; // Delete some ROWs
-    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
+    int startIdx = optimal_core * START_INDEX; // Delete some ROWs
+    int endIdx = optimal_core * END_INDEX; // Delete some ROWs
+    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx-endIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
-    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
+    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-endIdx; i++) {
         for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
             new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
         }
@@ -373,7 +379,7 @@ static int write_result_reclaiming(char *file_path)
     double frame_rate = 0.0;
     double cycle_time = 0.0;
 
-    for(i = 0; i < num_exp * optimal_core; i++)
+    for(i = 0; i < num_exp * optimal_core - startIdx-endIdx; i++)
     {
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
@@ -501,7 +507,7 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
         if(!data.isTest) {
-            if(i < 10) {
+            if(i < START_INDEX) {
             	if (data.isReclaiming){
 		        pthread_barrier_wait(&barrier_reclaiming);
 		        usleep(R * (data.thread_id - 1) * 1000);
@@ -975,7 +981,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
         model_name[strlen(cfgfile)-10] = '\0';
         
-        strcat(file_path, "gpu-accel_gpu/");
+        strcat(file_path, "gpu-accel/");
 
         strcat(file_path, model_name);
         strcat(file_path, "/");
