@@ -677,6 +677,7 @@ static void threadFunc(thread_data_t data)
         for(j = gLayer; j < rLayer; ++j){
             state.index = j;
             l = net.layers[j];
+            l.do_reclaiming = 1;
             if(l.delta && state.train && l.train){
                 scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
             }
@@ -728,6 +729,7 @@ static void threadFunc(thread_data_t data)
         for(j = start_layer_cpu; j < net.n; ++j){
             state.index = j;
             l = net.layers[j];
+            l.do_reclaiming = 0;
             if(l.delta && state.train && l.train){
                 scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
             }
