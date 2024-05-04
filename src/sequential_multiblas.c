@@ -272,6 +272,7 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
             for(layer_id = 0; layer_id < net.n; ++layer_id){
                 state.index = layer_id;
                 layer l = net.layers[layer_id];
+                l.do_reclaiming = 1;
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
@@ -327,9 +328,7 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+                // else printf("%s: %f\n",names[index], predictions[index]);
 
             }
         } // classifier model
