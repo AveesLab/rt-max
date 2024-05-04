@@ -33,7 +33,7 @@ static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 // static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
-
+static double start_time[MAXCORES] = {0,0,0,0,0,0,0,0,0,0,0,0};
 static int openblas_thread;
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
@@ -186,7 +186,7 @@ static int write_result_gpu(char *file_path)
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][28];
+    double sum_measure_data[num_exp * optimal_core][29];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -217,6 +217,7 @@ static int write_result_gpu(char *file_path)
         sum_measure_data[i][25] = 0.0;
         sum_measure_data[i][26] = 0.0;
         sum_measure_data[i][27] = 0.0;
+        sum_measure_data[i][28] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -233,7 +234,7 @@ static int write_result_gpu(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
             "start_infer", 
@@ -244,7 +245,7 @@ static int write_result_gpu(char *file_path)
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
             "cycle_time", "frame_rate",
-            "optimal_core");
+            "optimal_core", "R");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
@@ -260,15 +261,16 @@ static int write_result_gpu(char *file_path)
         new_sum_measure_data[i][25] = cycle_time;
         new_sum_measure_data[i][26] = frame_rate;
         new_sum_measure_data[i][27] = (double)optimal_core;
+        new_sum_measure_data[i][28] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f, %0.0f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
                 new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
                 new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], 
-                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27]);
+                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28]);
     }
     
     fclose(fp);
@@ -313,7 +315,7 @@ static int write_result_reclaiming(char *file_path)
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][28];
+    double sum_measure_data[num_exp * optimal_core][29];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -345,6 +347,7 @@ static int write_result_reclaiming(char *file_path)
         sum_measure_data[i][25] = 0.0;      
         sum_measure_data[i][26] = 0.0;
         sum_measure_data[i][27] = 0.0;
+        sum_measure_data[i][28] = 0.0;
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -361,7 +364,7 @@ static int write_result_reclaiming(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", 
@@ -374,7 +377,7 @@ static int write_result_reclaiming(char *file_path)
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
             "cycle_time", "frame_rate",
-            "optimal_core");
+            "optimal_core", "R");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
@@ -390,8 +393,9 @@ static int write_result_reclaiming(char *file_path)
         new_sum_measure_data[i][25] = cycle_time;
         new_sum_measure_data[i][26] = frame_rate;
         new_sum_measure_data[i][27] = (double)optimal_core;
+        new_sum_measure_data[i][28] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
                 new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
                 new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
@@ -400,7 +404,7 @@ static int write_result_reclaiming(char *file_path)
                 new_sum_measure_data[i][15], new_sum_measure_data[i][16], new_sum_measure_data[i][17], 
                 new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
                 new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23],
-                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27]);
+                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28]);
     }
     
     fclose(fp);
@@ -516,6 +520,12 @@ static void threadFunc(thread_data_t data)
 		        pthread_barrier_wait(&barrier);
 		        usleep(R * (data.thread_id - 1) * 1000);
             	}
+            	start_time[data.thread_id]=get_time_in_ms();
+            }
+            else{
+		start_time[data.thread_id] +=  R * optimal_core;
+		remaining_time = start_time[data.thread_id] - get_time_in_ms();
+		if (remaining_time > 0) usleep(remaining_time * 1000);
             }
         }
 #ifdef MEASURE
@@ -805,10 +815,12 @@ static void threadFunc(thread_data_t data)
         frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
         printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
 #endif
+        /*
         if (!data.isTest) {
             remaining_time = R *optimal_core - (get_time_in_ms() - start_preprocess[count]);
             if (remaining_time > 0) usleep(remaining_time * 1000);
         }
+        */
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
