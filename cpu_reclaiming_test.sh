@@ -180,16 +180,23 @@ for glayer in $(seq $layer_start $layer_end); do
             if (( optimal_core < 11 )); then
 		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
 		file_path_="measure/cpu-reclaiming/${model}/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
-		gpu_infer=$(calculate_average_float "$file_path_" 9)
-		recaliming_infer=$(calculate_average_float "$file_path_" 13)
-		#echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
-		if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
+		if [[ -f "$file_path_" ]]; then
+			gpu_infer=$(calculate_average_float "$file_path_" 9)
+			recaliming_infer=$(calculate_average_float "$file_path_" 13)
+			#echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
+			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
+				sleep 1s
+				echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
+				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
+				sleep 1s
+			else
+				break
+			fi
+		else
 			sleep 1s
 			echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
 			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
 			sleep 1s
-		else
-			break
 		fi
             else
                 break

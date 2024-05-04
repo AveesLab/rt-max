@@ -158,8 +158,8 @@ recaliming_infer=0.0
 
 # GPU-accelerated & CPU-reclaiming with optimal_core
 for glayer in $(seq $layer_start $layer_end); do
-    sleep 1s
     echo "glayer: $glayer"
+    sleep 1s
     ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 30
     sleep 1s
 done
