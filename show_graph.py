@@ -17,7 +17,7 @@ if args.rlayer is not None and args.glayer is not None:
     file_path = f"./measure/cpu-reclaiming/densenet201/{str(args.glayer).zfill(3)}glayer/cpu-reclaiming_{str(args.rlayer).zfill(3)}rlayer.csv"
 elif args.glayer is not None and args.rlayer is None:
     if args.reverse is None:
-        file_path = f"./measure/gpu-accel_gpu/densenet201/gpu-accel_{str(args.glayer).zfill(3)}glayer.csv"
+        file_path = f"./measure/gpu-accel/densenet201/gpu-accel_{str(args.glayer).zfill(3)}glayer.csv"
     else:
         file_path = f"./measure/gpu-accel-reverse/densenet201/gpu-accel-reverse_{str(args.glayer).zfill(3)}glayer.csv"
 else:
@@ -42,7 +42,7 @@ y_ticks = np.arange(len(core_ids))
 
 # Draw each process for each core
 for i, core_id in enumerate(core_ids):
-    for j in range(15, 20):
+    for j in range(10, 15):
         core_data = df[df['core_id'] == core_id].iloc[j]
         draw_process(ax, i, core_data['start_preprocess'], core_data['end_preprocess'], 'Preprocess', colors['Preprocess'])
         draw_process(ax, i, core_data['start_gpu_infer'], core_data['end_gpu_infer'], 'GPU Inference', colors['GPU Inference'])        
