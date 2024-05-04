@@ -64,6 +64,7 @@ calculate_average_float() {
 
 # 기본값 설정 (필요한 경우)
 model=""
+clean_mode=false  # 'clean' 모드를 위한 변수 추가
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -71,6 +72,9 @@ while [[ "$#" -gt 0 ]]; do
         -model)
             model="$2"
             shift
+            ;;
+        -clean)  # '-clean' 인자를 확인하는 케이스 추가
+            clean_mode=true
             ;;
         *)
             echo "Unknown parameter: $1"
@@ -80,8 +84,11 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-./test_clean_folder_gpu.sh -model ${model}
-./test_clean_folder_reclaiming.sh -model ${model}
+# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
+if [ "$clean_mode" = true ]; then
+    ./test_clean_folder_gpu.sh -model "${model}"
+    ./test_clean_folder_reclaiming.sh -model ${model}
+fi
 
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
