@@ -1938,8 +1938,8 @@ void run_detector(int argc, char **argv)
     isGPU = find_int_arg(argc, argv, "-isGPU", 0);
     r_time = find_int_arg(argc, argv, "-r_time", 1);
     num_process = find_int_arg(argc, argv, "-num_process", 1);
-    gLayer = find_int_arg(argc, argv, "-glayer", 1);
-    rLayer = find_int_arg(argc, argv, "-rlayer", 1);
+    gLayer = find_int_arg(argc, argv, "-glayer", 0);
+    rLayer = find_int_arg(argc, argv, "-rlayer", 0);
     opt_core = find_int_arg(argc, argv, "-opt_core", 0);
     int dont_show = find_arg(argc, argv, "-dont_show");
     int theoretical_exp = find_arg(argc, argv, "-theoretical_exp");
