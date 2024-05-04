@@ -87,8 +87,9 @@ done
 # '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
 if [ "$clean_mode" = true ]; then
     ./test_clean_folder_gpu.sh -model "${model}"
-    ./test_clean_folder_reclaiming.sh -model ${model}
 fi
+
+./test_clean_folder_reclaiming.sh -model ${model}
 
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
