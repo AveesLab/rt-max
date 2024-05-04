@@ -184,7 +184,7 @@ static int write_result_gpu(char *file_path)
             else tick++;
         }
     }
-    else printf("\nWrite output in %s\n", file_path); 
+    else printf("Write output in %s\n", file_path); 
 
     double sum_measure_data[num_exp * optimal_core][28];
     for(i = 0; i < num_exp * optimal_core; i++)
@@ -311,7 +311,7 @@ static int write_result_reclaiming(char *file_path)
             else tick++;
         }
     }
-    else printf("\nWrite output in %s\n", file_path); 
+    else printf("Write output in %s\n", file_path); 
 
     double sum_measure_data[num_exp * optimal_core][28];
     for(i = 0; i < num_exp * optimal_core; i++)

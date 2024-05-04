@@ -175,7 +175,7 @@ for glayer in $(seq $layer_start $layer_end); do
 		file_path_="measure/cpu-reclaiming/${model}/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		gpu_infer=$(calculate_average_float "$file_path_" 9)
 		recaliming_infer=$(calculate_average_float "$file_path_" 13)
-		echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
+		#echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
 		if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
 			sleep 1s
 			echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
