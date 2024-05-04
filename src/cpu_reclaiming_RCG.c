@@ -1098,7 +1098,7 @@ void cpu_reclaiming_RCG(char *datacfg, char *cfgfile, char *weightfile, char *fi
         model_name_[strlen(cfgfile)-10] = '\0';
         
 
-        strcat(file_path_, "cpu-reclaiming-CRG/");
+        strcat(file_path_, "cpu-reclaiming-RCG/");
         strcat(file_path_, model_name_);
         strcat(file_path_, "/");
 
