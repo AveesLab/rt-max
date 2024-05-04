@@ -65,6 +65,7 @@ calculate_average_float() {
 # 기본값 설정 (필요한 경우)
 model=""
 clean_mode=false  # 'clean' 모드를 위한 변수 추가
+gpu_accel_type="gpu-accel-CG"
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -86,7 +87,7 @@ done
 
 # '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
 if [ "$clean_mode" = true ]; then
-    ./test_clean_folder_gpu.sh -model "${model}"
+    ./test_clean_folder_gpu.sh -model "${model}" -accel_type "${gpu_accel_type}"
 fi
 
 # model 값에 따른 layer_num 값 설정
@@ -157,9 +158,9 @@ gpu_infer=0.0
 recaliming_infer=0.0
 
 # GPU-accelerated & CPU-reclaiming with optimal_core
-for glayer in $(seq $layer_start $layer_end); do
-    echo "glayer: $glayer"
+for glayer in $(seq $layer_end -1 $layer_start); do
+    echo "CG -- glayer: $glayer"
     sleep 1s
-    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 30
+    ./darknet detector cpu-reclaiming-CRG ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 30
     sleep 1s
 done

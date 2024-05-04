@@ -1039,7 +1039,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
         model_name[strlen(cfgfile)-10] = '\0';
         
-        strcat(file_path, "gpu-accel/");
+        strcat(file_path, "gpu-accel-GC/");
 
         strcat(file_path, model_name);
         strcat(file_path, "/");
@@ -1191,7 +1191,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         model_name_[strlen(cfgfile)-10] = '\0';
         
 
-        strcat(file_path_, "cpu-reclaiming/");
+        strcat(file_path_, "cpu-reclaiming-GRC/");
         strcat(file_path_, model_name_);
         strcat(file_path_, "/");
 

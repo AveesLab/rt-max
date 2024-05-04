@@ -65,6 +65,8 @@ calculate_average_float() {
 # 기본값 설정 (필요한 경우)
 model=""
 clean_mode=false  # 'clean' 모드를 위한 변수 추가
+gpu_accel_type="gpu-accel-GC"
+reclaiming_accel_type="cpu-reclaiming-GCR"
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -86,10 +88,10 @@ done
 
 # '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
 if [ "$clean_mode" = true ]; then
-    ./test_clean_folder_gpu.sh -model "${model}"
+    ./test_clean_folder_gpu.sh -model "${model}" -accel_type "${gpu_accel_type}"
 fi
 
-./test_clean_folder_reclaiming.sh -model ${model}
+./test_clean_folder_reclaiming.sh -model ${model} -accel_type "${reclaiming_accel_type}"
 
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
@@ -161,10 +163,10 @@ recaliming_infer=0.0
 # GPU-accelerated & CPU-reclaiming with optimal_core
 for glayer in $(seq $layer_start $layer_end); do
     optimal_core="NULL"
-    for ((rlayer = glayer + 1; rlayer <= $layer_num; rlayer++)); do
+    for ((rlayer = $layer_num; rlayer > glayer; rlayer--)); do
         if [[ "$optimal_core" == "NULL" ]]; then
             formatted_glayer=$(printf "%03d" $glayer)
-            file_path="measure/gpu-accel/${model}/gpu-accel_${formatted_glayer}glayer.csv"
+            file_path="measure/${gpu_accel_type}/${model}/gpu-accel_${formatted_glayer}glayer.csv"
             if [[ -f "$file_path" ]]; then
                 optimal_core=$(calculate_average_int "$file_path" 28)
             #     echo "--> optimal_core: $optimal_core"
@@ -174,29 +176,29 @@ for glayer in $(seq $layer_start $layer_end); do
         fi
         if [[ "$optimal_core" == "NULL" ]]; then
             sleep 1s
-            echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
+            echo "GCR -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
+            ./darknet detector ${reclaiming_accel_type} ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
             sleep 1s
         else
             if (( optimal_core < 11 )); then
-		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
-		file_path_="measure/cpu-reclaiming/${model}/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
+		formatted_rlayer=$(printf "%03d" $(($rlayer + 1)))
+		file_path_="measure/${reclaiming_accel_type}/${model}/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		if [[ -f "$file_path_" ]]; then
 			gpu_infer=$(calculate_average_float "$file_path_" 9)
 			recaliming_infer=$(calculate_average_float "$file_path_" 13)
 			#echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
 			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
 				sleep 1s
-				echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
+				echo "GCR -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
+				./darknet detector ${reclaiming_accel_type} ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
 				sleep 1s
 			else
 				break
 			fi
 		else
 			sleep 1s
-			echo "glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
+			echo "GCR -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
+			./darknet detector ${reclaiming_accel_type} ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30 -opt_core $optimal_core
 			sleep 1s
 		fi
             else

@@ -1,13 +1,18 @@
 #!/bin/bash
 
-# 기본 모델 이름 설정 (필요한 경우)
+# 기본 모델 이름과 가속 타입 설정 (필요한 경우)
 model=""
+accel_type=""
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -model)
             model="$2"
+            shift 2  # 파라미터와 값을 모두 건너뛰기
+            ;;
+        -accel_type)
+            accel_type="$2"
             shift 2  # 파라미터와 값을 모두 건너뛰기
             ;;
         *)
@@ -17,14 +22,14 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-# 모델 파라미터가 필요함을 확인
-if [[ -z "$model" ]]; then
-    echo "Error: Model parameter is required. Usage: $0 -model [model_name]"
+# 모델 및 가속 타입 파라미터가 필요함을 확인
+if [[ -z "$model" ]] || [[ -z "$accel_type" ]]; then
+    echo "Error: Both model and accel_type parameters are required. Usage: $0 -model [model_name] -accel_type [accel_type]"
     exit 1
 fi
 
 # 폴더 경로 설정
-folder_path="measure/gpu-accel/${model}/"
+folder_path="measure/${accel_type}/${model}/"
 
 # 폴더 존재 여부 확인
 if [ ! -d "$folder_path" ]; then
