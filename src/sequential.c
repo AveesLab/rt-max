@@ -280,7 +280,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         end_postprocess[i] = get_time_in_ms();
         e_postprocess[i] = end_postprocess[i] - start_postprocess[i];
         execution_time[i] = end_postprocess[i] - start_preprocess[i];
-        printf("%.2f\n", execution_time[i]);
+        // printf("%.2f\n", execution_time[i]);
         frame_rate[i] = 1000.0 / execution_time[i];
         // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
 #else
