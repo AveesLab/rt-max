@@ -48,13 +48,13 @@ done
 ## GPU-Accel_CG
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p gpu-accel_CG/$model/
+	mkdir -p gpu-accel-CG/$model/
 done
 
 ## GPU-Accel_GC
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p gpu-accel_GC/$model/
+	mkdir -p gpu-accel-GC/$model/
 done
 
 ## GPU-Accel

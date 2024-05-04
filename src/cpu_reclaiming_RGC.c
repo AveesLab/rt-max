@@ -1001,7 +1001,7 @@ void cpu_reclaiming_RGC(char *datacfg, char *cfgfile, char *weightfile, char *fi
         strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
         model_name[strlen(cfgfile)-10] = '\0';
         
-        strcat(file_path, "gpu-accel_GC/");
+        strcat(file_path, "gpu-accel-GC/");
 
         strcat(file_path, model_name);
         strcat(file_path, "/");

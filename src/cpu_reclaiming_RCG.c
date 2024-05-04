@@ -323,13 +323,13 @@ static int write_result_reclaiming(char *file_path)
         sum_measure_data[i][2] = e_preprocess[i];       
         sum_measure_data[i][3] = end_preprocess[i];
         sum_measure_data[i][4] = start_infer[i];
-        sum_measure_data[i][5] = start_cpu_infer[i];     
-        sum_measure_data[i][6] = e_cpu_infer[i];  
-        sum_measure_data[i][7] = end_cpu_infer[i];  
-        sum_measure_data[i][8] = waiting_reclaim[i];
-        sum_measure_data[i][9] = start_reclaim_infer[i];    
-        sum_measure_data[i][10] = e_reclaim_infer[i];    
-        sum_measure_data[i][11] = end_reclaim_infer[i];
+        sum_measure_data[i][5] = waiting_reclaim[i];
+        sum_measure_data[i][6] = start_reclaim_infer[i];    
+        sum_measure_data[i][7] = e_reclaim_infer[i];    
+        sum_measure_data[i][8] = end_reclaim_infer[i];
+        sum_measure_data[i][9] = start_cpu_infer[i];     
+        sum_measure_data[i][10] = e_cpu_infer[i];  
+        sum_measure_data[i][11] = end_cpu_infer[i];  
         sum_measure_data[i][12] = start_gpu_waiting[i];    
         sum_measure_data[i][13] = waiting_gpu[i];
         sum_measure_data[i][14] = start_gpu_infer[i];       
@@ -577,55 +577,6 @@ static void threadFunc(thread_data_t data)
         state.train = 0;
         state.delta = 0;
 
-        // CPU Inference
-#ifdef NVTX
-        char task_cpu[100];
-        sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", data.thread_id);
-        nvtxRangeId_t nvtx_task_cpu;
-        nvtx_task_cpu = nvtxRangeStartA(task_cpu);
-#endif
-
-#ifdef MEASURE
-        start_cpu_infer[count] = get_time_in_ms();
-#endif
-
-        state.workspace = net.workspace_cpu;
-        gpu_yolo = 0;
-
-        int end_layer_cpu = 0;
-        if (data.isReclaiming) {
-            end_layer_cpu = rLayer;
-            openblas_set_num_threads(1);
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        }
-        else {
-            end_layer_cpu = gLayer;
-        }
-
-        for(j = 0; j < end_layer_cpu; ++j){
-            state.index = j;
-            l = net.layers[j];
-            l.do_reclaiming = 0;
-            if(l.delta && state.train && l.train){
-                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-            }
-            l.forward(l, state);
-            if (skipped_layers[j]){
-                cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
-            }
-            state.input = l.output;
-        }
-
-#ifdef MEASURE
-        end_cpu_infer[count] = get_time_in_ms();
-#endif
-
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_cpu);
-#endif
-
         // Reclaiming Inference
         if (data.isReclaiming) {
 
@@ -645,7 +596,8 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
             start_reclaim_infer[count] = get_time_in_ms();
 #endif
-
+            state.workspace = net.workspace_cpu;
+            gpu_yolo = 0;
             openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
             openblas_set_num_threads(openblas_thread);
             CPU_ZERO(&cpuset);
@@ -658,7 +610,7 @@ static void threadFunc(thread_data_t data)
                 openblas_setaffinity(k, sizeof(cpuset), &cpuset);
             }
 
-            for(j = rLayer; j < gLayer; ++j){
+            for(j = 0; j < rLayer; ++j){
                 state.index = j;
                 l = net.layers[j];
                 l.do_reclaiming = 1;
@@ -691,7 +643,54 @@ static void threadFunc(thread_data_t data)
             end_reclaim_infer[count] = 0;
 
         }
+        // CPU Inference
+#ifdef NVTX
+        char task_cpu[100];
+        sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", data.thread_id);
+        nvtxRangeId_t nvtx_task_cpu;
+        nvtx_task_cpu = nvtxRangeStartA(task_cpu);
+#endif
 
+#ifdef MEASURE
+        start_cpu_infer[count] = get_time_in_ms();
+#endif
+
+        state.workspace = net.workspace_cpu;
+        gpu_yolo = 0;
+
+        int start_layer_cpu = 0;
+        if (data.isReclaiming) {
+            start_layer_cpu = rLayer;
+            openblas_set_num_threads(1);
+            CPU_ZERO(&cpuset);
+            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        }
+        else {
+            start_layer_cpu = 0;
+        }
+
+        for(j = start_layer_cpu; j < gLayer; ++j){
+            state.index = j;
+            l = net.layers[j];
+            l.do_reclaiming = 0;
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
+            if (skipped_layers[j]){
+                cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+            }
+            state.input = l.output;
+        }
+
+#ifdef MEASURE
+        end_cpu_infer[count] = get_time_in_ms();
+#endif
+
+#ifdef NVTX
+        nvtxRangeEnd(nvtx_task_cpu);
+#endif
         // GPU Inference
 
 #ifdef NVTX
@@ -838,7 +837,7 @@ static void threadFunc(thread_data_t data)
 }
 
 
-void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_RCG(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     num_thread = MAXCORES - 1;
@@ -1137,7 +1136,7 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
 }
 #else
 
-void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void cpu_reclaiming_RCG(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
