@@ -533,8 +533,6 @@ static void threadFunc(thread_data_t data)
         printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 #endif
 
-
-
         time = get_time_in_ms();
         // __Preprocess__
 #ifdef MEASURE
@@ -558,9 +556,7 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         start_infer[count] = get_time_in_ms();
 #endif
-        extern int gpu_yolo;
-        gpu_yolo = 0;
-        
+
         network_state state;
         state.index = 0;
         state.net = net;
@@ -589,10 +585,10 @@ static void threadFunc(thread_data_t data)
         int end_layer_cpu = 0;
         if (data.isReclaiming) {
             end_layer_cpu = rLayer;
-            // openblas_set_num_threads(1);
-            // CPU_ZERO(&cpuset);
-            // CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-            // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+            openblas_set_num_threads(1);
+            CPU_ZERO(&cpuset);
+            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         }
         else {
             end_layer_cpu = gLayer;
@@ -606,10 +602,8 @@ static void threadFunc(thread_data_t data)
                 scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
             }
             l.forward(l, state);
-            if(!data.isReclaiming){
-                if (skipped_layers[j]){
-                    cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
-                }
+            if (skipped_layers[j]){
+                cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output;
         }
@@ -667,10 +661,10 @@ static void threadFunc(thread_data_t data)
                 }
                 state.input = l.output;
             }
-            openblas_set_num_threads(1);
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+            // openblas_set_num_threads(1);
+            // CPU_ZERO(&cpuset);
+            // CPU_SET(coreIDOrder[data.thread_id], &cpuset);
+            // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
             pthread_mutex_unlock(&mutex_reclaim);
 
 #ifdef MEASURE
