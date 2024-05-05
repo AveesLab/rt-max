@@ -124,7 +124,7 @@ static double average(double arr[]){
     for(i = skip_num_exp ; i < total_num_exp - end_num_exp; i++) {
         sum += arr[i];
     }
-    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.02;
+    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.03;
 }
 
 #ifdef MEASURE
