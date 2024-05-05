@@ -217,7 +217,7 @@ for glayer in $(seq $layer_start $layer_end); do
 		if [[ -f "$file_path_" ]]; then
 			gpu_infer=$(calculate_average_float "$file_path_" "e_gpu_infer")
 			recaliming_infer=$(calculate_average_float "$file_path_" "e_reclaim_infer")
-			echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
+			# echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
 			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
 				sleep 1s
 				echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
