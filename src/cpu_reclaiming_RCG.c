@@ -751,7 +751,7 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         end_infer[count] = get_time_in_ms();
         e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
-        waiting_reclaim[count] = start_reclaim_infer[count] - end_cpu_infer[count];//start_reclaim_waiting[i];
+        waiting_reclaim[count] = start_reclaim_infer[count] - start_reclaim_waiting[count];///start_reclaim_waiting[i];
         e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
         waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
         e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
