@@ -124,7 +124,7 @@ static double average(double arr[]){
     for(i = skip_num_exp ; i < total_num_exp - end_num_exp; i++) {
         sum += arr[i];
     }
-    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.02;
+    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.03;
 }
 
 #ifdef MEASURE
@@ -659,7 +659,10 @@ static void threadFunc(thread_data_t data)
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
+
                 l.forward(l, state);
+
+
                 if (skip_layers[j]) {
                     cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
                 }
