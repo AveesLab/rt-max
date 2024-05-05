@@ -508,7 +508,17 @@ static void threadFunc(thread_data_t data)
 
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
+    
+    openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
+    openblas_set_num_threads(openblas_thread);
 
+    for (int k = 0; k < openblas_thread - 1; k++) {
+        CPU_ZERO(&cpuset);
+        CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
+        // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+        openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+    }
+        
     for (i = 0; i < num_exp; i++) {
         if(!data.isTest) {
             if(i < START_INDEX) {
@@ -672,17 +682,7 @@ static void threadFunc(thread_data_t data)
         start_reclaim_infer[count] = get_time_in_ms();
 #endif
 
-        openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
-        openblas_set_num_threads(openblas_thread);
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < openblas_thread - 1; k++) {
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
-            // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
-            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-        }
+        
 
         for(j = gLayer; j < rLayer; ++j){
             state.index = j;
@@ -727,10 +727,6 @@ static void threadFunc(thread_data_t data)
         int start_layer_cpu = 0;
         if (data.isReclaiming) {
             start_layer_cpu = rLayer;
-            openblas_set_num_threads(1);
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         }
         else {
             start_layer_cpu = gLayer;
