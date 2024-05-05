@@ -161,6 +161,6 @@ recaliming_infer=0.0
 for glayer in $(seq $layer_end -1 $layer_start); do
     echo "CG -- glayer: $glayer"
     sleep 1s
-    ./darknet detector cpu-reclaiming-CRG ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 30
+    ./darknet detector cpu-reclaiming-CRG ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 15
     sleep 1s
 done
