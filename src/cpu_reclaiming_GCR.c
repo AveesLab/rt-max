@@ -329,13 +329,13 @@ static int write_result_reclaiming(char *file_path)
         sum_measure_data[i][7] = start_gpu_infer[i];       
         sum_measure_data[i][8] = e_gpu_infer[i];        
         sum_measure_data[i][9] = end_gpu_infer[i];
-        sum_measure_data[i][14] = start_cpu_infer[i];     
-        sum_measure_data[i][15] = e_cpu_infer[i];  
-        sum_measure_data[i][16] = end_cpu_infer[i];  
-        sum_measure_data[i][10] = waiting_reclaim[i];
-        sum_measure_data[i][11] = start_reclaim_infer[i];    
-        sum_measure_data[i][12] = e_reclaim_infer[i];    
-        sum_measure_data[i][13] = end_reclaim_infer[i];
+        sum_measure_data[i][10] = start_cpu_infer[i];     
+        sum_measure_data[i][11] = e_cpu_infer[i];  
+        sum_measure_data[i][12] = end_cpu_infer[i];  
+        sum_measure_data[i][13] = waiting_reclaim[i];
+        sum_measure_data[i][14] = start_reclaim_infer[i];    
+        sum_measure_data[i][15] = e_reclaim_infer[i];    
+        sum_measure_data[i][16] = end_reclaim_infer[i];
         sum_measure_data[i][17] = end_infer[i];
         sum_measure_data[i][18] = e_infer[i];
         sum_measure_data[i][19] = start_postprocess[i];     
@@ -509,7 +509,15 @@ static void threadFunc(thread_data_t data)
 
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
-
+    
+    openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
+    openblas_set_num_threads(openblas_thread);
+    for (int k = 0; k < openblas_thread - 1; k++) {
+            CPU_ZERO(&cpuset);
+            CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
+            // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+    }
     for (i = 0; i < num_exp; i++) {
         if(!data.isTest) {
             if(i < START_INDEX) {
@@ -666,10 +674,6 @@ static void threadFunc(thread_data_t data)
         int end_layer_cpu = 0;
         if (data.isReclaiming) {
             end_layer_cpu = rLayer;
-            openblas_set_num_threads(1);
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         }
         else {
             end_layer_cpu = net.n;
@@ -712,18 +716,6 @@ static void threadFunc(thread_data_t data)
 #ifdef MEASURE
         start_reclaim_infer[count] = get_time_in_ms();
 #endif
-
-        openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
-        openblas_set_num_threads(openblas_thread);
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < openblas_thread - 1; k++) {
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
-            // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
-            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-        }
 
         for(j = rLayer; j < net.n; ++j){
             state.index = j;
