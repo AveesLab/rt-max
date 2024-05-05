@@ -861,7 +861,7 @@ void cpu_reclaiming_GCR(char *datacfg, char *cfgfile, char *weightfile, char *fi
     thread_data_t data[MAXCORES - 1];
 
     if (opt_core == 0) {
-        optimal_core = 10;
+        optimal_core = 11;
 
         R = 0.0;
         sleep_time = 0.0;
@@ -1149,7 +1149,7 @@ void cpu_reclaiming_GCR(char *datacfg, char *cfgfile, char *weightfile, char *fi
         printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
         }
 
-        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1)) * 1.07;
+        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
         // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
