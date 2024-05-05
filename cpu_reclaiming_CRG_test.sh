@@ -2,7 +2,7 @@
 # 평균을 계산하고 반환하는 함수
 calculate_average_int() {
     local file_path=$1
-    local column=$2
+    local column_name=$2
 
     # 파일 존재 여부 확인
     if [ ! -f "$file_path" ]; then
@@ -10,8 +10,24 @@ calculate_average_int() {
         return 1  # 에러 상태 반환
     fi
 
+    # 주어진 열의 인덱스 찾기
+    local column_index=$(head -1 "$file_path" | awk -F',' -v column="$column_name" '{
+        for (i=1; i<=NF; i++) {
+            if ($i == column) {
+                print i;
+                exit;
+            }
+        }
+    }')
+
+    # 인덱스가 없는 경우 처리
+    if [ -z "$column_index" ]; then
+        echo "Error: Column '$column_name' not found in the file."
+        return 1
+    fi
+
     # 주어진 열의 값 추출 및 평균 계산, 결과 반환
-    awk -v col="$column" -F ',' '
+    awk -F',' -v col="$column_index" '
     BEGIN {
         sum = 0
         count = 0
@@ -33,7 +49,7 @@ calculate_average_int() {
 
 calculate_average_float() {
     local file_path=$1
-    local column=$2
+    local column_name=$2
 
     # 파일 존재 여부 확인
     if [ ! -f "$file_path" ]; then
@@ -41,8 +57,24 @@ calculate_average_float() {
         return 1  # 에러 상태 반환
     fi
 
+    # 주어진 열의 인덱스 찾기
+    local column_index=$(head -1 "$file_path" | awk -F',' -v column="$column_name" '{
+        for (i=1; i<=NF; i++) {
+            if ($i == column) {
+                print i;
+                exit;
+            }
+        }
+    }')
+
+    # 인덱스가 없는 경우 처리
+    if [ -z "$column_index" ]; then
+        echo "Error: Column '$column_name' not found in the file."
+        return 1
+    fi
+
     # 주어진 열의 값 추출 및 평균 계산, 결과 반환
-    awk -v col="$column" -F ',' '
+    awk -F',' -v col="$column_index" '
     BEGIN {
         sum = 0
         count = 0
@@ -168,7 +200,7 @@ for glayer in $(seq $layer_end -1 $layer_start); do
             formatted_glayer=$(printf "%03d" $glayer)
             file_path="measure/${gpu_accel_type}/${model}/gpu-accel_${formatted_glayer}glayer.csv"
             if [[ -f "$file_path" ]]; then
-                optimal_core=$(calculate_average_int "$file_path" 28)
+                optimal_core=$(calculate_average_int "$file_path" "optimal_core")
             #     echo "--> optimal_core: $optimal_core"
             # else
             #     echo "--> No optimal_core: $optimal_core [$file_path]"
@@ -184,8 +216,8 @@ for glayer in $(seq $layer_end -1 $layer_start); do
 		formatted_rlayer=$(printf "%03d" $(($rlayer + 1)))
 		file_path_="measure/${reclaiming_accel_type}/${model}/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		if [[ -f "$file_path_" ]]; then
-			gpu_infer=$(calculate_average_float "$file_path_" 9)
-			recaliming_infer=$(calculate_average_float "$file_path_" 13)
+			gpu_infer=$(calculate_average_float "$file_path_" "e_gpu_infer")
+			recaliming_infer=$(calculate_average_float "$file_path_" "e_reclaim_infer")
 			#echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
 			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
 				sleep 1s
