@@ -1173,7 +1173,11 @@ void cpu_reclaiming_GCR(char *datacfg, char *cfgfile, char *weightfile, char *fi
                 exit(-1);
             }
         }
-
+        
+        for (i = 0; i < optimal_core; i++) {
+            pthread_join(threads[i], NULL);
+        }
+        
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
