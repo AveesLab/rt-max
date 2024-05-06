@@ -137,7 +137,7 @@ elif [ "$model" == "resnet152" ]; then
     layer_num=206
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
-    layer_start=0
+    layer_start=1
     layer_end=136
     layer_num=136
 elif [ "$model" == "csmobilenet-v2" ]; then
@@ -157,7 +157,7 @@ elif [ "$model" == "yolov7" ]; then
     layer_num=143
 elif [ "$model" == "yolov7-tiny" ]; then
     data_file="coco"
-    layer_start=0
+    layer_start=1
     layer_end=99
     layer_num=99
 elif [ "$model" == "yolov4" ]; then
@@ -167,7 +167,7 @@ elif [ "$model" == "yolov4" ]; then
     layer_num=162
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
-    layer_start=0
+    layer_start=1
     layer_end=38
     layer_num=38
 elif [ -z "$model" ]; then

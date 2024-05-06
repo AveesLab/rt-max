@@ -1,8 +1,14 @@
+./cpu_reclaiming_GRC_test.sh -model csmobilenet-v2 -clean
+./cpu_reclaiming_CRG_test.sh -model csmobilenet-v2 -clean
 
-./layer_time_test.sh -model csmobilenet-v2
-./layer_time_test.sh -model enetb0
-./layer_time_test.sh -model yolov7-tiny
-./layer_time_test.sh -model yolov4-tiny
-./layer_time_test.sh -model densenet201
-./layer_time_test.sh -model squeezenet
-./layer_time_test.sh -model resnet152
+./cpu_reclaiming_GRC_test.sh -model enetb0 -clean
+./cpu_reclaiming_CRG_test.sh -model enetb0 -clean
+
+./cpu_reclaiming_GRC_test.sh -model squeezenet -clean
+./cpu_reclaiming_CRG_test.sh -model squeezenet -clean
+
+./cpu_reclaiming_GRC_test.sh -model yolov4-tiny -clean
+#./cpu_reclaiming_CRG_test.sh -model yolov4-tiny -clean
+
+./cpu_reclaiming_GRC_test.sh -model yolov7-tiny -clean
+#./cpu_reclaiming_CRG_test.sh -model yolov7-tiny -clean
