@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("-model", type=str, required=True, help="Model name")
     args = parser.parse_args()
 
-    directory = f"/home/avees/baseline/darknet/measure/sequential-multiblas/{args.model}/"
+    directory = f"./measure/sequential-multiblas/{args.model}/"
     output_filename = f"./measure/layer_time/{args.model}/sequential_inference_list.csv"
 
     gather_e_infer(directory, output_filename)

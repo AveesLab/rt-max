@@ -220,7 +220,7 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
 #endif
 
 #ifndef MEASURE
-        printf("\nThread %d is set to CPU core %d\n", coreIDOrder[1], sched_getcpu());
+        // printf("\nThread %d is set to CPU core %d\n", coreIDOrder[1], sched_getcpu());
 #endif
 
         time = get_time_in_ms();
@@ -243,18 +243,19 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
 #ifdef MEASURE
         start_infer[i] = get_time_in_ms();
 #endif
-        printf("\n%d Thread %d is set to CPU core %d\n", i, coreIDOrder[1], sched_getcpu());
+        // printf("\n%d Thread %d is set to CPU core %d\n", i, coreIDOrder[1], sched_getcpu());
         openblas_set_num_threads(num_blas);
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[i%6 +1], &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        printf("\n%d Thread %d is set to CPU core %d\n", i, coreIDOrder[i%6 +1], sched_getcpu());
+        // CPU_ZERO(&cpuset);
+        // CPU_SET(coreIDOrder[i%6 +1], &cpuset);
+        // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        // printf("\n%d Thread %d is set to CPU core %d\n", i, coreIDOrder[i%6 +1], sched_getcpu());
         for(int i = 1; i < num_blas; i++) {
                 CPU_ZERO(&cpuset);
                 CPU_SET(MAXCORES - coreIDOrder[i], &cpuset);
+                //printf("R cores: %d\n", MAXCORES - coreIDOrder[i]);
                 openblas_setaffinity(i-1, sizeof(cpuset), &cpuset);
         }
-        
+                //printf("------\n");
         if (device) predictions = network_predict(net, X);
         else {
             extern int gpu_yolo;

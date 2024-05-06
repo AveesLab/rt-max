@@ -65,6 +65,8 @@ done
 
 python3 gather_seq.py -model ${model}
 
+./darknet detector gpu-layer-test ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -num_exp 100
+
 # GPU-accelerated with 1 thread
 #for var in $(seq 1 $layer_num)
 #do
