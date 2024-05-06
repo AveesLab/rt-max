@@ -1299,4 +1299,4 @@ void cpu_reclaiming_GCR(char *datacfg, char *cfgfile, char *weightfile, char *fi
 {
     printf("!!ERROR!! GPU = 0 \n");
 }
-#endif  // GPUv
+#endif  // GPU
