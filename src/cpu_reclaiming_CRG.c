@@ -24,12 +24,13 @@
 #endif
 #endif
 
-#define START_INDEX 10
+#define START_INDEX 5
 #define END_INDEX 2
+#define ACCEPTABLE_JITTER 3
 
 pthread_barrier_t barrier;
 pthread_barrier_t barrier_reclaiming;
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 7, 10, 2, 5, 8, 11, 1};
 // static int coreIDOrder[MAXCORES] = {0,2,3,4,5,6,7,8,9,10,11,1};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
@@ -93,6 +94,7 @@ static double start_postprocess[1000];
 static double end_postprocess[1000];
 static double e_postprocess[1000];
 
+static double check_jitter[1000] = {0, };
 static int optimal_core;
 static float R;
 #endif
@@ -110,6 +112,13 @@ static float max_gpu_infer_time;
 static float max_execution_time;
 static float sleep_time;
 static float R;
+
+static int reset_check_jitter() {
+    for (int check_num = 0; check_num < 1000; check_num++) {
+        check_jitter[check_num] = 0;
+    }
+    return 1;
+}
 
 static int is_GPU_larger(double a, double b) {
     return (a - b) >= 2 ? 1 : 0; // Check 2ms differnce
@@ -186,7 +195,7 @@ static int write_result_gpu(char *file_path)
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][29];
+    double sum_measure_data[num_exp * optimal_core][30];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -218,6 +227,7 @@ static int write_result_gpu(char *file_path)
         sum_measure_data[i][26] = 0.0;
         sum_measure_data[i][27] = 0.0;        
         sum_measure_data[i][28] = 0.0;
+        sum_measure_data[i][29] = check_jitter[i];
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -234,7 +244,7 @@ static int write_result_gpu(char *file_path)
         newIndex++;
     }
 
-        fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+        fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
             "start_infer", "start_cpu_infer", "e_cpu_infer", "end_cpu_infer",
@@ -244,13 +254,15 @@ static int write_result_gpu(char *file_path)
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
             "cycle_time", "frame_rate",
-            "optimal_core", "R");
+            "optimal_core", "R", "check_jitter");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
 
     for(i = 0; i < num_exp * optimal_core - startIdx - endIdx; i++)
     {
+        if (new_sum_measure_data[i][29] > ACCEPTABLE_JITTER) continue;
+        
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
 
@@ -262,14 +274,15 @@ static int write_result_gpu(char *file_path)
         new_sum_measure_data[i][27] = (double)optimal_core;
         new_sum_measure_data[i][28] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f, %0.0f, %0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f, %0.0f, %0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
                 new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
                 new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], 
-                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28]);
+                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27],
+                new_sum_measure_data[i][28], new_sum_measure_data[i][29]);
     }
     
     fclose(fp);
@@ -314,7 +327,7 @@ static int write_result_reclaiming(char *file_path)
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * optimal_core][29];
+    double sum_measure_data[num_exp * optimal_core][30];
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -347,6 +360,7 @@ static int write_result_reclaiming(char *file_path)
         sum_measure_data[i][26] = 0.0;
         sum_measure_data[i][27] = 0.0;
         sum_measure_data[i][28] = 0.0;
+        sum_measure_data[i][29] = check_jitter[i];
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -363,7 +377,7 @@ static int write_result_reclaiming(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", 
             "start_infer", "start_cpu_infer", "e_cpu_infer", "end_cpu_infer",
@@ -375,13 +389,15 @@ static int write_result_reclaiming(char *file_path)
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "execution_time_max_value",
             "cycle_time", "frame_rate",
-            "optimal_core","R");
+            "optimal_core","R", "check_jitter");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
 
     for(i = 0; i < num_exp * optimal_core - startIdx-endIdx; i++)
     {
+        if (new_sum_measure_data[i][29] > ACCEPTABLE_JITTER) continue;
+        
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
 
@@ -393,7 +409,7 @@ static int write_result_reclaiming(char *file_path)
         new_sum_measure_data[i][27] = (double)optimal_core;
         new_sum_measure_data[i][28] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
                 new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
                 new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
@@ -402,7 +418,8 @@ static int write_result_reclaiming(char *file_path)
                 new_sum_measure_data[i][15], new_sum_measure_data[i][16], new_sum_measure_data[i][17], 
                 new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
                 new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23],
-                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28]);
+                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], 
+                new_sum_measure_data[i][27], new_sum_measure_data[i][28], new_sum_measure_data[i][29]);
     }
     
     fclose(fp);
@@ -506,16 +523,21 @@ static void threadFunc(thread_data_t data)
 
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
-    openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
+    openblas_thread = (MAXCORES - 2) - data.num_thread + 1;
     openblas_set_num_threads(openblas_thread);
 
     for (int k = 0; k < openblas_thread - 1; k++) {
         CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
-        // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+        CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
+        // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 2) - k] );
         openblas_setaffinity(k, sizeof(cpuset), &cpuset);
     }
     for (i = 0; i < num_exp; i++) {
+
+#ifdef MEASURE
+        int count = i * data.num_thread + data.thread_id - 1;
+#endif
+
         if(!data.isTest) {
             if(i < START_INDEX) {
             	if (data.isReclaiming){
@@ -532,11 +554,16 @@ static void threadFunc(thread_data_t data)
                 start_time[data.thread_id] +=  R * optimal_core;
                 remaining_time = start_time[data.thread_id] - get_time_in_ms();
                 if (remaining_time > 0) usleep(remaining_time * 1000);
+                else if (remaining_time < -ACCEPTABLE_JITTER) {
+                    for (int idx = 1; idx < optimal_core + 2; idx++) {
+			start_time[idx] += (fabs(remaining_time) * 2);
+			check_jitter[count + idx - optimal_core] = fabs(remaining_time);
+			if (idx == 1) check_jitter[count + idx - optimal_core -1] = fabs(remaining_time);
+		    }
+		}
             }
         }
-#ifdef MEASURE
-        int count = i * data.num_thread + data.thread_id - 1;
-#endif
+
 
 #ifdef NVTX
         char task[100];
@@ -659,7 +686,10 @@ static void threadFunc(thread_data_t data)
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
+		double aa = get_time_in_ms();
                 l.forward(l, state);
+		double bb = get_time_in_ms();
+		printf("%.2f\n", bb - aa);
                 if (skip_layers[j]) {
                     cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
                 }
@@ -776,7 +806,7 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                // else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
+                 //else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
 
             }
         }
@@ -832,20 +862,20 @@ static void threadFunc(thread_data_t data)
 void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    num_thread = MAXCORES - 1;
+    num_thread = MAXCORES - 2;
     bool visible_exp = false;
     // visible_exp = true;
     
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
-    pthread_t threads[MAXCORES - 1];
+    pthread_t threads[MAXCORES - 2];
     int rc;
     int i;
 
-    thread_data_t data[MAXCORES - 1];
+    thread_data_t data[MAXCORES - 2];
 
     if (opt_core == 0) {
-        optimal_core = 11;
+        optimal_core = 10;
 
         R = 0.0;
         sleep_time = 0.0;
@@ -892,16 +922,16 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 2));
         }
 
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 2));
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
+        if (optimal_core > (MAXCORES - 2)) optimal_core = MAXCORES - 2;
         max_execution_time = R * optimal_core;
         
         if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
-
+        reset_check_jitter();
         pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
@@ -936,16 +966,16 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 2));
         }
 
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 2));
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
+        if (optimal_core > (MAXCORES - 2)) optimal_core = MAXCORES - 2;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
-
+        reset_check_jitter();
         pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
@@ -979,16 +1009,16 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
 	execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 2));
         }
 
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 2));
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
+        if (optimal_core > (MAXCORES - 2)) optimal_core = MAXCORES - 2;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-3:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
-
+        reset_check_jitter();
         pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
@@ -1045,10 +1075,10 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
 
     if (opt_core > 0) optimal_core = opt_core;
 
-    if (optimal_core < (MAXCORES - 1) && (rLayer > 0)) {
+    if (optimal_core < (MAXCORES - 2) && (rLayer > 0)) {
         // =====================RECLAMING=====================
         if (visible_exp) printf("\n::EXP-4:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
-
+        reset_check_jitter();
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
@@ -1085,10 +1115,10 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 2));
         }
 
-        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 2));
         // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
@@ -1096,7 +1126,7 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
 
         if (visible_exp) printf("\n::EXP-5:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
-
+        reset_check_jitter();
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;
@@ -1129,10 +1159,10 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 2));
         }
 
-        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 2));
         // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
@@ -1140,7 +1170,7 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
 
         if (visible_exp) printf("\n::EXP-6:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
-
+        reset_check_jitter();
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;
@@ -1173,10 +1203,10 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 2));
         }
 
-        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 2));
         // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
@@ -1184,7 +1214,7 @@ void cpu_reclaiming_CRG(char *datacfg, char *cfgfile, char *weightfile, char *fi
 
         if (visible_exp) printf("\n::EXP-7:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
-
+        reset_check_jitter();
         for (i = 0; i < optimal_core; i++) {
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;
