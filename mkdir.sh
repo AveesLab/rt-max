@@ -114,7 +114,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
@@ -160,7 +160,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming-CRG/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming-CRG/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
@@ -206,7 +206,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming-GRC/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming-GRC/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
@@ -252,7 +252,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming-RCG/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming-RCG/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
@@ -298,7 +298,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming-RGC/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming-RGC/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
@@ -344,7 +344,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming-GCR/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming-GCR/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
@@ -390,7 +390,7 @@ for var in {1..207}
 
 for var in {1..81}
 	do
-	mkdir -p cpu-reclaiming-mp/csmobilenet/${var}glayer/
+	mkdir -p cpu-reclaiming-mp/csmobilenet-v2/${var}glayer/
 	done
 
 for var in {1..51}
