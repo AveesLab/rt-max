@@ -1525,6 +1525,9 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
                 net.layers[l.index].keep_delta_gpu = 1;
         }else if (lt == SCALE_CHANNELS) {
             l = parse_scale_channels(options, params, net);
+            char *index_from = option_find(options, "from");
+            int index = atoi(index_from);
+            skip_layers[count][0] = count + index;
             net.layers[count - 1].use_bin_output = 0;
             net.layers[l.index].use_bin_output = 0;
             net.layers[l.index].keep_delta_gpu = 1;
