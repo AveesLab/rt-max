@@ -883,6 +883,7 @@ void diounms_sort(detection *dets, int total, int classes, float thresh, NMS_KIN
         for (i = 0; i < total; ++i) {
             dets[i].sort_class = k;
         }
+
         qsort(dets, total, sizeof(detection), nms_comparator_v3);
         for (i = 0; i < total; ++i)
         {

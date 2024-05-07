@@ -13,7 +13,7 @@ __global__ void forward_avgpool_layer_kernel(int n, int w, int h, int c, float *
     int k = id % c;
     id /= c;
     int b = id;
-
+    // printf("size = %d %d %d\n", h, w, c);
     int i;
     int out_index = (k + c*b);
     output[out_index] = 0;

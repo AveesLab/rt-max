@@ -41,7 +41,7 @@ void resize_avgpool_layer(avgpool_layer *l, int w, int h)
 void forward_avgpool_layer(const avgpool_layer l, network_state state)
 {
     int b,i,k;
-
+    // printf("size = %d %d %d\n", l.h, l.w, l.c);
     for(b = 0; b < l.batch; ++b){
         for(k = 0; k < l.c; ++k){
             int out_index = k + b*l.c;
@@ -51,6 +51,7 @@ void forward_avgpool_layer(const avgpool_layer l, network_state state)
                 l.output[out_index] += state.input[in_index];
             }
             l.output[out_index] /= l.h*l.w;
+            // printf("%f\n", *(l.output));
         }
     }
 }

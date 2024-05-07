@@ -88,6 +88,6 @@ void im2col_cpu_ext(const float* data_im, const int channels,
                     input_row += stride_h;
                 }
             }
-        }
+        }                            
     }
 }

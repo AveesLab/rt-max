@@ -977,6 +977,7 @@ layer parse_shortcut(list *options, size_params params, network net)
     for (i = 0; i < n; ++i) {
         int index = atoi(l);
         l = strchr(l, ',') + 1;
+        // printf("params.index + index : %d %d \n", params.index , index);
         if (index < 0) index = params.index + index;
         layers[i] = index;
         sizes[i] = params.net.layers[index].outputs;
@@ -1019,6 +1020,7 @@ layer parse_scale_channels(list *options, size_params params, network net)
 
     int batch = params.batch;
     layer from = net.layers[index];
+    // printf("parse_scale_channels : %d \n", index);
 
     layer s = make_scale_channels_layer(batch, index, params.w, params.h, params.c, from.out_w, from.out_h, from.out_c, scale_wh);
 
@@ -1511,6 +1513,7 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
             int k;
             for (k = 0; k < l.n; ++k) {
                 skip_layers[count][k] = l.input_layers[k];
+                printf( "ROUTE skip_layers[%d][%d] : %d \n", count, k, skip_layers[count][k]);
                 net.layers[l.input_layers[k]].use_bin_output = 0;
                 if (count >= last_stop_backward)
                     net.layers[l.input_layers[k]].keep_delta_gpu = 1;
@@ -1525,9 +1528,23 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
                 net.layers[l.index].keep_delta_gpu = 1;
         }else if (lt == SCALE_CHANNELS) {
             l = parse_scale_channels(options, params, net);
+            char *index_from = option_find(options, "from");
+            int index = atoi(index_from);
             net.layers[count - 1].use_bin_output = 0;
             net.layers[l.index].use_bin_output = 0;
             net.layers[l.index].keep_delta_gpu = 1;
+            skip_layers[count][0] = count + index;
+            printf( "SCALE_CHANNELS skip_layers[%d][%d] : %d \n", count, 0, skip_layers[count][0]);
+
+            net.layers[skip_layers[count][0]].use_bin_output = 0;
+            if (count >= last_stop_backward)
+                net.layers[skip_layers[count][0]].keep_delta_gpu = 1;
+            // printf("SCALE_CHANNELS l.n = %d\n", l.n);
+            // printf("%d %d SCALE_CHANNELS\n", count, k);
+
+            // for (k = 0; k < 1; ++k) {
+            //     //skip_layers[count][k] = l.input_layers[k];
+            // }
         }
         else if (lt == SAM) {
             l = parse_sam(options, params, net);
