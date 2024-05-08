@@ -60,7 +60,7 @@ done
 ## GPU-Accel_GC
 for num_thread in $(seq 1 11);
 do
-	mkdir -p gpu-accel-GC/densenet201/$num_thread/
+	mkdir -p gpu-accel-GC/densenet201-multithread/${num_thread}thread/
 done
 
 ## GPU-Accel
@@ -88,47 +88,47 @@ do
 done
 
 ## CPU-Reclaiming
-for var in {1..305}
+for var in {0..305}
 	do
 	mkdir -p cpu-reclaiming/densenet201/${var}glayer/
 	done
 
-for var in {1..37}
+for var in {0..37}
 	do
 	mkdir -p cpu-reclaiming/yolov4-tiny/${var}glayer/
 	done
 
-for var in {1..162}
+for var in {0..162}
 	do
 	mkdir -p cpu-reclaiming/yolov4/${var}glayer/
 	done
 
-for var in {1..100}
+for var in {0..100}
 	do
 	mkdir -p cpu-reclaiming/yolov7-tiny/${var}glayer/
 	done
 
-for var in {1..144}
+for var in {0..144}
 	do
 	mkdir -p cpu-reclaiming/yolov7/${var}glayer/
 	done
 
-for var in {1..207}
+for var in {0..207}
 	do
 	mkdir -p cpu-reclaiming/resnet152/${var}glayer/
 	done
 
-for var in {1..81}
+for var in {0..81}
 	do
 	mkdir -p cpu-reclaiming/csmobilenet-v2/${var}glayer/
 	done
 
-for var in {1..51}
+for var in {0..51}
 	do
 	mkdir -p cpu-reclaiming/squeezenet/${var}glayer/
 	done
 
-for var in {1..138}
+for var in {0..138}
 	do
 	mkdir -p cpu-reclaiming/enetb0/${var}glayer/
 	done
@@ -180,47 +180,56 @@ for var in {1..138}
 	done
 
 ## CPU-Reclaiming-CRG
-for var in {1..305}
+
+
+for thread in {1..11}; do
+	for var in {0..305}
+		do
+		mkdir -p cpu-reclaiming-GRC/densenet201-multithread/${thread}thread/${var}glayer/
+		done
+done
+
+for var in {0..305}
 	do
 	mkdir -p cpu-reclaiming-GRC/densenet201/${var}glayer/
 	done
 
-for var in {1..37}
+for var in {0..37}
 	do
 	mkdir -p cpu-reclaiming-GRC/yolov4-tiny/${var}glayer/
 	done
 
-for var in {1..162}
+for var in {0..162}
 	do
 	mkdir -p cpu-reclaiming-GRC/yolov4/${var}glayer/
 	done
 
-for var in {1..100}
+for var in {0..100}
 	do
 	mkdir -p cpu-reclaiming-GRC/yolov7-tiny/${var}glayer/
 	done
 
-for var in {1..144}
+for var in {0..144}
 	do
 	mkdir -p cpu-reclaiming-GRC/yolov7/${var}glayer/
 	done
 
-for var in {1..207}
+for var in {0..207}
 	do
 	mkdir -p cpu-reclaiming-GRC/resnet152/${var}glayer/
 	done
 
-for var in {1..81}
+for var in {0..81}
 	do
 	mkdir -p cpu-reclaiming-GRC/csmobilenet-v2/${var}glayer/
 	done
 
-for var in {1..51}
+for var in {0..51}
 	do
 	mkdir -p cpu-reclaiming-GRC/squeezenet/${var}glayer/
 	done
 
-for var in {1..138}
+for var in {0..138}
 	do
 	mkdir -p cpu-reclaiming-GRC/enetb0/${var}glayer/
 	done
