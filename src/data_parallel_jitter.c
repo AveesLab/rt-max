@@ -24,7 +24,8 @@
 #endif
 
 pthread_barrier_t barrier;
-
+pthread_mutex_t init_mutex;
+// static int coreIDOrder[MAXCORES] = {1,2,3,4,5,6,7,8,9,10,11};
 static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 
 typedef struct thread_data_t{
@@ -134,7 +135,7 @@ static int write_result(char *file_path)
     
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
-    int startIdx = 5 * num_thread; // Delete some ROWs
+    int startIdx = 10 * num_thread; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
 
     int newIndex = 0;
@@ -219,6 +220,7 @@ static void threadFunc(thread_data_t data)
 
     int device = 0; // Choose CPU or GPU
 
+    pthread_mutex_lock(&init_mutex);
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
 
@@ -229,7 +231,7 @@ static void threadFunc(thread_data_t data)
     net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
-
+    pthread_mutex_unlock(&init_mutex);
     srand(2222222);
 
     if (data.filename) strncpy(input, data.filename, 256);
@@ -243,28 +245,18 @@ static void threadFunc(thread_data_t data)
     double start_task_time = 0.0;
 
     for (i = 0; i < num_exp; i++) {
-
-        if (i == 0) pthread_barrier_wait(&barrier);
-
-        if (!data.isTest) {
-            if (i == 5) {
+    
+	if (!data.isTest){
+            if (i < 5) {
                 pthread_barrier_wait(&barrier);
-                // usleep(R * (data.thread_id - 1) * 1000);
-
-                // Busy wait for the remaining time
-                remaining_time = R * (data.thread_id - 1);
-                wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-                
-                if (remaining_time > 0) {
-                    wait_start = get_time_in_ms();
-                    wait_end;
-                    do {
-                        wait_end = get_time_in_ms();
-                        work_time = wait_end - wait_start;
-                    } while(work_time < remaining_time);
-                }
+                if (R > 0) usleep(R * (data.thread_id - 1) * 1000);
             }
         }
+        else{
+        	pthread_barrier_wait(&barrier);
+        }
+       
+
 
         // __Preprocess__
 #ifdef MEASURE
@@ -446,23 +438,50 @@ void data_parallel_jitter(char *datacfg, char *cfgfile, char *weightfile, char *
         pthread_join(threads[i], NULL);
     }
 
-    int startIdx = 5 * num_thread;
+#ifdef MEASURE
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(cfgfile) + 1);
+    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+    model_name[strlen(cfgfile)-10] = '\0';
+    
+
+    strcat(file_path, "data-parallel/");
+    strcat(file_path, model_name);
+    strcat(file_path, "/");
+
+    strcat(file_path, "data-parallel_");
+
+    char thread[20];
+    sprintf(thread, "%dthread", num_thread);
+    strcat(file_path, thread);
+
+    strcat(file_path, ".csv");
+    if(write_result(file_path) == -1) {
+        /* return error */
+        exit(0);
+    }
+#endif
+    R = 0.0;
+    max_execution_time = 0.0;
+    avg_execution_time = 0.0;
+    int startIdx = 10 * num_thread;
     for (i = startIdx; i < num_thread * num_exp; i++) {
         max_execution_time = MAX(max_execution_time, execution_time[i]);
         avg_execution_time += execution_time[i];
     }
 
-    avg_execution_time = avg_execution_time / (num_thread * num_exp - startIdx + 1);
+    avg_execution_time = avg_execution_time / (num_thread * num_exp - startIdx);
 
-    double wcet_ratio = 1.0; // Already WCET (Parallel 11 thread with No R --> Maximum Memony contention)
-    max_execution_time = max_execution_time * wcet_ratio;
+    double wcet_ratio = 1.03; // Already WCET (Parallel 11 thread with No R --> Maximum Memony contention)
+    max_execution_time = max_execution_time;
 
     printf("\navg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
     R = max_execution_time / num_thread;
     printf("R : %0.2lf \n", R);
 
 
-    printf("\n\n::EXP:: Data-parallel with %d threads\n", num_thread);
+    printf("\n\n::EXP 1:: Data-parallel with %d threads\n", num_thread);
 
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
@@ -489,27 +508,90 @@ void data_parallel_jitter(char *datacfg, char *cfgfile, char *weightfile, char *
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
+    R = 0.0;
+    max_execution_time = 0.0;
+    avg_execution_time = 0.0;
+    startIdx = 10 * num_thread;
+    for (i = startIdx; i < num_thread * num_exp; i++) {
+        max_execution_time = MAX(max_execution_time, execution_time[i]);
+        avg_execution_time += execution_time[i];
+    }
 
+    avg_execution_time = avg_execution_time / (num_thread * num_exp - startIdx);
+
+    wcet_ratio = 1.03; // Already WCET (Parallel 11 thread with No R --> Maximum Memony contention)
+    max_execution_time = max_execution_time;
+
+    printf("\navg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
+    R = max_execution_time / num_thread;
+    printf("R : %0.2lf \n", R);
+
+/*
+    printf("\n\n::EXP 2:: Data-parallel with %d threads\n", num_thread);
+
+    for (i = 0; i < num_thread; i++) {
+        data[i].datacfg = datacfg;
+        data[i].cfgfile = cfgfile;
+        data[i].weightfile = weightfile;
+        data[i].filename = filename;
+        data[i].thresh = thresh;
+        data[i].hier_thresh = hier_thresh;
+        data[i].dont_show = dont_show;
+        data[i].ext_output = ext_output;
+        data[i].save_labels = save_labels;
+        data[i].outfile = outfile;
+        data[i].letter_box = letter_box;
+        data[i].benchmark_layers = benchmark_layers;
+        data[i].thread_id = i + 1;
+        data[i].isTest = false;
+        rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+        if (rc) {
+            printf("Error: Unable to create thread, %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    for (i = 0; i < num_thread; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    R = 0.0;
+    max_execution_time = 0.0;
+    avg_execution_time = 0.0;
+    startIdx = 10 * num_thread;
+    for (i = startIdx; i < num_thread * num_exp; i++) {
+        max_execution_time = MAX(max_execution_time, execution_time[i]);
+        avg_execution_time += execution_time[i];
+    }
+
+    avg_execution_time = avg_execution_time / (num_thread * num_exp - startIdx);
+
+    wcet_ratio = 1.03; // Already WCET (Parallel 11 thread with No R --> Maximum Memony contention)
+    max_execution_time = max_execution_time;
+
+    printf("\navg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
+    R = max_execution_time / num_thread;
+    printf("R : %0.2lf \n", R);
+*/
 #ifdef MEASURE
-    char file_path[256] = "measure/";
+    char file_path_[256] = "measure/";
 
-    char* model_name = malloc(strlen(cfgfile) + 1);
-    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
-    model_name[strlen(cfgfile)-10] = '\0';
+    char* model_name_ = malloc(strlen(cfgfile) + 1);
+    strncpy(model_name_, cfgfile + 6, (strlen(cfgfile)-10));
+    model_name_[strlen(cfgfile)-10] = '\0';
     
 
-    strcat(file_path, "data-parallel/");
-    strcat(file_path, model_name);
-    strcat(file_path, "/");
+    strcat(file_path_, "data-parallel/");
+    strcat(file_path_, model_name_);
+    strcat(file_path_, "/");
 
-    strcat(file_path, "data-parallel_jitter_");
+    strcat(file_path_, "data-parallel_R_");
 
-    char thread[20];
-    sprintf(thread, "%dthread", num_thread);
-    strcat(file_path, thread);
+    char thread_[20];
+    sprintf(thread_, "%dthread", num_thread);
+    strcat(file_path_, thread_);
 
-    strcat(file_path, ".csv");
-    if(write_result(file_path) == -1) {
+    strcat(file_path_, ".csv");
+    if(write_result(file_path_) == -1) {
         /* return error */
         exit(0);
     }
