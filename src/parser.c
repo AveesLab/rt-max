@@ -1519,6 +1519,9 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
             l = parse_upsample(options, params, net);
         }else if(lt == SHORTCUT){
             l = parse_shortcut(options, params, net);
+            char *index_from = option_find(options, "from");
+            int index = atoi(index_from);
+            skip_layers[count][0] = count + index;
             net.layers[count - 1].use_bin_output = 0;
             net.layers[l.index].use_bin_output = 0;
             if (count >= last_stop_backward)

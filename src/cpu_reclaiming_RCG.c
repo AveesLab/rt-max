@@ -734,7 +734,12 @@ static void threadFunc(thread_data_t data)
         cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output_gpu;
         state.workspace = net.workspace;
-
+        if(gLayer == 0) {
+            state.input = net.input_state_gpu;
+            int size = get_network_input_size(net) * net.batch;
+            memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+            cuda_push_array(state.input, net.input_pinned_cpu, size);
+        }
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
         for(j = gLayer; j < net.n; ++j){
