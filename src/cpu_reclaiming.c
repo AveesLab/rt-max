@@ -675,9 +675,8 @@ static void threadFunc(thread_data_t data)
 
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
-        if(gLayer == 0) {
-            state.input = X;
-        }
+        if (gLayer == 0) state.input = X;
+
         // Reclaiming Inference
         if (data.isReclaiming) {
 
