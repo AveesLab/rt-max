@@ -473,10 +473,14 @@ static void threadFunc(thread_data_t data)
     double time;
 
     int top = 5;
-    int index, i, j, k = 0;
+    int nboxes = 0;
+    int index = 0;
+    int i = 0;
+    int j = 0;
+    int k = 0;
+
     int* indexes = (int*)xcalloc(top, sizeof(int));
 
-    int nboxes;
     detection *dets;
 
     image im, resized, cropped;
