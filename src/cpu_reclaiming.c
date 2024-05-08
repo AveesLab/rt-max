@@ -876,7 +876,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 {
     num_thread = MAXCORES - 1;
     bool visible_exp = false;
-    // visible_exp = true;
+    visible_exp = true;
     
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
@@ -942,7 +942,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
         max_execution_time = R * optimal_core;
         
-        if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+        if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
         reset_check_jitter();
         pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
@@ -986,7 +986,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
         max_execution_time = R * optimal_core;
 
-        if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+        if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
         reset_check_jitter();
         pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
@@ -1030,7 +1030,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
         max_execution_time = R * optimal_core;
 
-        if (visible_exp) printf("\n::EXP-3:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
+        if (visible_exp) printf("\n::EXP-3:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
         reset_check_jitter();
         pthread_barrier_init(&barrier, NULL, optimal_core);
         for (i = 0; i < optimal_core; i++) {
@@ -1137,7 +1137,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         max_execution_time = R * optimal_core;
 
-        if (visible_exp) printf("\n::EXP-5:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
+        if (visible_exp) printf("\n::EXP-5:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
         reset_check_jitter();
         for (i = 0; i < optimal_core; i++) {
@@ -1181,7 +1181,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         max_execution_time = R * optimal_core;
 
-        if (visible_exp) printf("\n::EXP-6:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
+        if (visible_exp) printf("\n::EXP-6:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
         reset_check_jitter();
         for (i = 0; i < optimal_core; i++) {
@@ -1225,7 +1225,51 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         max_execution_time = R * optimal_core;
 
-        if (visible_exp) printf("\n::EXP-7:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", optimal_core, gLayer, rLayer);
+        if (visible_exp) printf("\n::EXP-7:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
+        pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
+        reset_check_jitter();
+        for (i = 0; i < optimal_core; i++) {
+            data[i].datacfg = datacfg;
+            data[i].cfgfile = cfgfile;
+            data[i].weightfile = weightfile;
+            data[i].filename = filename;
+            data[i].thresh = thresh;
+            data[i].hier_thresh = hier_thresh;
+            data[i].dont_show = dont_show;
+            data[i].ext_output = ext_output;
+            data[i].save_labels = save_labels;
+            data[i].outfile = outfile;
+            data[i].letter_box = letter_box;
+            data[i].benchmark_layers = benchmark_layers;
+            data[i].thread_id = i + 1;
+            data[i].num_thread = optimal_core;
+            data[i].isTest = false;
+            data[i].isSet = true;
+            data[i].isReclaiming = true;
+            rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
+            if (rc) {
+                printf("Error: Unable to create thread, %d\n", rc);
+                exit(-1);
+            }
+        }
+
+        for (i = 0; i < optimal_core; i++) {
+            pthread_join(threads[i], NULL);
+        }
+
+        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
+
+        if (visible_exp) {
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        }
+
+        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+        optimal_core = (int)ceil(execution_time_wo_waiting / R);
+        if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
+        max_execution_time = R * optimal_core;
+
+        if (visible_exp) printf("\n::EXP-8:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
         pthread_barrier_init(&barrier_reclaiming, NULL, optimal_core);
         reset_check_jitter();
         for (i = 0; i < optimal_core; i++) {
