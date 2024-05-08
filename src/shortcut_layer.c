@@ -15,10 +15,10 @@ layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes,
 {
     // fprintf(stderr, "Shortcut Layer: ");
     int i;
-    for(i = 0; i < n; ++i) {
-        // fprintf(stderr, "%d, ", input_layers[i]);
-        skip_layers[input_layers[i]] = 1;
-    }
+    // for(i = 0; i < n; ++i) {
+    //     // fprintf(stderr, "%d, ", input_layers[i]);
+    //     skip_layers[input_layers[i]] = 1;
+    // }
 
     layer l = { (LAYER_TYPE)0 };
     l.train = train;
