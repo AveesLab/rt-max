@@ -127,8 +127,8 @@ fi
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
-    layer_start=0
-    layer_end=306
+    layer_start=168
+    layer_end=178
     layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
@@ -193,24 +193,8 @@ recaliming_infer=0.0
 
 # GPU-accelerated & CPU-reclaiming with optimal_core
 for glayer in $(seq $layer_start $layer_end); do
-    optimal_core="NULL"
+    optimal_core=10
     for ((rlayer = glayer + 1; rlayer <= $layer_num; rlayer++)); do
-        if [[ "$optimal_core" == "NULL" ]]; then
-            formatted_glayer=$(printf "%03d" $glayer)
-            file_path="measure/${gpu_accel_type}/${model}/gpu-accel_${formatted_glayer}glayer.csv"
-            if [[ -f "$file_path" ]]; then
-                optimal_core=$(calculate_average_int "$file_path" "optimal_core")
-            #     echo "--> optimal_core: $optimal_core"
-            # else
-            #     echo "--> No optimal_core: $optimal_core [$file_path]"
-            fi
-        fi
-        if [[ "$optimal_core" == "NULL" ]]; then
-            sleep 1s
-            echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 15
-            sleep 1s
-        else
             if (( optimal_core < 11 )); then
 		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
 		file_path_="measure/${reclaiming_accel_type}/${model}/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
@@ -221,7 +205,7 @@ for glayer in $(seq $layer_start $layer_end); do
 			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
 				sleep 1s
 				echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
+				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 10 -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
 				sleep 1s
 			else
 				break
@@ -229,12 +213,10 @@ for glayer in $(seq $layer_start $layer_end); do
 		else
 			sleep 1s
 			echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
+			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 10 -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
 			sleep 1s
 		fi
-            else
-                break
             fi
-        fi
+
     done
 done
