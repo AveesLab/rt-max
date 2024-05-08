@@ -93,8 +93,8 @@ fi
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
-    layer_start=0
-    layer_end=306
+    layer_start=172
+    layer_end=250
     layer_num=306
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
@@ -161,6 +161,36 @@ recaliming_infer=0.0
 for glayer in $(seq $layer_start $layer_end); do
     echo "GC -- glayer: $glayer"
     sleep 1s
-    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 15
+    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 10 -glayer $glayer -num_exp 15
+    sleep 1s
+done
+
+
+# 초기 optimal_core 값을 설정
+optimal_core="NULL"
+gpu_infer=0.0
+recaliming_infer=0.0
+
+# GPU-accelerated & CPU-reclaiming with optimal_core
+for glayer in $(seq $layer_start $layer_end); do
+    echo "GC -- glayer: $glayer"
+    sleep 1s
+    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 9 -glayer $glayer -num_exp 15
+    sleep 1s
+done
+
+
+
+
+# 초기 optimal_core 값을 설정
+optimal_core="NULL"
+gpu_infer=0.0
+recaliming_infer=0.0
+
+# GPU-accelerated & CPU-reclaiming with optimal_core
+for glayer in $(seq $layer_start $layer_end); do
+    echo "GC -- glayer: $glayer"
+    sleep 1s
+    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 8 -glayer $glayer -num_exp 15
     sleep 1s
 done

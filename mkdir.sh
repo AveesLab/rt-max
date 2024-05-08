@@ -57,6 +57,12 @@ do
 	mkdir -p gpu-accel-GC/$model/
 done
 
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-GC/densenet201/$num_thread/
+done
+
 ## GPU-Accel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do

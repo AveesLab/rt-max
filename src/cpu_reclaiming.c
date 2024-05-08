@@ -874,20 +874,20 @@ static void threadFunc(thread_data_t data)
 void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    num_thread = MAXCORES - 1;
+    // num_thread = MAXCORES - 1;
     bool visible_exp = false;
-    visible_exp = true;
+    // visible_exp = true;
     
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
-    pthread_t threads[MAXCORES - 1];
+    pthread_t threads[num_thread];
     int rc;
     int i;
 
-    thread_data_t data[MAXCORES - 1];
+    thread_data_t data[num_thread];
 
     if (opt_core == 0) {
-        optimal_core = 11;
+        optimal_core = num_thread;
 
         R = 0.0;
         sleep_time = 0.0;
@@ -934,12 +934,12 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         }
 
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
+        if (optimal_core > (num_thread)) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
         
         if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
@@ -978,12 +978,12 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         }
 
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
+        if (optimal_core > (num_thread)) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
@@ -1022,12 +1022,12 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         }
 
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(MAXCORES - 1));
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (MAXCORES - 1)) optimal_core = MAXCORES - 1;
+        if (optimal_core > (num_thread)) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-3:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
@@ -1073,6 +1073,13 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         strcat(file_path, model_name);
         strcat(file_path, "/");
 
+
+        char num_threads__[20];
+        sprintf(num_threads__, "%d/", num_thread);
+        strcat(file_path, num_threads__);
+
+
+
         strcat(file_path, "gpu-accel_");
 
         char gpu_portion[20];
@@ -1080,10 +1087,13 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         strcat(file_path, gpu_portion);
 
         strcat(file_path, ".csv");
+
         if(write_result_gpu(file_path) == -1) {
             /* return error */
             exit(0);
         }
+        
+
     }
 
     if (opt_core > 0) optimal_core = opt_core;
