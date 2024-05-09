@@ -590,7 +590,13 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
     l.inputs = l.w * l.h * l.c;
     l.activation = activation;
 
-    l.output = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
+    float *h_output, *d_output;
+
+    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    l.output = h_output;
+    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+
+    // l.output = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
 #ifndef GPU
     if (train) l.delta = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
 #endif  // not GPU
@@ -688,7 +694,6 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
         if (train && (l.activation == SWISH || l.activation == MISH || l.activation == HARD_MISH)) {
             l.activation_input_gpu = cuda_make_array(l.activation_input, total_batch*l.outputs);
         }
-
         if (l.deform) l.weight_deform_gpu = cuda_make_array(NULL, l.nweights);
 
         if (adam) {
@@ -718,7 +723,9 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
             if (train) l.bias_updates_gpu = cuda_make_array(l.bias_updates, n);
         }
 
-        l.output_gpu = cuda_make_array(l.output, total_batch*out_h*out_w*n);
+        l.output_gpu = d_output;
+
+        // l.output_gpu = cuda_make_array(l.output, total_batch*out_h*out_w*n);
         if (train) l.delta_gpu = cuda_make_array(l.delta, total_batch*out_h*out_w*n);
 
         if(binary){

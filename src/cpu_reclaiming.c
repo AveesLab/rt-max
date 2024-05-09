@@ -648,7 +648,10 @@ static void threadFunc(thread_data_t data)
 
             l.forward_gpu(l, state);
             if (skipped_layers[j]){
-                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+                // double copy_start  = get_time_in_ms();
+                l.output = l.output_gpu;
+                // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+                // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
             }
             state.input = l.output_gpu;
         }
@@ -816,7 +819,7 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                // else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
+                else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
 
             }
         }
