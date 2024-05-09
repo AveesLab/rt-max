@@ -876,7 +876,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 {
     // num_thread = MAXCORES - 1;
     bool visible_exp = false;
-    visible_exp = true;
+    // visible_exp = true;
     
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
