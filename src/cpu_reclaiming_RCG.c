@@ -649,7 +649,8 @@ static void threadFunc(thread_data_t data)
                 }
                 l.forward(l, state);
                 if (skip_layers[j]) {
-                    cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                    // cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                    l.output_gpu = l.output;
                 }
                 state.input = l.output;
             }
@@ -702,7 +703,9 @@ static void threadFunc(thread_data_t data)
             }
             l.forward(l, state);
             if (skipped_layers[j]){
-                cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                // cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                l.output_gpu = l.output;
+
             }
             state.input = l.output;
         }

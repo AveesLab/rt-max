@@ -113,7 +113,13 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
         if (!avgpool) l.indexes = (int*)xcalloc(output_size, sizeof(int));
         l.delta = (float*)xcalloc(output_size, sizeof(float));
     }
-    l.output = (float*)xcalloc(output_size, sizeof(float));
+    // l.output = (float*)xcalloc(output_size, sizeof(float));
+    float *h_output, *d_output;
+
+    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    l.output = h_output;
+    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+
     if (avgpool) {
         l.forward = forward_local_avgpool_layer;
         l.backward = backward_local_avgpool_layer;
@@ -136,7 +142,9 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
         if (!avgpool) l.indexes_gpu = cuda_make_int_array(output_size);
         l.delta_gpu = cuda_make_array(l.delta, output_size);
     }
-    l.output_gpu  = cuda_make_array(l.output, output_size);
+    // l.output_gpu  = cuda_make_array(l.output, output_size);
+    l.output_gpu = d_output;
+
     create_maxpool_cudnn_tensors(&l);
     if (avgpool) cudnn_local_avgpool_setup(&l);
     else cudnn_maxpool_setup(&l);

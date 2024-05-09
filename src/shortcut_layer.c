@@ -49,8 +49,13 @@ layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes,
 
 
     if (train) l.delta = (float*)xcalloc(l.outputs * batch, sizeof(float));
-    l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    // l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    float *h_output, *d_output;
 
+    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    l.output = h_output;
+    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    
     l.nweights = 0;
     if (l.weights_type == PER_FEATURE) l.nweights = (l.n + 1);
     else if (l.weights_type == PER_CHANNEL) l.nweights = (l.n + 1) * l.c;
@@ -83,7 +88,8 @@ layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes,
     }
 
     if (train) l.delta_gpu =  cuda_make_array(l.delta, l.outputs*batch);
-    l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    // l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    l.output_gpu = d_output;
 
     l.input_sizes_gpu = cuda_make_int_array_new_api(input_sizes, l.n);
     l.layers_output_gpu = (float**)cuda_make_array_pointers((void**)layers_output_gpu, l.n);

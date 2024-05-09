@@ -648,7 +648,8 @@ static void threadFunc(thread_data_t data)
             }
             l.forward(l, state);
             if (skipped_layers[j]){
-                cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                // cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                l.output_gpu = l.output;
             }
             state.input = l.output;
         }
@@ -681,8 +682,6 @@ static void threadFunc(thread_data_t data)
             start_reclaim_infer[count] = get_time_in_ms();
 #endif
 
-
-
             for(j = rLayer; j < gLayer; ++j){
                 state.index = j;
                 l = net.layers[j];
@@ -692,7 +691,8 @@ static void threadFunc(thread_data_t data)
                 }
                 l.forward(l, state);
                 if (skip_layers[j]) {
-                    cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                    // cuda_push_array(l.output_gpu, l.output, l.outputs * l.batch);
+                    l.output_gpu = l.output;
                 }
                 state.input = l.output;
             }
