@@ -897,8 +897,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (num_thread)) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
         
         if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
@@ -941,8 +939,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (num_thread)) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
@@ -985,8 +981,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (optimal_core > (num_thread)) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-3:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", optimal_core, gLayer, R);
@@ -1107,10 +1101,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
-        else if (optimal_core > num_thread) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-5:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
@@ -1152,10 +1142,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
-        else if (optimal_core > num_thread) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-6:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
@@ -1197,10 +1183,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
-        else if (optimal_core > num_thread) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-7:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
@@ -1242,10 +1224,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-
-        optimal_core = (int)ceil(execution_time_wo_waiting / R);
-        if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
-        else if (optimal_core > num_thread) optimal_core = num_thread;
         max_execution_time = R * optimal_core;
 
         if (visible_exp) printf("\n::EXP-8:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", optimal_core, gLayer, rLayer, R);
