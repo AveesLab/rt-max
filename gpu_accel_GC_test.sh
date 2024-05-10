@@ -85,11 +85,6 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
-if [ "$clean_mode" = true ]; then
-    ./test_clean_folder_gpu.sh -model "${model}" -accel_type "${gpu_accel_type}"
-fi
-
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
@@ -144,53 +139,24 @@ else
     exit 1
 fi
 
-# GPU-accelerated with optimal_core
-# for glayer in $(seq $layer_start $layer_num); do
-#     for ((rlayer = glayer + 1; rlayer < $layer_num; rlayer++)); do
-#         ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
-#     done
-# done
-
 
 # 초기 optimal_core 값을 설정
 optimal_core="NULL"
 gpu_infer=0.0
 recaliming_infer=0.0
+num_thread_=11
 
-# GPU-accelerated & CPU-reclaiming with optimal_core
+# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
+if [ "$clean_mode" = true ]; then
+    ./test_clean_folder_gpu.sh -model "${model}-multithread" -accel_type "${gpu_accel_type}" -num_thread "${num_thread_}thread"
+fi
+
+# GPU-accelerated
 for glayer in $(seq $layer_start $layer_end); do
     echo "GC -- glayer: $glayer"
     sleep 1s
-    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 10 -glayer $glayer -num_exp 15
+    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -num_exp 15
     sleep 1s
 done
 
 
-# 초기 optimal_core 값을 설정
-optimal_core="NULL"
-gpu_infer=0.0
-recaliming_infer=0.0
-
-# GPU-accelerated & CPU-reclaiming with optimal_core
-for glayer in $(seq $layer_start $layer_end); do
-    echo "GC -- glayer: $glayer"
-    sleep 1s
-    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 9 -glayer $glayer -num_exp 15
-    sleep 1s
-done
-
-
-
-
-# 초기 optimal_core 값을 설정
-optimal_core="NULL"
-gpu_infer=0.0
-recaliming_infer=0.0
-
-# GPU-accelerated & CPU-reclaiming with optimal_core
-for glayer in $(seq $layer_start $layer_end); do
-    echo "GC -- glayer: $glayer"
-    sleep 1s
-    ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 8 -glayer $glayer -num_exp 15
-    sleep 1s
-done

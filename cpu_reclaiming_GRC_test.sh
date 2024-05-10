@@ -117,13 +117,6 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
-#if [ "$clean_mode" = true ]; then
-#    ./test_clean_folder_gpu.sh -model "${model}" -accel_type "${gpu_accel_type}"
-#fi
-
-#./test_clean_folder_reclaiming.sh -model ${model} -accel_type "${reclaiming_accel_type}"
-
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
@@ -137,7 +130,7 @@ elif [ "$model" == "resnet152" ]; then
     layer_num=206
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
-    layer_start=1
+    layer_start=0
     layer_end=136
     layer_num=136
 elif [ "$model" == "csmobilenet-v2" ]; then
@@ -157,7 +150,7 @@ elif [ "$model" == "yolov7" ]; then
     layer_num=143
 elif [ "$model" == "yolov7-tiny" ]; then
     data_file="coco"
-    layer_start=1
+    layer_start=0
     layer_end=99
     layer_num=99
 elif [ "$model" == "yolov4" ]; then
@@ -167,7 +160,7 @@ elif [ "$model" == "yolov4" ]; then
     layer_num=162
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
-    layer_start=1
+    layer_start=0
     layer_end=38
     layer_num=38
 elif [ -z "$model" ]; then
@@ -177,13 +170,6 @@ else
     echo "Unknown model: $model"
     exit 1
 fi
-
-# GPU-accelerated with optimal_core
-# for glayer in $(seq $layer_start $layer_num); do
-#     for ((rlayer = glayer + 1; rlayer < $layer_num; rlayer++)); do
-#         ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
-#     done
-# done
 
 # 초기 optimal_core 값을 설정
 optimal_core="NULL"
@@ -195,67 +181,12 @@ layer_start=0
 last_rlayer=$(($layer_start + 1))
 
 
-# GPU-accelerated & CPU-reclaiming with optimal_core
-for glayer in $(seq $layer_start $layer_end); do
-    optimal_core="NULL"
-    if [ $last_rlayer -lt $(($glayer + 1)) ]; then
-	last_rlayer=$(($glayer + 1))
-    fi
-    for ((rlayer = $last_rlayer; rlayer <= $layer_num; rlayer++)); do
-        if [[ "$optimal_core" == "NULL" ]]; then
-            formatted_glayer=$(printf "%03d" $glayer)
-            file_path="measure/${gpu_accel_type}/${model}-multithread/${num_thread_}thread/gpu-accel_${formatted_glayer}glayer.csv"
-            if [[ -f "$file_path" ]]; then
-                optimal_core=$(calculate_average_int "$file_path" "optimal_core")
-            #     echo "--> optimal_core: $optimal_core"
-            # else
-            #     echo "--> No optimal_core: $optimal_core [$file_path]"
-            fi
-        fi
-        if [[ "$optimal_core" == "NULL" ]]; then
-            sleep 1s
-            echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15
-            sleep 1s
-        else
-            if (( optimal_core < 11 )); then
-		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
-		file_path_="measure/${reclaiming_accel_type}/${model}-multithread/${num_thread_}thread/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
-		if [[ -f "$file_path_" ]]; then
-			gpu_infer=$(calculate_average_float "$file_path_" "e_gpu_infer")
-			recaliming_infer=$(calculate_average_float "$file_path_" "e_reclaim_infer")
-			# echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
-			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
-				sleep 1s
-				echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
-				sleep 1s
-			else
-				last_rlayer=$(($rlayer - 2))
-				break
-			fi
-		else
-			sleep 1s
-			echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
-			sleep 1s
-		fi
-            else
-                break
-            fi
-        fi
-    done
-done
+# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
+if [ "$clean_mode" = true ]; then
+    ./test_clean_folder_gpu.sh -model "${model}-multithread" -accel_type "${gpu_accel_type}" -num_thread "${num_thread_}thread"
+fi
 
-
-# 초기 optimal_core 값을 설정
-optimal_core="NULL"
-gpu_infer=0.0
-recaliming_infer=0.0
-num_thread_=10
-
-layer_start=0
-last_rlayer=$(($layer_start + 1))
+./test_clean_folder_reclaiming.sh -model "${model}-multithread" -accel_type "${reclaiming_accel_type}" -num_thread "${num_thread_}thread"
 
 
 # GPU-accelerated & CPU-reclaiming with optimal_core
@@ -270,76 +201,12 @@ for glayer in $(seq $layer_start $layer_end); do
             file_path="measure/${gpu_accel_type}/${model}-multithread/${num_thread_}thread/gpu-accel_${formatted_glayer}glayer.csv"
             if [[ -f "$file_path" ]]; then
                 optimal_core=$(calculate_average_int "$file_path" "optimal_core")
-            #     echo "--> optimal_core: $optimal_core"
-            # else
-            #     echo "--> No optimal_core: $optimal_core [$file_path]"
+             #    echo "--> optimal_core: $optimal_core"
+             #else
+             #    echo "--> No optimal_core: $optimal_core [$file_path]"
             fi
         fi
-        if [[ "$optimal_core" == "NULL" ]]; then
-            sleep 1s
-            echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-            ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15
-            sleep 1s
-        else
-            if (( optimal_core < 11 )); then
-		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
-		file_path_="measure/${reclaiming_accel_type}/${model}-multithread/${num_thread_}thread/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
-		if [[ -f "$file_path_" ]]; then
-			gpu_infer=$(calculate_average_float "$file_path_" "e_gpu_infer")
-			recaliming_infer=$(calculate_average_float "$file_path_" "e_reclaim_infer")
-			# echo "$file_path_ --> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
-			if (( $(echo "$recaliming_infer < $gpu_infer" | bc) == 1 )); then
-				sleep 1s
-				echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
-				sleep 1s
-			else
-				last_rlayer=$(($rlayer - 2))
-				break
-			fi
-		else
-			sleep 1s
-			echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
-			./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15 -opt_core $optimal_core
-			sleep 1s
-		fi
-            else
-                break
-            fi
-        fi
-    done
-done
-
-
-
-# 초기 optimal_core 값을 설정
-optimal_core="NULL"
-gpu_infer=0.0
-recaliming_infer=0.0
-num_thread_=9
-
-layer_start=0
-last_rlayer=$(($layer_start + 1))
-
-
-# GPU-accelerated & CPU-reclaiming with optimal_core
-for glayer in $(seq $layer_start $layer_end); do
-    optimal_core="NULL"
-    if [ $last_rlayer -lt $(($glayer + 1)) ]; then
-	last_rlayer=$(($glayer + 1))
-    fi
-    for ((rlayer = $last_rlayer; rlayer <= $layer_num; rlayer++)); do
-        if [[ "$optimal_core" == "NULL" ]]; then
-            formatted_glayer=$(printf "%03d" $glayer)
-            file_path="measure/${gpu_accel_type}/${model}-multithread/${num_thread_}thread/gpu-accel_${formatted_glayer}glayer.csv"
-            if [[ -f "$file_path" ]]; then
-                optimal_core=$(calculate_average_int "$file_path" "optimal_core")
-            #     echo "--> optimal_core: $optimal_core"
-            # else
-            #     echo "--> No optimal_core: $optimal_core [$file_path]"
-            fi
-        fi
-        if [[ "$optimal_core" == "NULL" ]]; then
+        if [[ "$optimal_core" == "NULL" || "$optimal_core" == "NaN" ]]; then
             sleep 1s
             echo "GRC -- glayer: $glayer, rlayer: $rlayer, optimal_core: $optimal_core"
             ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15
