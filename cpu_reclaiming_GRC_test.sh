@@ -181,7 +181,7 @@ fi
 # GPU-accelerated with optimal_core
 # for glayer in $(seq $layer_start $layer_num); do
 #     for ((rlayer = glayer + 1; rlayer < $layer_num; rlayer++)); do
-#         ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
+#         ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 10 -glayer $glayer -rlayer $rlayer -num_exp 30
 #     done
 # done
 
@@ -189,7 +189,7 @@ fi
 optimal_core="NULL"
 gpu_infer=0.0
 recaliming_infer=0.0
-num_thread_=11
+num_thread_=10
 
 layer_start=0
 last_rlayer=$(($layer_start + 1))
@@ -218,7 +218,7 @@ for glayer in $(seq $layer_start $layer_end); do
             ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15
             sleep 1s
         else
-            if (( optimal_core < 11 )); then
+            if (( optimal_core < 10 )); then
 		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
 		file_path_="measure/${reclaiming_accel_type}/${model}-multithread/${num_thread_}thread/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		if [[ -f "$file_path_" ]]; then
@@ -281,7 +281,7 @@ for glayer in $(seq $layer_start $layer_end); do
             ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15
             sleep 1s
         else
-            if (( optimal_core < 11 )); then
+            if (( optimal_core < 10 )); then
 		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
 		file_path_="measure/${reclaiming_accel_type}/${model}-multithread/${num_thread_}thread/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		if [[ -f "$file_path_" ]]; then
@@ -345,7 +345,7 @@ for glayer in $(seq $layer_start $layer_end); do
             ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread_ -glayer $glayer -rlayer $rlayer -num_exp 15
             sleep 1s
         else
-            if (( optimal_core < 11 )); then
+            if (( optimal_core < 10 )); then
 		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
 		file_path_="measure/${reclaiming_accel_type}/${model}-multithread/${num_thread_}thread/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		if [[ -f "$file_path_" ]]; then
