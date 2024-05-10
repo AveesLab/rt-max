@@ -15,13 +15,11 @@
 #include "nvToolsExt.h"
 #endif
 
-#ifdef MEASURE
 #ifdef WIN32
 #include <time.h>
 #include "gettimeofday.h"
 #else
 #include <sys/time.h>
-#endif
 #endif
 
 #define START_INDEX 5
@@ -62,7 +60,6 @@ typedef struct thread_data_t{
     bool isReclaiming;
 } thread_data_t;
 
-#ifdef MEASURE
 static double core_id_list[1000];
 static double start_preprocess[1000];
 static double end_preprocess[1000];
@@ -101,7 +98,6 @@ static double e_postprocess[1000];
 static double check_jitter[1000] = {0, };
 static int optimal_core;
 static float R;
-#endif
 
 static double execution_time[1000];
 static double execution_time_max[1000];
@@ -137,10 +133,8 @@ static double average(double arr[]){
     for(i = skip_num_exp ; i < total_num_exp - end_num_exp; i++) {
         sum += arr[i];
     }
-    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.03;
+    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.05;
 }
-
-#ifdef MEASURE
 
 static int compare(const void *a, const void *b) {
     double valueA = *((double *)a + 1);
@@ -340,7 +334,6 @@ static int write_result_reclaiming(char *file_path)
     for(i = 0; i < num_exp * optimal_core; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
-        // printf("%d == %.0lf %.0lf\n", i, core_id_list[i], sum_measure_data[i][0]);
         sum_measure_data[i][1] = start_preprocess[i];     
         sum_measure_data[i][2] = e_preprocess[i];       
         sum_measure_data[i][3] = end_preprocess[i];
@@ -440,7 +433,6 @@ static int write_result_reclaiming(char *file_path)
 
     return 1;
 }
-#endif
 
 #ifdef GPU
 static void threadFunc(thread_data_t data)
@@ -528,6 +520,7 @@ static void threadFunc(thread_data_t data)
     extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
 
+    // __Check Skip layer__
     for(i = gLayer; i < net.n; i++) {
         for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
@@ -536,6 +529,7 @@ static void threadFunc(thread_data_t data)
             }
         }
     }
+    
     srand(2222222);
     double remaining_time = 0.0;
 
@@ -544,10 +538,9 @@ static void threadFunc(thread_data_t data)
 
     for (i = 0; i < num_exp; i++) {
     
-#ifdef MEASURE
         int count = i * data.num_thread + data.thread_id - 1;
-#endif
-    
+
+        // __Time Sync__
         if(!data.isTest) {
             if(i < START_INDEX) {
             	if (data.isReclaiming){
@@ -582,37 +575,26 @@ static void threadFunc(thread_data_t data)
         nvtx_task = nvtxRangeStartA(task);
 #endif
 
-#ifdef MEASURE
-        //printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
-#else
-        printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
-#endif
-
-
-
-        time = get_time_in_ms();
+        // printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
+        
         // __Preprocess__
-#ifdef MEASURE
         start_preprocess[count] = get_time_in_ms();
-#endif
+
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-#ifdef MEASURE
         end_preprocess[count] = get_time_in_ms();
         e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
-#endif
+
         e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         // __Inference__
         // if (device) predictions = network_predict(net, X);
         // else predictions = network_predict_cpu(net, X);
 
-#ifdef MEASURE
         start_infer[count] = get_time_in_ms();
-#endif
 
         // GPU Inference
 
@@ -623,16 +605,11 @@ static void threadFunc(thread_data_t data)
         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
 #endif
 
-
-#ifdef MEASURE
         start_gpu_waiting[count] = get_time_in_ms();
-#endif
 
         pthread_mutex_lock(&mutex_gpu);
 
-#ifdef MEASURE
         start_gpu_infer[count] = get_time_in_ms();
-#endif
 
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
@@ -646,10 +623,6 @@ static void threadFunc(thread_data_t data)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-
-        // while(data.thread_id != current_thread) {
-        //     pthread_cond_wait(&cond, &mutex_gpu);
-        // }
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
@@ -678,18 +651,10 @@ static void threadFunc(thread_data_t data)
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
 
-#ifdef MEASURE
         end_gpu_infer[count] = get_time_in_ms();
-#endif
+
         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
 
-        // if (data.thread_id == data.num_thread) {
-        //     current_thread = 1;
-        // } else {
-        //     current_thread++;
-        // }
-
-        // pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
 
 
@@ -700,9 +665,7 @@ static void threadFunc(thread_data_t data)
         // Reclaiming Inference
         if (data.isReclaiming) {
 
-#ifdef MEASURE
         start_reclaim_waiting[count] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
         char task_reclaiming[100];
@@ -713,9 +676,7 @@ static void threadFunc(thread_data_t data)
 
         pthread_mutex_lock(&mutex_reclaim);
 
-#ifdef MEASURE
         start_reclaim_infer[count] = get_time_in_ms();
-#endif
 
         openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
         openblas_set_num_threads(openblas_thread);
@@ -742,9 +703,7 @@ static void threadFunc(thread_data_t data)
 
         pthread_mutex_unlock(&mutex_reclaim);
 
-#ifdef MEASURE
         end_reclaim_infer[count] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_reclaiming);
@@ -766,9 +725,8 @@ static void threadFunc(thread_data_t data)
         nvtx_task_cpu = nvtxRangeStartA(task_cpu);
 #endif
 
-#ifdef MEASURE
         start_cpu_infer[count] = get_time_in_ms();
-#endif
+        
         int start_layer_cpu = 0;
         if (data.isReclaiming) {
             start_layer_cpu = rLayer;
@@ -801,23 +759,11 @@ static void threadFunc(thread_data_t data)
         nvtxRangeEnd(nvtx_task_cpu);
 #endif
 
-#ifdef MEASURE
         end_cpu_infer[count] = get_time_in_ms();
         end_infer[count] = get_time_in_ms();
-        waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
-        e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
-        e_gpu_synchronize[count] = end_gpu_synchronize[count] - start_gpu_synchronize[count];
-        waiting_reclaim[count] = start_reclaim_infer[count] - end_gpu_infer[count];//start_reclaim_waiting[i];
-        e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
-        e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
-        e_infer[count] = end_infer[count] - start_infer[count];
-        // printf("gpu : %0.2f, reclaim : %0.2f, cpu : %0.2f \n", e_gpu_infer[count], e_reclaim_infer[count], e_cpu_infer[count]);
-#endif
-        // printf("%0.2f %0.2f %0.2f\n",end_gpu_infer[count], waiting_reclaim[count], start_reclaim_infer[count]);
-        // __Postprecess__
-#ifdef MEASURE
+
         start_postprocess[count] = get_time_in_ms();
-#endif
+
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
@@ -849,24 +795,20 @@ static void threadFunc(thread_data_t data)
         free_image(resized);
         free_image(cropped);
 
-#ifdef MEASURE
+        // __Measure Result__
+        core_id_list[count] = (double)sched_getcpu();
+        
+        waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
+        e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
+        e_gpu_synchronize[count] = end_gpu_synchronize[count] - start_gpu_synchronize[count];
+        waiting_reclaim[count] = start_reclaim_infer[count] - end_gpu_infer[count];//start_reclaim_waiting[i];
+        e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
+        e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
+        e_infer[count] = end_infer[count] - start_infer[count];
+
         end_postprocess[count] = get_time_in_ms();
         e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         execution_time[count] = end_postprocess[count] - start_preprocess[count];
-        core_id_list[count] = (double)sched_getcpu();
-        // printf("%d -- %.0f\n", count, core_id_list[count]);
-        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
-#else
-        execution_time[i] = get_time_in_ms() - time;
-        frame_rate[i] = 1000.0 / (execution_time[i] / data.num_thread); // N thread
-        printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
-#endif
-        /*
-        if (!data.isTest) {
-            remaining_time = R *optimal_core - (get_time_in_ms() - start_preprocess[count]);
-            if (remaining_time > 0) usleep(remaining_time * 1000);
-        }
-        */
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
@@ -894,7 +836,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     // num_thread = MAXCORES - 1;
     
     int visible_exp = show_result;
-    // printf("show_result %d\n", show_result);
     
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
@@ -915,8 +856,8 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         avg_preprocess_time = 0.0;
         avg_gpu_infer_time = 0.0;
         avg_execution_time = 0.0;
-
-        // printf("\n\nGPU-accelerated with Jitter Compensation (CS: \"GPU\")\n");
+        
+        // =====================GPU-ACCEL=====================
         if (visible_exp) printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", optimal_core, gLayer);
         
         for (i = 0; i < optimal_core; i++) {
@@ -948,7 +889,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_join(threads[i], NULL);
         }
 
-
+        // =====================GPU-ACCEL + OPTIMAL_CORE=====================
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
@@ -1166,7 +1107,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-        // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         else if (optimal_core > num_thread) optimal_core = num_thread;
@@ -1211,7 +1152,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-        // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         else if (optimal_core > num_thread) optimal_core = num_thread;
@@ -1256,7 +1197,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-        // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         else if (optimal_core > num_thread) optimal_core = num_thread;
@@ -1301,7 +1242,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-        // R = MAX((average(e_gpu_infer)), (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess)) / MAXCORES -1); 
+
         optimal_core = (int)ceil(execution_time_wo_waiting / R);
         if (opt_core > 0 && optimal_core > opt_core) optimal_core = opt_core;
         else if (optimal_core > num_thread) optimal_core = num_thread;
@@ -1380,15 +1321,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     pthread_barrier_destroy(&barrier);
     pthread_barrier_destroy(&barrier_reclaiming);
     
-    // pthread_mutex_destroy(&mutex);
-    // pthread_cond_destroy(&cond);
-
-    // }
-    // else
-    // {
-    //     printf("\n\ne_infer : %0.02f,e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, e_infer_cpu : %0.02f\n", average(e_infer), average(e_gpu_infer), average(e_reclaim_infer), average(e_cpu_infer));
-    //     printf("\nError: Reclaiming inference time exceeds GPU inference time. Please check your configurations.\n\n");
-    // }
     return 0;
 
 }
