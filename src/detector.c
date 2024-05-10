@@ -37,6 +37,8 @@ int num_exp;
 int core_id;
 int num_blas;
 int num_thread;
+int show_result;
+int show_accuracy;
 int r_time;
 int num_process;
 int gLayer;
@@ -1941,6 +1943,8 @@ void run_detector(int argc, char **argv)
     gLayer = find_int_arg(argc, argv, "-glayer", 0);
     rLayer = find_int_arg(argc, argv, "-rlayer", 0);
     opt_core = find_int_arg(argc, argv, "-opt_core", 0);
+    show_result = find_arg(argc, argv, "-show_result");
+    show_accuracy = find_arg(argc, argv, "-show_accuracy");
     int dont_show = find_arg(argc, argv, "-dont_show");
     int theoretical_exp = find_arg(argc, argv, "-theoretical_exp");
     int theo_thread = find_int_arg(argc, argv, "-theo_thread", 1);

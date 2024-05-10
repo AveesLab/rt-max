@@ -833,7 +833,7 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                // else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
+                else if (show_accuracy && data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
 
             }
         }
@@ -892,8 +892,9 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     // num_thread = MAXCORES - 1;
-    bool visible_exp = false;
-    // visible_exp = true;
+    
+    int visible_exp = show_result;
+    // printf("show_result %d\n", show_result);
     
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
@@ -1077,6 +1078,12 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
         for (i = 0; i < optimal_core; i++) {
             pthread_join(threads[i], NULL);
+        }
+
+        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
+
+        if (visible_exp) {
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
         }
 
         char file_path[256] = "measure/";
@@ -1330,6 +1337,12 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
         for (i = 0; i < optimal_core; i++) {
             pthread_join(threads[i], NULL);
+        }
+
+        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
+
+        if (visible_exp) {
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
         }
 
         char file_path_[256] = "measure/";

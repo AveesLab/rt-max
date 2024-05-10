@@ -92,6 +92,8 @@ extern int num_process;
 extern int gLayer;
 extern int rLayer;
 extern int opt_core;
+extern int show_result;
+extern int show_accuracy;
 extern int skip_layers[1000][10];
 
 #ifdef __cplusplus
