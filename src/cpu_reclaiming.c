@@ -541,7 +541,7 @@ static void threadFunc(thread_data_t data)
 
         // __Time Sync__
         if(!data.isTest) {
-            if(i < START_INDEX) {
+            if(i <= START_INDEX) {
             	if (data.isReclaiming){
 		        pthread_barrier_wait(&barrier_reclaiming);
 		        usleep(R * (data.thread_id - 1) * 1000);
