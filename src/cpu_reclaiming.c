@@ -893,7 +893,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/(num_thread));
         }
 
         R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
@@ -937,7 +937,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/(num_thread));
         }
 
         R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
@@ -981,7 +981,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/(num_thread));
         }
 
         R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
@@ -1024,7 +1024,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
 
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, CPU/N: %0.02f --> R: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting/(num_thread), MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread)));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f --> R: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/optimal_core, MAX(average(e_gpu_infer), execution_time_wo_waiting/optimal_core));
         }
 
         char file_path[256] = "measure/";
@@ -1103,7 +1103,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread);
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
@@ -1148,7 +1148,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread);
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
@@ -1193,7 +1193,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread);
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
@@ -1238,7 +1238,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread);
         }
 
         R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
@@ -1283,7 +1283,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
 
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, CPU/N: %0.02f --> R: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread, maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread));
+        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f --> R: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/optimal_core, maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/optimal_core));
         }
 
         char file_path_[256] = "measure/";
