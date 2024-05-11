@@ -33,14 +33,16 @@ crop_layer make_crop_layer(int batch, int h, int w, int c, int crop_height, int 
     l.out_c = c;
     l.inputs = l.w * l.h * l.c;
     l.outputs = l.out_w * l.out_h * l.out_c;
-    l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    // l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    cudaHostAlloc((void**)&(l.output), (l.outputs * batch * sizeof(float)), cudaHostAllocMapped);
     l.forward = forward_crop_layer;
     l.backward = backward_crop_layer;
 
     #ifdef GPU
     l.forward_gpu = forward_crop_layer_gpu;
     l.backward_gpu = backward_crop_layer_gpu;
-    l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    // l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
     l.rand_gpu   = cuda_make_array(0, l.batch*8);
     #endif
     return l;
