@@ -561,8 +561,10 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
         l.bias_updates = l.share_layer->bias_updates;
     }
     else {
-        l.weights = (float*)xcalloc(l.nweights, sizeof(float));
-        l.biases = (float*)xcalloc(n, sizeof(float));
+        // l.weights = (float*)xcalloc(l.nweights, sizeof(float));
+        // l.biases = (float*)xcalloc(n, sizeof(float));
+        cudaHostAlloc((void**)&(l.weights), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+        cudaHostAlloc((void**)&(l.biases), n * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
 
         if (train) {
             l.weight_updates = (float*)xcalloc(l.nweights, sizeof(float));
@@ -590,11 +592,8 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
     l.inputs = l.w * l.h * l.c;
     l.activation = activation;
 
-    float *h_output, *d_output;
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
-    l.output = h_output;
-    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    cudaHostAlloc((void**)&(l.output), l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
 
     // l.output = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
 #ifndef GPU
@@ -605,19 +604,24 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
     l.backward = backward_convolutional_layer;
     l.update = update_convolutional_layer;
     if(binary){
-        l.binary_weights = (float*)xcalloc(l.nweights, sizeof(float));
+        // l.binary_weights = (float*)xcalloc(l.nweights, sizeof(float));
+        // l.scales = (float*)xcalloc(n, sizeof(float));
         l.cweights = (char*)xcalloc(l.nweights, sizeof(char));
-        l.scales = (float*)xcalloc(n, sizeof(float));
+        cudaHostAlloc((void**)&(l.binary_weights), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+        cudaHostAlloc((void**)&(l.scales), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
     }
     if(xnor){
-        l.binary_weights = (float*)xcalloc(l.nweights, sizeof(float));
-        l.binary_input = (float*)xcalloc(l.inputs * l.batch, sizeof(float));
+        // l.binary_weights = (float*)xcalloc(l.nweights, sizeof(float));
+        // l.binary_input = (float*)xcalloc(l.inputs * l.batch, sizeof(float));
+        cudaHostAlloc((void**)&(l.binary_weights), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+        cudaHostAlloc((void**)&(l.binary_input), l.inputs * l.batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
 
         int align = 32;// 8;
         int src_align = l.out_h*l.out_w;
         l.bit_align = src_align + (align - src_align % align);
 
-        l.mean_arr = (float*)xcalloc(l.n, sizeof(float));
+        // l.mean_arr = (float*)xcalloc(l.n, sizeof(float));
+        cudaHostAlloc((void**)&(l.mean_arr), l.n * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
 
         const size_t new_c = l.c / 32;
         size_t in_re_packed_input_size = new_c * l.w * l.h + 1;
@@ -643,6 +647,7 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
         }
         else {
             l.scales = (float*)xcalloc(n, sizeof(float));
+            // cudaHostAlloc((void**)&(l.scales), n * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
             for (i = 0; i < n; ++i) {
                 l.scales[i] = 1;
             }
@@ -658,6 +663,8 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
             }
             l.rolling_mean = (float*)xcalloc(n, sizeof(float));
             l.rolling_variance = (float*)xcalloc(n, sizeof(float));
+            // cudaHostAlloc((void**)&(l.rolling_mean), n * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+            // cudaHostAlloc((void**)&(l.rolling_variance), n * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
         }
 
 #ifndef GPU
@@ -669,17 +676,26 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
     }
 
 // #ifndef GPU
-    if (l.activation == SWISH || l.activation == MISH || l.activation == HARD_MISH) l.activation_input = (float*)calloc(total_batch*l.outputs, sizeof(float));
+    if (l.activation == SWISH || l.activation == MISH || l.activation == HARD_MISH) {
+        cudaHostAlloc((void**)&(l.activation_input), total_batch*l.outputs * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+        // l.activation_input = (float*)calloc(total_batch*l.outputs, sizeof(float));
+    } 
 // #endif  // not GPU
 
     if(adam){
         l.adam = 1;
-        l.m = (float*)xcalloc(l.nweights, sizeof(float));
-        l.v = (float*)xcalloc(l.nweights, sizeof(float));
-        l.bias_m = (float*)xcalloc(n, sizeof(float));
-        l.scale_m = (float*)xcalloc(n, sizeof(float));
-        l.bias_v = (float*)xcalloc(n, sizeof(float));
-        l.scale_v = (float*)xcalloc(n, sizeof(float));
+        // l.m = (float*)xcalloc(l.nweights, sizeof(float));
+        // l.v = (float*)xcalloc(l.nweights, sizeof(float));
+        // l.bias_m = (float*)xcalloc(n, sizeof(float));
+        // l.scale_m = (float*)xcalloc(n, sizeof(float));
+        // l.bias_v = (float*)xcalloc(n, sizeof(float));
+        // l.scale_v = (float*)xcalloc(n, sizeof(float));
+        cudaHostAlloc((void**)&(l.m), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);        
+        cudaHostAlloc((void**)&(l.v), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);        
+        cudaHostAlloc((void**)&(l.bias_m), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);        
+        cudaHostAlloc((void**)&(l.scale_m), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);        
+        cudaHostAlloc((void**)&(l.bias_v), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);        
+        cudaHostAlloc((void**)&(l.scale_v), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);        
     }
 
 #ifdef GPU
@@ -692,17 +708,24 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
     if(gpu_index >= 0){
 
         if (train && (l.activation == SWISH || l.activation == MISH || l.activation == HARD_MISH)) {
-            l.activation_input_gpu = cuda_make_array(l.activation_input, total_batch*l.outputs);
+            // l.activation_input_gpu = cuda_make_array(l.activation_input, total_batch*l.outputs);
+            cudaHostGetDevicePointer((void**)&(l.activation_input_gpu), (void*)&(l.activation_input),0);
         }
         if (l.deform) l.weight_deform_gpu = cuda_make_array(NULL, l.nweights);
 
         if (adam) {
-            l.m_gpu = cuda_make_array(l.m, l.nweights);
-            l.v_gpu = cuda_make_array(l.v, l.nweights);
-            l.bias_m_gpu = cuda_make_array(l.bias_m, n);
-            l.bias_v_gpu = cuda_make_array(l.bias_v, n);
-            l.scale_m_gpu = cuda_make_array(l.scale_m, n);
-            l.scale_v_gpu = cuda_make_array(l.scale_v, n);
+            // l.m_gpu = cuda_make_array(l.m, l.nweights);
+            // l.v_gpu = cuda_make_array(l.v, l.nweights);
+            // l.bias_m_gpu = cuda_make_array(l.bias_m, n);
+            // l.bias_v_gpu = cuda_make_array(l.bias_v, n);
+            // l.scale_m_gpu = cuda_make_array(l.scale_m, n);
+            // l.scale_v_gpu = cuda_make_array(l.scale_v, n);
+            cudaHostGetDevicePointer((void**)&(l.m_gpu), (void*)(l.m),0);
+            cudaHostGetDevicePointer((void**)&(l.v_gpu), (void*)(l.v),0);
+            cudaHostGetDevicePointer((void**)&(l.bias_m_gpu), (void*)(l.bias_m),0);
+            cudaHostGetDevicePointer((void**)&(l.bias_v_gpu), (void*)(l.bias_v),0);
+            cudaHostGetDevicePointer((void**)&(l.scale_m_gpu), (void*)(l.scale_m),0);
+            cudaHostGetDevicePointer((void**)&(l.scale_v_gpu), (void*)(l.scale_v),0);
         }
         if (l.share_layer) {
             l.weights_gpu = l.share_layer->weights_gpu;
@@ -713,29 +736,36 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
             l.bias_updates_gpu = l.share_layer->bias_updates_gpu;
         }
         else {
-            l.weights_gpu = cuda_make_array(l.weights, l.nweights);
+            // l.weights_gpu = cuda_make_array(l.weights, l.nweights);
+            cudaHostGetDevicePointer((void**)&(l.weights_gpu), (void*)(l.weights), 0);
             if (train) l.weight_updates_gpu = cuda_make_array(l.weight_updates, l.nweights);
 #ifdef CUDNN_HALF
             l.weights_gpu16 = cuda_make_array(NULL, l.nweights / 2 + 1);
             if (train) l.weight_updates_gpu16 = cuda_make_array(NULL, l.nweights / 2 + 1);
 #endif  // CUDNN_HALF
-            l.biases_gpu = cuda_make_array(l.biases, n);
+            // l.biases_gpu = cuda_make_array(l.biases, n);
+            cudaHostGetDevicePointer((void**)&(l.biases_gpu), (void*)(l.biases), 0);
             if (train) l.bias_updates_gpu = cuda_make_array(l.bias_updates, n);
         }
 
-        l.output_gpu = d_output;
-
+        cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
         // l.output_gpu = cuda_make_array(l.output, total_batch*out_h*out_w*n);
+
         if (train) l.delta_gpu = cuda_make_array(l.delta, total_batch*out_h*out_w*n);
 
         if(binary){
-            l.binary_weights_gpu = cuda_make_array(l.weights, l.nweights);
+            // l.binary_weights_gpu = cuda_make_array(l.weights, l.nweights);
+            cudaHostGetDevicePointer((void**)&(l.binary_weights_gpu), (void*)(l.binary_weights), 0);
         }
         if(xnor){
-            l.binary_weights_gpu = cuda_make_array(l.weights, l.nweights);
-            l.mean_arr_gpu = cuda_make_array(0, l.n);
-            l.binary_input_gpu = cuda_make_array(0, l.inputs*l.batch);
-        }
+            // l.binary_weights_gpu = cuda_make_array(l.weights, l.nweights);
+            // l.mean_arr_gpu = cuda_make_array(0, l.n);
+            // l.binary_input_gpu = cuda_make_array(0, l.inputs*l.batch);
+            cudaHostGetDevicePointer((void**)&(l.binary_weights_gpu), (void*)(l.binary_weights), 0);        
+            cudaHostGetDevicePointer((void**)&(l.mean_arr_gpu), (void*)(l.mean_arr), 0);        
+            cudaHostGetDevicePointer((void**)&(l.binary_input_gpu), (void*)(l.binary_input), 0);
+
+        } //asaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
         if(batch_normalize){
             if (l.share_layer) {
@@ -750,9 +780,10 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
             }
             else {
                 l.scales_gpu = cuda_make_array(l.scales, n);
+                // cudaHostGetDevicePointer((void**)&(l.scales_gpu), (void*)(l.scales), 0);        
 
                 if (train) {
-                    l.scale_updates_gpu = cuda_make_array(l.scale_updates, n);
+                    // l.scale_updates_gpu = cuda_make_array(l.scale_updates, n);
 
                     l.mean_gpu = cuda_make_array(l.mean, n);
                     l.variance_gpu = cuda_make_array(l.variance, n);
@@ -766,6 +797,8 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
 
                 l.rolling_mean_gpu = cuda_make_array(l.mean, n);
                 l.rolling_variance_gpu = cuda_make_array(l.variance, n);
+                // cudaHostGetDevicePointer((void**)&(l.rolling_mean_gpu), (void*)(l.rolling_mean), 0);        
+                // cudaHostGetDevicePointer((void**)&(l.rolling_variance_gpu), (void*)(l.rolling_variance), 0);        
             }
 
             if (train) {

@@ -31,7 +31,7 @@ route_layer make_route_layer(int batch, int n, int *input_layers, int *input_siz
     // l.output = (float*)xcalloc(outputs * batch, sizeof(float));
     float *h_output, *d_output;
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
     l.output = h_output;
     cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
 

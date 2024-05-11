@@ -116,7 +116,7 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
     // l.output = (float*)xcalloc(output_size, sizeof(float));
     float *h_output, *d_output;
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
     l.output = h_output;
     cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
 

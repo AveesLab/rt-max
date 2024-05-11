@@ -531,8 +531,22 @@ static void threadFunc(thread_data_t data)
     srand(2222222);
     double remaining_time = 0.0;
 
+    openblas_thread = (MAXCORES - 2) - data.num_thread + 1;
+    openblas_set_num_threads(openblas_thread);
+
+    for (int k = 0; k < openblas_thread - 1; k++) {
+        CPU_ZERO(&cpuset);
+        CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
+        // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+        openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+    }
+    
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
     for (i = 0; i < num_exp; i++) {
     
@@ -645,7 +659,11 @@ static void threadFunc(thread_data_t data)
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
+        double aa = get_time_in_ms();
+        double total_layer = 0.0;
         for(j = 0; j < gLayer; ++j){
+            // cudaEventRecord(start, get_cuda_stream());
+
             state.index = j;
             l = net.layers[j];
             if(l.delta_gpu && state.train){
@@ -653,15 +671,24 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
-            if (skipped_layers[j]){
+            // if (skipped_layers[j]){
 
-                l.output = l.output_gpu;
-                // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-                // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
-            }
+            //     l.output = l.output_gpu;
+            //     // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            //     // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
+            // }
             state.input = l.output_gpu;
+            // cudaEventRecord(stop, get_cuda_stream());
+            // cudaEventSynchronize(stop);
+            // float ms = 0.0;
+            // cudaEventElapsedTime(&ms, start, stop);
+            // total_layer += ms;
+            // printf("[%d %d %d] layer time: %.2f\n", coreIDOrder[data.thread_id], i, j, ms);
         }
-        l.output = l.output_gpu;
+        double bb = get_time_in_ms();
+        // printf("%.2f  %.2f\n", bb - aa, total_layer);
+        printf("%.2f\n", bb - aa);
+        // l.output = l.output_gpu;
         // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
         double sync_start  = get_time_in_ms();
@@ -711,17 +738,7 @@ static void threadFunc(thread_data_t data)
         start_reclaim_infer[count] = get_time_in_ms();
 #endif
 
-        openblas_thread = (MAXCORES - 2) - data.num_thread + 1;
-        openblas_set_num_threads(openblas_thread);
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < openblas_thread - 1; k++) {
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
-            // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 2) - k] );
-            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-        }
+
 
         for(j = gLayer; j < rLayer; ++j){
             state.index = j;
@@ -766,10 +783,6 @@ static void threadFunc(thread_data_t data)
         int start_layer_cpu = 0;
         if (data.isReclaiming) {
             start_layer_cpu = rLayer;
-            openblas_set_num_threads(1);
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[data.thread_id], &cpuset);
-            pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
         }
         else {
             start_layer_cpu = gLayer;
@@ -826,7 +839,7 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                // else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
+                else if (data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
 
             }
         }

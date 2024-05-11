@@ -29,7 +29,7 @@ layer make_upsample_layer(int batch, int w, int h, int c, int stride)
     // l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
     float *h_output, *d_output;
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
     l.output = h_output;
     cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
 
