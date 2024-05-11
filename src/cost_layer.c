@@ -41,9 +41,12 @@ cost_layer make_cost_layer(int batch, int inputs, COST_TYPE cost_type, float sca
     l.inputs = inputs;
     l.outputs = inputs;
     l.cost_type = cost_type;
-    l.delta = (float*)xcalloc(inputs * batch, sizeof(float));
-    l.output = (float*)xcalloc(inputs * batch, sizeof(float));
-    l.cost = (float*)xcalloc(1, sizeof(float));
+    // l.delta = (float*)xcalloc(inputs * batch, sizeof(float));
+    // l.output = (float*)xcalloc(inputs * batch, sizeof(float));
+    // l.cost = (float*)xcalloc(1, sizeof(float));
+    cudaHostAlloc((void**)&(l.delta), inputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.output), inputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.cost), sizeof(float), cudaHostAllocMapped);
 
     l.forward = forward_cost_layer;
     l.backward = backward_cost_layer;
@@ -51,8 +54,11 @@ cost_layer make_cost_layer(int batch, int inputs, COST_TYPE cost_type, float sca
     l.forward_gpu = forward_cost_layer_gpu;
     l.backward_gpu = backward_cost_layer_gpu;
 
-    l.delta_gpu = cuda_make_array(l.delta, inputs*batch);
-    l.output_gpu = cuda_make_array(l.output, inputs*batch);
+    // l.delta_gpu = cuda_make_array(l.delta, inputs*batch);
+    // l.output_gpu = cuda_make_array(l.output, inputs*batch);
+    cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
+    
     #endif
     return l;
 }

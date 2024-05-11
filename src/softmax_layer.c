@@ -36,10 +36,14 @@ softmax_layer make_softmax_layer(int batch, int inputs, int groups)
     l.groups = groups;
     l.inputs = inputs;
     l.outputs = inputs;
-    l.loss = (float*)xcalloc(inputs * batch, sizeof(float));
-    l.output = (float*)xcalloc(inputs * batch, sizeof(float));
-    l.delta = (float*)xcalloc(inputs * batch, sizeof(float));
-    l.cost = (float*)xcalloc(1, sizeof(float));
+    // l.loss = (float*)xcalloc(inputs * batch, sizeof(float));
+    // l.output = (float*)xcalloc(inputs * batch, sizeof(float));
+    // l.delta = (float*)xcalloc(inputs * batch, sizeof(float));
+    // l.cost = (float*)xcalloc(1, sizeof(float));
+    cudaHostAlloc((void**)&(l.loss), inputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.output), inputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.delta), inputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.cost), inputs * batch * sizeof(float), cudaHostAllocMapped);
 
     l.forward = forward_softmax_layer;
     l.backward = backward_softmax_layer;
@@ -47,9 +51,13 @@ softmax_layer make_softmax_layer(int batch, int inputs, int groups)
     l.forward_gpu = forward_softmax_layer_gpu;
     l.backward_gpu = backward_softmax_layer_gpu;
 
-    l.output_gpu = cuda_make_array(l.output, inputs*batch);
-    l.loss_gpu = cuda_make_array(l.loss, inputs*batch);
-    l.delta_gpu = cuda_make_array(l.delta, inputs*batch);
+    // l.output_gpu = cuda_make_array(l.output, inputs*batch);
+    // l.loss_gpu = cuda_make_array(l.loss, inputs*batch);
+    // l.delta_gpu = cuda_make_array(l.delta, inputs*batch);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
+    cudaHostGetDevicePointer((void**)&(l.loss_gpu), (void*)(l.loss), 0);
+    cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
+
 #endif
     return l;
 }

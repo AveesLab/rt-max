@@ -18,15 +18,21 @@ avgpool_layer make_avgpool_layer(int batch, int w, int h, int c)
     l.outputs = l.out_c;
     l.inputs = h*w*c;
     int output_size = l.outputs * batch;
-    l.output = (float*)xcalloc(output_size, sizeof(float));
-    l.delta = (float*)xcalloc(output_size, sizeof(float));
+    // l.output = (float*)xcalloc(output_size, sizeof(float));
+    // l.delta = (float*)xcalloc(output_size, sizeof(float));
+    cudaHostAlloc((void**)&(l.output), output_size * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.delta), output_size * sizeof(float), cudaHostAllocMapped);
+
     l.forward = forward_avgpool_layer;
     l.backward = backward_avgpool_layer;
     #ifdef GPU
     l.forward_gpu = forward_avgpool_layer_gpu;
     l.backward_gpu = backward_avgpool_layer_gpu;
-    l.output_gpu  = cuda_make_array(l.output, output_size);
-    l.delta_gpu   = cuda_make_array(l.delta, output_size);
+    // l.output_gpu  = cuda_make_array(l.output, output_size);
+    // l.delta_gpu   = cuda_make_array(l.delta, output_size);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
+    cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
+    
     #endif
     return l;
 }
