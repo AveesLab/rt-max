@@ -675,12 +675,12 @@ static void threadFunc(thread_data_t data)
 
             l.forward_gpu(l, state);
             usleep(1);
-            // if (skipped_layers[j]){
+            if (skipped_layers[j]){
 
-            //     l.output = l.output_gpu;
-            //     // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-            //     // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
-            // }
+                l.output = l.output_gpu;
+                // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+                // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
+            }
             state.input = l.output_gpu;
             // cudaEventRecord(stop, get_cuda_stream());
             // cudaEventSynchronize(stop);
@@ -697,16 +697,17 @@ static void threadFunc(thread_data_t data)
             // end_for[j] = get_time_in_ms();
 
         }
-        double bb = get_time_in_ms();
+        // double bb = get_time_in_ms();
         // printf("%.2f  %.2f\n", bb - aa, total_layer);
-        printf("%.2f\n", bb - aa);
-        // l.output = l.output_gpu;
+        // printf("%.2f\n", bb - aa);
+        l.output = l.output_gpu;
         // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-        state.input = l.output;
         double sync_start  = get_time_in_ms();
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         double sync_end = get_time_in_ms();
         sync_time[count] = sync_end - sync_start;
+        state.input = l.output;
+
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
 #endif
