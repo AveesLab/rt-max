@@ -213,7 +213,7 @@ for glayer in $(seq $layer_start $layer_end); do
 				./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -glayer $glayer -rlayer $rlayer -num_exp 10 -opt_core $num_thread
 				sleep 1s
 			else
-				echo "--> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
+				# echo "--> gpu_infer: $gpu_infer, recaliming_infer: $recaliming_infer"
 				last_rlayer=$(($rlayer - 2))
 				break
 			fi
