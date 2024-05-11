@@ -661,8 +661,11 @@ static void threadFunc(thread_data_t data)
         state.workspace = net.workspace;
         double aa = get_time_in_ms();
         double total_layer = 0.0;
+        double start_for[300] = {0, };
+        double end_for[300] = {0, };
         for(j = 0; j < gLayer; ++j){
             // cudaEventRecord(start, get_cuda_stream());
+            // start_for[j] = get_time_in_ms();
 
             state.index = j;
             l = net.layers[j];
@@ -671,6 +674,7 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
+            usleep(1);
             // if (skipped_layers[j]){
 
             //     l.output = l.output_gpu;
@@ -684,6 +688,14 @@ static void threadFunc(thread_data_t data)
             // cudaEventElapsedTime(&ms, start, stop);
             // total_layer += ms;
             // printf("[%d %d %d] layer time: %.2f\n", coreIDOrder[data.thread_id], i, j, ms);
+            //             if(j != 0) {
+            //     printf("[%d %d %d] inter layer time: %.6f  layer time: %.6f\n", coreIDOrder[data.thread_id], i, j, start_for[j] - end_for[j - 1], end_for[j] - start_for[j]);
+            // }
+            // else {
+            //     printf("[%d %d %d] inter layer time: 0 layer time: %.6f\n", coreIDOrder[data.thread_id], i, j, end_for[j] - start_for[j]);
+            // }
+            // end_for[j] = get_time_in_ms();
+
         }
         double bb = get_time_in_ms();
         // printf("%.2f  %.2f\n", bb - aa, total_layer);
