@@ -192,10 +192,6 @@ last_rlayer=$(($layer_start + 1))
 
 
 # '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
-if [ "$clean_mode" = true ]; then
-    ./test_clean_folder_gpu.sh -model "${model}-multithread" -accel_type "${gpu_accel_type}" -num_thread "${num_thread}thread"
-fi
-
 ./test_clean_folder_reclaiming.sh -model "${model}-multithread" -accel_type "${reclaiming_accel_type}" -num_thread "${num_thread}thread"
 
 
