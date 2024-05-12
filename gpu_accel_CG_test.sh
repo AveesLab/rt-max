@@ -63,31 +63,37 @@ calculate_average_float() {
 }
 
 # 기본값 설정 (필요한 경우)
-model=""
+model=""  # 모델 이름을 위한 변수
 clean_mode=false  # 'clean' 모드를 위한 변수 추가
 gpu_accel_type="gpu-accel-CG"
+num_thread=0  # 초기 num_thread 값을 설정
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -model)
             model="$2"
-            shift
+            shift 2  # 파라미터와 값 모두 넘김
+            ;;
+        -num_thread)
+            num_thread="$2"
+            shift 2  # 파라미터와 값 모두 넘김
             ;;
         -clean)  # '-clean' 인자를 확인하는 케이스 추가
             clean_mode=true
+            shift  # 파라미터만 넘김
             ;;
         *)
             echo "Unknown parameter: $1"
             exit 1
             ;;
     esac
-    shift
 done
 
-# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
-if [ "$clean_mode" = true ]; then
-    ./test_clean_folder_gpu.sh -model "${model}" -accel_type "${gpu_accel_type}"
+# 필수 파라미터 확인
+if [[ -z "$model" ]] || [[ "$num_thread" -eq 0 ]]; then
+    echo "Error: Both 'model' and 'num_thread' parameters are required. Usage: $0 -model [model_name] -num_thread [num_threads]"
+    exit 1
 fi
 
 # model 값에 따른 layer_num 값 설정
@@ -144,23 +150,17 @@ else
     exit 1
 fi
 
-# GPU-accelerated with optimal_core
-# for glayer in $(seq $layer_start $layer_num); do
-#     for ((rlayer = glayer + 1; rlayer < $layer_num; rlayer++)); do
-#         ./darknet detector cpu-reclaiming ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -rlayer $rlayer -num_exp 30
-#     done
-# done
+# '-clean' 인자가 주어진 경우에만 'test_clean_folder_gpu.sh' 스크립트 실행
+if [ "$clean_mode" = true ]; then
+    ./test_clean_folder_gpu.sh -model "${model}-multithread" -accel_type "${gpu_accel_type}" -num_thread "${num_thread}thread"
+fi
 
-
-# 초기 optimal_core 값을 설정
-optimal_core="NULL"
-gpu_infer=0.0
-recaliming_infer=0.0
-
-# GPU-accelerated & CPU-reclaiming with optimal_core
+# GPU-accelerated
 for glayer in $(seq $layer_end -1 $layer_start); do
     echo "CG -- glayer: $glayer"
     sleep 1s
-    ./darknet detector cpu-reclaiming-CRG ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $glayer -num_exp 15
+    ./darknet detector cpu-reclaiming-CRG ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -glayer $glayer -num_exp 10
     sleep 1s
 done
+
+
