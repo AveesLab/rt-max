@@ -666,7 +666,7 @@ static void threadFunc(thread_data_t data)
         pthread_mutex_unlock(&mutex_gpu);
 
 
-        state.workspace = net.workspace_cpu;
+        //state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
         if (gLayer == 0) state.input = X;
 
