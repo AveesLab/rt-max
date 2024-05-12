@@ -273,7 +273,8 @@ void sequential_multiblas(char *datacfg, char *cfgfile, char *weightfile, char *
             for(layer_id = 0; layer_id < net.n; ++layer_id){
                 state.index = layer_id;
                 layer l = net.layers[layer_id];
-                l.do_reclaiming = 1;
+                if (num_blas == 1) l.do_reclaiming = 0;
+                else l.do_reclaiming = 1;
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
