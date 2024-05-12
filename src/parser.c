@@ -1809,8 +1809,10 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
         if (device) {
             if (workspace_size) {
                 // fprintf(stderr, " Allocate additional workspace_size = %1.2f MB \n", (float)workspace_size/1000000);
-                net.workspace = cuda_make_array(0, workspace_size / sizeof(float) + 1);
-                net.workspace_cpu = (float*)xcalloc(1, workspace_size);
+                // net.workspace = cuda_make_array(0, workspace_size / sizeof(float) + 1);
+                // net.workspace_cpu = (float*)xcalloc(1, workspace_size);
+                cudaHostAlloc((void**)&(net.workspace_cpu), workspace_size, cudaHostAllocMapped);
+                cudaHostGetDevicePointer((void**)&(net.workspace), (void*)(net.workspace_cpu), 0);
             }
         }
         else {

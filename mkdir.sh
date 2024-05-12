@@ -63,6 +63,12 @@ do
 	mkdir -p gpu-accel-GC/densenet201-multithread/${num_thread}thread/
 done
 
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-CG/densenet201-multithread/${num_thread}thread/
+done
+
 ## GPU-Accel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
@@ -134,6 +140,13 @@ for var in {0..138}
 	done
 
 ## CPU-Reclaiming-CRG
+for thread in {1..11}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-CRG/densenet201-multithread/${thread}thread/${var}glayer/
+		done
+done
+
 for var in {1..305}
 	do
 	mkdir -p cpu-reclaiming-CRG/densenet201/${var}glayer/
@@ -183,7 +196,7 @@ for var in {1..138}
 
 
 for thread in {1..11}; do
-	for var in {0..305}
+	for var in {0..306}
 		do
 		mkdir -p cpu-reclaiming-GRC/densenet201-multithread/${thread}thread/${var}glayer/
 		done
@@ -235,6 +248,13 @@ for var in {0..138}
 	done
 
 ## CPU-Reclaiming-RCG
+for thread in {1..11}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-RCG/densenet201-multithread/${thread}thread/${var}glayer/
+		done
+done
+
 for var in {1..305}
 	do
 	mkdir -p cpu-reclaiming-RCG/densenet201/${var}glayer/
@@ -327,6 +347,13 @@ for var in {1..138}
 	done
 
 ## CPU-Reclaiming-GCR
+for thread in {1..11}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-GCR/densenet201-multithread/${thread}thread/${var}glayer/
+		done
+done
+
 for var in {1..305}
 	do
 	mkdir -p cpu-reclaiming-GCR/densenet201/${var}glayer/
