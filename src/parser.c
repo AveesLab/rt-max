@@ -1790,7 +1790,8 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
     if (gpu_index >= 0)
     {
         int size = get_network_input_size(net) * net.batch;
-        net.input_state_gpu = cuda_make_array(0, size);
+        // net.input_state_gpu = cuda_make_array(0, size);
+        cudaHostAlloc((void**)&(net.input_state_gpu), size * sizeof(float), cudaHostAllocMapped);
         if (cudaSuccess == cudaHostAlloc(&net.input_pinned_cpu, size * sizeof(float), cudaHostRegisterMapped)) net.input_pinned_cpu_flag = 1;
         else {
             cudaGetLastError(); // reset CUDA-error
@@ -1809,8 +1810,10 @@ network parse_network_cfg_custom(char *filename, int batch, int time_steps, int 
         if (device) {
             if (workspace_size) {
                 // fprintf(stderr, " Allocate additional workspace_size = %1.2f MB \n", (float)workspace_size/1000000);
-                net.workspace = cuda_make_array(0, workspace_size / sizeof(float) + 1);
-                net.workspace_cpu = (float*)xcalloc(1, workspace_size);
+                // net.workspace = cuda_make_array(0, workspace_size / sizeof(float) + 1);
+                // net.workspace_cpu = (float*)xcalloc(1, workspace_size);
+                cudaHostAlloc((void**)&(net.workspace_cpu), workspace_size, cudaHostAllocMapped);
+                cudaHostGetDevicePointer((void**)&(net.workspace), (void*)(net.workspace_cpu), 0);
             }
         }
         else {

@@ -48,48 +48,54 @@ layer make_shortcut_layer(int batch, int n, int *input_layers, int* input_sizes,
     l.index = l.input_layers[0];
 
 
-    if (train) l.delta = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    // if (train) l.delta = (float*)xcalloc(l.outputs * batch, sizeof(float));
     // l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
-    float *h_output, *d_output;
+    cudaHostAlloc((void**)&(l.delta), l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
-    l.output = h_output;
-    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    cudaHostAlloc((void**)&(l.output), l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
     
     l.nweights = 0;
     if (l.weights_type == PER_FEATURE) l.nweights = (l.n + 1);
     else if (l.weights_type == PER_CHANNEL) l.nweights = (l.n + 1) * l.c;
 
     if (l.nweights > 0) {
-        l.weights = (float*)calloc(l.nweights, sizeof(float));
+        // l.weights = (float*)calloc(l.nweights, sizeof(float));
+        cudaHostAlloc((void**)&(l.weights), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+
         float scale = sqrt(2. / l.nweights);
         for (i = 0; i < l.nweights; ++i) l.weights[i] = 1;// +0.01*rand_uniform(-1, 1);// scale*rand_uniform(-1, 1);   // rand_normal();
 
-        if (train) l.weight_updates = (float*)calloc(l.nweights, sizeof(float));
+        if (train) cudaHostAlloc((void**)&(l.weight_updates), l.nweights * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+        //l.weight_updates = (float*)calloc(l.nweights, sizeof(float));
         l.update = update_shortcut_layer;
     }
 
     l.forward = forward_shortcut_layer;
     l.backward = backward_shortcut_layer;
 
-    if (l.activation == SWISH || l.activation == MISH) l.activation_input = (float*)calloc(l.batch*l.outputs, sizeof(float));
+    if (l.activation == SWISH || l.activation == MISH) cudaHostAlloc((void**)&(l.activation_input), l.batch * l.outputs * sizeof(float), cudaHostAllocMapped);
+    //l.activation_input = (float*)calloc(l.batch*l.outputs, sizeof(float));
 
 
 #ifdef GPU
-    if (l.activation == SWISH || l.activation == MISH) l.activation_input_gpu = cuda_make_array(l.activation_input, l.batch*l.outputs);
+    if (l.activation == SWISH || l.activation == MISH) cudaHostGetDevicePointer((void**)&(l.activation_input_gpu), (void*)(l.activation_input), 0);
+    //l.activation_input_gpu = cuda_make_array(l.activation_input, l.batch*l.outputs);
 
     l.forward_gpu = forward_shortcut_layer_gpu;
     l.backward_gpu = backward_shortcut_layer_gpu;
 
     if (l.nweights > 0) {
         l.update_gpu = update_shortcut_layer_gpu;
-        l.weights_gpu = cuda_make_array(l.weights, l.nweights);
-        if (train) l.weight_updates_gpu = cuda_make_array(l.weight_updates, l.nweights);
+        // l.weights_gpu = cuda_make_array(l.weights, l.nweights);
+        cudaHostGetDevicePointer((void**)&(l.weights_gpu), (void*)(l.weights), 0);
+        if (train) cudaHostGetDevicePointer((void**)&(l.weight_updates_gpu), (void*)(l.weight_updates), 0);
+        //l.weight_updates_gpu = cuda_make_array(l.weight_updates, l.nweights);
     }
 
-    if (train) l.delta_gpu =  cuda_make_array(l.delta, l.outputs*batch);
+    if (train) cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
+    //l.delta_gpu =  cuda_make_array(l.delta, l.outputs*batch);
     // l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
-    l.output_gpu = d_output;
 
     l.input_sizes_gpu = cuda_make_int_array_new_api(input_sizes, l.n);
     l.layers_output_gpu = (float**)cuda_make_array_pointers((void**)layers_output_gpu, l.n);

@@ -666,6 +666,7 @@ static void threadFunc(thread_data_t data)
         for(j = 0; j < gLayer; ++j){
             // cudaEventRecord(start, get_cuda_stream());
             // start_for[j] = get_time_in_ms();
+        double aa = get_time_in_ms();
 
             state.index = j;
             l = net.layers[j];
@@ -674,13 +675,17 @@ static void threadFunc(thread_data_t data)
             }
 
             l.forward_gpu(l, state);
-            usleep(1);
-            if (skipped_layers[j]){
+            // usleep(10);
+            cudaStreamSynchronize(get_cuda_stream());
+            // if (skipped_layers[j]){
 
-                l.output = l.output_gpu;
-                // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-                // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
-            }
+            //     l.output = l.output_gpu;
+            //     // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+            //     // printf("copy time: %.2f\n", get_time_in_ms() - copy_start);            
+            // }
+                    double bb = get_time_in_ms();
+        printf("%.2f  %d\n", bb - aa, j);
+
             state.input = l.output_gpu;
             // cudaEventRecord(stop, get_cuda_stream());
             // cudaEventSynchronize(stop);
@@ -700,7 +705,7 @@ static void threadFunc(thread_data_t data)
         // double bb = get_time_in_ms();
         // printf("%.2f  %.2f\n", bb - aa, total_layer);
         // printf("%.2f\n", bb - aa);
-        l.output = l.output_gpu;
+        // l.output = l.output_gpu;
         // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         double sync_start  = get_time_in_ms();
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));

@@ -133,7 +133,7 @@ void forward_cost_layer_gpu(cost_layer l, network_state state)
     }
 
     if(l.ratio){
-        cuda_pull_array(l.delta_gpu, l.delta, l.batch*l.inputs);
+        // cuda_pull_array(l.delta_gpu, l.delta, l.batch*l.inputs);
         qsort(l.delta, l.batch*l.inputs, sizeof(float), float_abs_compare);
         int n = (1-l.ratio) * l.batch*l.inputs;
         float thresh = l.delta[n];
@@ -142,7 +142,7 @@ void forward_cost_layer_gpu(cost_layer l, network_state state)
         supp_ongpu(l.batch*l.inputs, thresh, l.delta_gpu, 1);
     }
 
-    cuda_pull_array(l.output_gpu, l.output, l.batch*l.inputs);
+    // cuda_pull_array(l.output_gpu, l.output, l.batch*l.inputs);
     l.cost[0] = sum_array(l.output, l.batch*l.inputs);
 }
 

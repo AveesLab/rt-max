@@ -28,8 +28,10 @@ layer make_scale_channels_layer(int batch, int index, int w, int h, int c, int w
     l.inputs = l.outputs;
     l.index = index;
 
-    l.delta = (float*)xcalloc(l.outputs * batch, sizeof(float));
-    l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    // l.delta = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    // l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    cudaHostAlloc((void**)&(l.delta), (l.outputs * batch * sizeof(float)), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&(l.output), (l.outputs * batch * sizeof(float)), cudaHostAllocMapped);
 
     l.forward = forward_scale_channels_layer;
     l.backward = backward_scale_channels_layer;
@@ -37,8 +39,10 @@ layer make_scale_channels_layer(int batch, int index, int w, int h, int c, int w
     l.forward_gpu = forward_scale_channels_layer_gpu;
     l.backward_gpu = backward_scale_channels_layer_gpu;
 
-    l.delta_gpu =  cuda_make_array(l.delta, l.outputs*batch);
-    l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    // l.delta_gpu =  cuda_make_array(l.delta, l.outputs*batch);
+    // l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
 #endif
     return l;
 }

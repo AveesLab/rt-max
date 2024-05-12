@@ -765,7 +765,7 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
             cudaHostGetDevicePointer((void**)&(l.mean_arr_gpu), (void*)(l.mean_arr), 0);        
             cudaHostGetDevicePointer((void**)&(l.binary_input_gpu), (void*)(l.binary_input), 0);
 
-        } //asaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        }
 
         if(batch_normalize){
             if (l.share_layer) {

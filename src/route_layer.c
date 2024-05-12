@@ -27,13 +27,13 @@ route_layer make_route_layer(int batch, int n, int *input_layers, int *input_siz
     l.outputs = outputs;
     l.inputs = outputs;
     //fprintf(stderr, " inputs = %d \t outputs = %d, groups = %d, group_id = %d \n", l.inputs, l.outputs, l.groups, l.group_id);
-    l.delta = (float*)xcalloc(outputs * batch, sizeof(float));
+    // l.delta = (float*)xcalloc(outputs * batch, sizeof(float));
     // l.output = (float*)xcalloc(outputs * batch, sizeof(float));
-    float *h_output, *d_output;
+    cudaHostAlloc((void**)&(l.delta), outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+    cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
-    l.output = h_output;
-    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    cudaHostAlloc((void**)&(l.output), outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
 
     l.forward = forward_route_layer;
     l.backward = backward_route_layer;
@@ -41,9 +41,8 @@ route_layer make_route_layer(int batch, int n, int *input_layers, int *input_siz
     l.forward_gpu = forward_route_layer_gpu;
     l.backward_gpu = backward_route_layer_gpu;
 
-    l.delta_gpu =  cuda_make_array(l.delta, outputs*batch);
+    // l.delta_gpu =  cuda_make_array(l.delta, outputs*batch);
     // l.output_gpu = cuda_make_array(l.output, outputs*batch);
-    l.output_gpu = d_output;
 
     #endif
     return l;

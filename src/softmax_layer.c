@@ -119,7 +119,7 @@ void forward_softmax_layer_gpu(const softmax_layer l, network_state net)
             mask_gpu_new_api(l.batch*l.inputs, l.delta_gpu, SECRET_NUM, net.truth, 0);
             mask_gpu_new_api(l.batch*l.inputs, l.loss_gpu, SECRET_NUM, net.truth, 0);
         }
-        cuda_pull_array(l.loss_gpu, l.loss, l.batch*l.inputs);
+        // cuda_pull_array(l.loss_gpu, l.loss, l.batch*l.inputs);
         l.cost[0] = sum_array(l.loss, l.batch*l.inputs);
     }
 }

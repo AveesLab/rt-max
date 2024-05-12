@@ -114,11 +114,8 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
         l.delta = (float*)xcalloc(output_size, sizeof(float));
     }
     // l.output = (float*)xcalloc(output_size, sizeof(float));
-    float *h_output, *d_output;
-
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
-    l.output = h_output;
-    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    cudaHostAlloc((void**)&(l.output), l.outputs * batch * sizeof(float), cudaHostAllocMapped | cudaHostAllocPortable);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
 
     if (avgpool) {
         l.forward = forward_local_avgpool_layer;
@@ -143,7 +140,6 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
         l.delta_gpu = cuda_make_array(l.delta, output_size);
     }
     // l.output_gpu  = cuda_make_array(l.output, output_size);
-    l.output_gpu = d_output;
 
     create_maxpool_cudnn_tensors(&l);
     if (avgpool) cudnn_local_avgpool_setup(&l);
@@ -168,7 +164,8 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
 
     if (l.antialiasing) {
         printf("AA:  ");
-        l.input_layer = (layer*)calloc(1, sizeof(layer));
+        // l.input_layer = (layer*)calloc(1, sizeof(layer));
+        cudaHostAlloc((void**)&(l.input_layer), sizeof(layer), cudaHostAllocMapped);
         int blur_size = 3;
         int blur_pad = blur_size / 2;
         if (l.antialiasing == 2) {
@@ -204,8 +201,9 @@ maxpool_layer make_maxpool_layer(int batch, int h, int w, int c, int size, int s
         for (i = 0; i < l.out_c; ++i) l.input_layer->biases[i] = 0;
 #ifdef GPU
         if (gpu_index >= 0) {
-            if (l.antialiasing) l.input_antialiasing_gpu = cuda_make_array(NULL, l.batch*l.outputs);
-            push_convolutional_layer(*(l.input_layer));
+            // if (l.antialiasing) l.input_antialiasing_gpu = cuda_make_array(NULL, l.batch*l.outputs);
+            // push_convolutional_layer(*(l.input_layer));
+            if(l.antialiasing) cudaHostGetDevicePointer((void**)&(l.input_antialiasing_gpu), (void*)&(l.input_layer), 0);
         }
 #endif  // GPU
     }
