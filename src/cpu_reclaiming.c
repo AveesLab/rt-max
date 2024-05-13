@@ -512,6 +512,15 @@ static void threadFunc(thread_data_t data)
     network net = net_list[data.thread_id];
     // network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device);
     // printf("parse_network_cfg_custom : %.3lf ms\n", get_time_in_ms() - start_1);
+    
+    // __Preprocess__
+    if (data.filename) strncpy(input, data.filename, 256);
+    else printf("Error! File is not exist.");
+    im = load_image(input, 0, 0, net.c);
+    resized = resize_min(im, net.w);
+    cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
+    X = cropped.data;    
+    
     pthread_mutex_unlock(&mutex_init);
 
     layer l = net.layers[net.n - 1];
@@ -531,9 +540,6 @@ static void threadFunc(thread_data_t data)
     
     srand(2222222);
     double remaining_time = 0.0;
-
-    if (data.filename) strncpy(input, data.filename, 256);
-    else printf("Error! File is not exist.");
 
     openblas_thread = (MAXCORES - 1) - data.num_thread + 1;
     openblas_set_num_threads(openblas_thread);
@@ -588,10 +594,7 @@ static void threadFunc(thread_data_t data)
         // __Preprocess__
         start_preprocess[count] = get_time_in_ms();
 
-        im = load_image(input, 0, 0, net.c);
-        resized = resize_min(im, net.w);
-        cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
-        X = cropped.data;
+
 
         end_preprocess[count] = get_time_in_ms();
         e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
@@ -798,10 +801,7 @@ static void threadFunc(thread_data_t data)
         //     wait_key_cv(1);
         // }
 
-        // free memory
-        free_image(im);
-        free_image(resized);
-        free_image(cropped);
+
 
         // __Measure Result__
         core_id_list[count] = (double)sched_getcpu();
@@ -832,6 +832,11 @@ static void threadFunc(thread_data_t data)
     free_list(options);
     free_alphabet(alphabet);
     // free_network(net);
+
+    // free memory
+    free_image(im);
+    free_image(resized);
+    free_image(cropped);
 
     pthread_exit(NULL);
 
