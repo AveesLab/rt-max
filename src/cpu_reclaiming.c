@@ -102,14 +102,12 @@ static double execution_time[1000];
 static double execution_time_max[1000];
 
 static double frame_rate[1000];
-static float avg_preprocess_time;
-static float avg_gpu_infer_time;
-static float avg_execution_time;
 
 static float max_preprocess_time;
 static float max_gpu_infer_time;
-static float max_execution_time;
-static float sleep_time;
+static float max_reclaim_infer_time;
+static float max_cpu_infer_time;
+static float release_interval;
 static float R;
 
 static int reset_check_jitter() {
@@ -192,7 +190,7 @@ static int write_result_gpu(char *file_path)
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_thread][33];
+    double sum_measure_data[num_exp * num_thread][34];
     for(i = 0; i < num_exp * num_thread; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -211,23 +209,24 @@ static int write_result_gpu(char *file_path)
         sum_measure_data[i][13] = max_gpu_infer_time;
         sum_measure_data[i][14] = start_cpu_infer[i];
         sum_measure_data[i][15] = e_cpu_infer[i];
-        sum_measure_data[i][16] = end_infer[i];
-        sum_measure_data[i][17] = end_infer[i];
-        sum_measure_data[i][18] = e_infer[i];
-        sum_measure_data[i][19] = start_postprocess[i];
-        sum_measure_data[i][20] = e_postprocess[i];
-        sum_measure_data[i][21] = end_postprocess[i];
-        sum_measure_data[i][22] = execution_time[i];
-        sum_measure_data[i][23] = execution_time_max[i];
-        sum_measure_data[i][24] = max_execution_time;
-        sum_measure_data[i][25] = 0.0;
+        sum_measure_data[i][16] = end_cpu_infer[i];
+        sum_measure_data[i][17] = max_cpu_infer_time;
+        sum_measure_data[i][18] = end_infer[i];
+        sum_measure_data[i][19] = e_infer[i];
+        sum_measure_data[i][20] = start_postprocess[i];
+        sum_measure_data[i][21] = e_postprocess[i];
+        sum_measure_data[i][22] = end_postprocess[i];
+        sum_measure_data[i][23] = execution_time[i];
+        sum_measure_data[i][24] = execution_time_max[i];
+        sum_measure_data[i][25] = release_interval;
         sum_measure_data[i][26] = 0.0;
         sum_measure_data[i][27] = 0.0;
         sum_measure_data[i][28] = 0.0;
-        sum_measure_data[i][29] = check_jitter[i];
-        sum_measure_data[i][30] = start_gpu_synchronize[i];
-        sum_measure_data[i][31] = e_gpu_synchronize[i];
-        sum_measure_data[i][32] = end_gpu_synchronize[i];
+        sum_measure_data[i][29] = 0.0;
+        sum_measure_data[i][30] = check_jitter[i];
+        sum_measure_data[i][31] = start_gpu_synchronize[i];
+        sum_measure_data[i][32] = e_gpu_synchronize[i];
+        sum_measure_data[i][33] = end_gpu_synchronize[i];
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -244,16 +243,16 @@ static int write_result_gpu(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
             "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
-            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "end_infer", 
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "e_cpu_infer_max_value", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "execution_time_max", "execution_time_max_value",
+            "execution_time", "execution_time_max", "release_interval",
             "cycle_time", "frame_rate",
             "num_thread", "R", "check_jitter",
             "start_gpu_synchronize", "e_gpu_synchronize", "end_gpu_synchronize");
@@ -263,7 +262,7 @@ static int write_result_gpu(char *file_path)
 
     for(i = 0; i < num_exp * num_thread - startIdx - endIdx; i++)
     {
-        if (new_sum_measure_data[i][29] > ACCEPTABLE_JITTER) continue;
+        if (new_sum_measure_data[i][30] > ACCEPTABLE_JITTER) continue;
         
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
@@ -271,12 +270,12 @@ static int write_result_gpu(char *file_path)
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
-        new_sum_measure_data[i][25] = cycle_time;
-        new_sum_measure_data[i][26] = frame_rate;
-        new_sum_measure_data[i][27] = (double)num_thread;
-        new_sum_measure_data[i][28] = R;
+        new_sum_measure_data[i][26] = cycle_time;
+        new_sum_measure_data[i][27] = frame_rate;
+        new_sum_measure_data[i][28] = (double)num_thread;
+        new_sum_measure_data[i][29] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
@@ -284,7 +283,7 @@ static int write_result_gpu(char *file_path)
                 new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
                 new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], 
                 new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28], new_sum_measure_data[i][29]
-                , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32]);
+                , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32], new_sum_measure_data[i][33]);
     }
     
     fclose(fp);
@@ -329,42 +328,46 @@ static int write_result_reclaiming(char *file_path)
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_thread][33];
+    double sum_measure_data[num_exp * num_thread][37];
     for(i = 0; i < num_exp * num_thread; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
         sum_measure_data[i][1] = start_preprocess[i];     
         sum_measure_data[i][2] = e_preprocess[i];       
         sum_measure_data[i][3] = end_preprocess[i];
-        sum_measure_data[i][4] = start_infer[i];
-        sum_measure_data[i][5] = start_gpu_waiting[i];    
-        sum_measure_data[i][6] = waiting_gpu[i];
-        sum_measure_data[i][7] = start_gpu_infer[i];       
-        sum_measure_data[i][8] = e_gpu_infer[i];        
-        sum_measure_data[i][9] = end_gpu_infer[i];
-        sum_measure_data[i][10] = waiting_reclaim[i];
-        sum_measure_data[i][11] = start_reclaim_infer[i];    
-        sum_measure_data[i][12] = e_reclaim_infer[i];    
-        sum_measure_data[i][13] = end_reclaim_infer[i];
-        sum_measure_data[i][14] = start_cpu_infer[i];     
-        sum_measure_data[i][15] = e_cpu_infer[i];  
-        sum_measure_data[i][16] = end_cpu_infer[i];  
-        sum_measure_data[i][17] = end_infer[i];
-        sum_measure_data[i][18] = e_infer[i];
-        sum_measure_data[i][19] = start_postprocess[i];     
-        sum_measure_data[i][20] = e_postprocess[i];      
-        sum_measure_data[i][21] = end_postprocess[i];
-        sum_measure_data[i][22] = execution_time[i];     
-        sum_measure_data[i][23] = execution_time_max[i];
-        sum_measure_data[i][24] = max_execution_time;     
-        sum_measure_data[i][25] = 0.0;      
-        sum_measure_data[i][26] = 0.0;
-        sum_measure_data[i][27] = 0.0;
-        sum_measure_data[i][28] = 0.0;
-        sum_measure_data[i][29] = check_jitter[i];
-        sum_measure_data[i][30] = start_gpu_synchronize[i];
-        sum_measure_data[i][31] = e_gpu_synchronize[i];
-        sum_measure_data[i][32] = end_gpu_synchronize[i];
+        sum_measure_data[i][4] = max_preprocess_time;
+        sum_measure_data[i][5] = start_infer[i];
+        sum_measure_data[i][6] = start_gpu_waiting[i];    
+        sum_measure_data[i][7] = waiting_gpu[i];
+        sum_measure_data[i][8] = start_gpu_infer[i];       
+        sum_measure_data[i][9] = e_gpu_infer[i];        
+        sum_measure_data[i][10] = end_gpu_infer[i];
+        sum_measure_data[i][11] = max_gpu_infer_time;
+        sum_measure_data[i][12] = waiting_reclaim[i];
+        sum_measure_data[i][13] = start_reclaim_infer[i];    
+        sum_measure_data[i][14] = e_reclaim_infer[i];    
+        sum_measure_data[i][15] = end_reclaim_infer[i];
+        sum_measure_data[i][16] = max_reclaim_infer_time;
+        sum_measure_data[i][17] = start_cpu_infer[i];     
+        sum_measure_data[i][18] = e_cpu_infer[i];  
+        sum_measure_data[i][19] = end_cpu_infer[i];  
+        sum_measure_data[i][20] = max_cpu_infer_time;
+        sum_measure_data[i][21] = end_infer[i];
+        sum_measure_data[i][22] = e_infer[i];
+        sum_measure_data[i][23] = start_postprocess[i];     
+        sum_measure_data[i][24] = e_postprocess[i];      
+        sum_measure_data[i][25] = end_postprocess[i];
+        sum_measure_data[i][26] = execution_time[i];     
+        sum_measure_data[i][27] = execution_time_max[i];
+        sum_measure_data[i][28] = release_interval;     
+        sum_measure_data[i][29] = 0.0;      
+        sum_measure_data[i][30] = 0.0;
+        sum_measure_data[i][31] = 0.0;
+        sum_measure_data[i][32] = 0.0;
+        sum_measure_data[i][33] = check_jitter[i];
+        sum_measure_data[i][34] = start_gpu_synchronize[i];
+        sum_measure_data[i][35] = e_gpu_synchronize[i];
+        sum_measure_data[i][36] = end_gpu_synchronize[i];
     }
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
@@ -381,18 +384,18 @@ static int write_result_reclaiming(char *file_path)
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
-            "start_preprocess", "e_preprocess", "end_preprocess", 
+            "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max_value", 
             "start_infer", 
             "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer",
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max_value",
             "waiting_reclaim",
-            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", 
-            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "end_infer", 
+            "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", "e_reclaim_infer_max_value", 
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "end_cpu_infer_max_value", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
-            "execution_time", "execution_time_max", "execution_time_max_value",
+            "execution_time", "execution_time_max", "release_interval",
             "cycle_time", "frame_rate",
             "num_thread", "R", "check_jitter",
             "start_gpu_synchronize", "e_gpu_synchronize", "end_gpu_synchronize");
@@ -402,7 +405,7 @@ static int write_result_reclaiming(char *file_path)
 
     for(i = 0; i < num_exp * num_thread - startIdx-endIdx; i++)
     {
-        if (new_sum_measure_data[i][29] > ACCEPTABLE_JITTER) continue;
+        if (new_sum_measure_data[i][33] > ACCEPTABLE_JITTER) continue;
 
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
@@ -410,12 +413,12 @@ static int write_result_reclaiming(char *file_path)
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
-        new_sum_measure_data[i][25] = cycle_time;
-        new_sum_measure_data[i][26] = frame_rate;
-        new_sum_measure_data[i][27] = (double)num_thread;
-        new_sum_measure_data[i][28] = R;
+        new_sum_measure_data[i][29] = cycle_time;
+        new_sum_measure_data[i][30] = frame_rate;
+        new_sum_measure_data[i][31] = (double)num_thread;
+        new_sum_measure_data[i][32] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
                 new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
                 new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
@@ -425,7 +428,8 @@ static int write_result_reclaiming(char *file_path)
                 new_sum_measure_data[i][18], new_sum_measure_data[i][19], new_sum_measure_data[i][20], 
                 new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23],
                 new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28], new_sum_measure_data[i][29]
-                , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32]);
+                , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32], new_sum_measure_data[i][33]
+                , new_sum_measure_data[i][34], new_sum_measure_data[i][35], new_sum_measure_data[i][36]);
     }
 
     fclose(fp);
@@ -844,6 +848,14 @@ static void threadFunc(thread_data_t data)
 void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    R = 0.0;
+    max_preprocess_time = 0.0;
+    max_gpu_infer_time = 0.0;
+    max_reclaim_infer_time = 0.0;
+    max_cpu_infer_time = 0.0;
+    release_interval = 0.0;
+
     // num_thread = MAXCORES - 1;
     
     int visible_exp = show_result;
@@ -857,17 +869,16 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     thread_data_t data[num_thread];
 
     if (opt_core == 0) {
+
+	R = 0.0;
+	max_preprocess_time = 0.0;
+	max_gpu_infer_time = 0.0;
+	max_reclaim_infer_time = 0.0;
+	max_cpu_infer_time = 0.0;
+	release_interval = 0.0;
+
         num_thread = num_thread;
 
-        R = 0.0;
-        sleep_time = 0.0;
-        max_preprocess_time = 0.0;
-        max_gpu_infer_time = 0.0;
-        max_execution_time = 0.0;
-        avg_preprocess_time = 0.0;
-        avg_gpu_infer_time = 0.0;
-        avg_execution_time = 0.0;
-        
         // =====================GPU-ACCEL=====================
         if (visible_exp) printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
         
@@ -900,12 +911,15 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_join(threads[i], NULL);
         }
 
-        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
-        max_execution_time = R * num_thread;
+	max_preprocess_time = average(e_preprocess);
+        max_gpu_infer_time = average(e_gpu_infer);
+        max_cpu_infer_time = average(e_cpu_infer);
+        execution_time_wo_waiting = max_gpu_infer_time + max_cpu_infer_time; // Delete Preprocess
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/num_thread);
+        release_interval = R * num_thread;
         
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/(num_thread), max_execution_time);
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
         
         if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", num_thread, gLayer, R);
@@ -940,12 +954,15 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_join(threads[i], NULL);
         }
 
-        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
-        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread));
-        max_execution_time = R * num_thread;
-
+	max_preprocess_time = average(e_preprocess);
+        max_gpu_infer_time = average(e_gpu_infer);
+        max_cpu_infer_time = average(e_cpu_infer);
+        execution_time_wo_waiting = max_gpu_infer_time + max_cpu_infer_time; // Delete Preprocess
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/num_thread);
+        release_interval = R * num_thread;
+        
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/(num_thread), max_execution_time);
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
         if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", num_thread, gLayer, R);
@@ -980,10 +997,15 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_join(threads[i], NULL);
         }
 
-        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_postprocess));
-
+	max_preprocess_time = average(e_preprocess);
+        max_gpu_infer_time = average(e_gpu_infer);
+        max_cpu_infer_time = average(e_cpu_infer);
+        execution_time_wo_waiting = max_gpu_infer_time + max_cpu_infer_time; // Delete Preprocess
+        R = MAX(average(e_gpu_infer), execution_time_wo_waiting/num_thread);
+        release_interval = R * num_thread;
+        
         if (visible_exp) {
-            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f --> Cycle time: %0.02f, Frame rate: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread, MAX(average(e_gpu_infer), execution_time_wo_waiting/(num_thread))* num_thread, MAX(average(e_gpu_infer), execution_time_wo_waiting/num_thread), 1000/MAX(average(e_gpu_infer), execution_time_wo_waiting/num_thread));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
         char file_path[256] = "measure/";
@@ -1023,6 +1045,14 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     if (opt_core > 0) num_thread = opt_core;
 
     if (num_thread < (MAXCORES-1) && (rLayer > 0)) {
+    
+	R = 0.0;
+	max_preprocess_time = 0.0;
+	max_gpu_infer_time = 0.0;
+	max_reclaim_infer_time = 0.0;
+	max_cpu_infer_time = 0.0;
+	release_interval = 0.0;
+    
         // =====================RECLAMING=====================
         if (visible_exp) printf("\n::TEST:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer\n", num_thread, gLayer, rLayer);
         reset_check_jitter();
@@ -1056,13 +1086,17 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         for (i = 0; i < num_thread; i++) {
             pthread_join(threads[i], NULL);
         }
-
-        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
-        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-        max_execution_time = R * num_thread;
+        
+        max_preprocess_time = average(e_preprocess);
+	max_reclaim_infer_time = average(e_reclaim_infer);
+	max_gpu_infer_time = average(e_gpu_infer);
+	max_cpu_infer_time = average(e_cpu_infer);
+        execution_time_wo_waiting = max_gpu_infer_time + max_reclaim_infer_time + max_cpu_infer_time; // Delete Preprocess
+        R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting/num_thread);
+        release_interval = R * num_thread;
         
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread, max_execution_time);
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
         if (visible_exp) printf("\n::EXP-1:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", num_thread, gLayer, rLayer, R);
@@ -1097,12 +1131,16 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_join(threads[i], NULL);
         }
 
-        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
-        R = maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread);
-        max_execution_time = R * num_thread;
-
+        max_preprocess_time = average(e_preprocess);
+	max_reclaim_infer_time = average(e_reclaim_infer);
+	max_gpu_infer_time = average(e_gpu_infer);
+	max_cpu_infer_time = average(e_cpu_infer);
+        execution_time_wo_waiting = max_gpu_infer_time + max_reclaim_infer_time + max_cpu_infer_time; // Delete Preprocess
+        R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting/num_thread);
+        release_interval = R * num_thread;
+        
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread, max_execution_time);
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
         if (visible_exp) printf("\n::EXP-2:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", num_thread, gLayer, rLayer, R);
@@ -1137,10 +1175,16 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_join(threads[i], NULL);
         }
 
-        execution_time_wo_waiting = (average(e_preprocess)+average(e_cpu_infer)+average(e_gpu_infer)+average(e_reclaim_infer)+average(e_postprocess));
-
+        max_preprocess_time = average(e_preprocess);
+	max_reclaim_infer_time = average(e_reclaim_infer);
+	max_gpu_infer_time = average(e_gpu_infer);
+	max_cpu_infer_time = average(e_cpu_infer);
+        execution_time_wo_waiting = max_gpu_infer_time + max_reclaim_infer_time + max_cpu_infer_time; // Delete Preprocess
+        R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting/num_thread);
+        release_interval = R * num_thread;
+        
         if (visible_exp) {
-        printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f  --> Cycle time: %0.02f, Frame rate: %0.02f\n", average(e_preprocess), average(e_cpu_infer), average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting, execution_time_wo_waiting/num_thread, maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread) * num_thread, maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread), 1000/maxOfThree(average(e_gpu_infer), average(e_reclaim_infer), execution_time_wo_waiting/num_thread));
+            printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
         char file_path_[256] = "measure/";
