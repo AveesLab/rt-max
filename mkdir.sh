@@ -66,6 +66,24 @@ done
 ## GPU-Accel_GC
 for num_thread in $(seq 1 11);
 do
+	mkdir -p gpu-accel-GC/resnet152-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-GC/csmobilenet-v2-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-GC/enetb0-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
 	mkdir -p gpu-accel-CG/densenet201-multithread/${num_thread}thread/
 done
 
@@ -147,6 +165,7 @@ for thread in {1..11}; do
 		done
 done
 
+
 for var in {1..305}
 	do
 	mkdir -p cpu-reclaiming-CRG/densenet201/${var}glayer/
@@ -199,6 +218,27 @@ for thread in {1..11}; do
 	for var in {0..306}
 		do
 		mkdir -p cpu-reclaiming-GRC/densenet201-multithread/${thread}thread/${var}glayer/
+		done
+done
+
+for thread in {1..11}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-GRC/enetb0-multithread/${thread}thread/${var}glayer/
+		done
+done
+
+for thread in {1..11}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-GRC/resnet152-multithread/${thread}thread/${var}glayer/
+		done
+done
+
+for thread in {1..11}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-GRC/csmobilenet-v2-multithread/${thread}thread/${var}glayer/
 		done
 done
 
