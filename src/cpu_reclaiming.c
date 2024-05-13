@@ -519,7 +519,7 @@ static void threadFunc(thread_data_t data)
     im = load_image(input, 0, 0, net.c);
     resized = resize_min(im, net.w);
     cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
-    X = cropped.data;    
+    X = cropped.data;
     
     pthread_mutex_unlock(&mutex_init);
 
@@ -776,24 +776,24 @@ static void threadFunc(thread_data_t data)
         start_postprocess[count] = get_time_in_ms();
 
         // __NMS & TOP acccuracy__
-        if (object_detection) {
-            dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
-            if (nms) {
-                if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
-                else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
-            }
-            draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
-        }
-        else {
-            if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
-            top_k(predictions, net.outputs, top, indexes);
-            for(j = 0; j < top; ++j){
-                index = indexes[j];
-                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                else if (show_accuracy && data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
+        // if (object_detection) {
+        //     dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
+        //     if (nms) {
+        //         if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+        //         else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+        //     }
+        //     draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
+        // }
+        // else {
+        //     if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+        //     top_k(predictions, net.outputs, top, indexes);
+        //     for(j = 0; j < top; ++j){
+        //         index = indexes[j];
+        //         if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+        //         else if (show_accuracy && data.thread_id == 1 && i == 3)printf("%s: %f\n",names[index], predictions[index]);
 
-            }
-        }
+        //     }
+        // }
 
         // __Display__
         // if (!data.dont_show) {
@@ -801,7 +801,9 @@ static void threadFunc(thread_data_t data)
         //     wait_key_cv(1);
         // }
 
-
+        end_postprocess[count] = get_time_in_ms();
+        e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
+        execution_time[count] = end_postprocess[count] - start_preprocess[count];
 
         // __Measure Result__
         core_id_list[count] = (double)sched_getcpu();
@@ -813,10 +815,6 @@ static void threadFunc(thread_data_t data)
         e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
         e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
-
-        end_postprocess[count] = get_time_in_ms();
-        e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
-        execution_time[count] = end_postprocess[count] - start_preprocess[count];
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
