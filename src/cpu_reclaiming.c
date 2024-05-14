@@ -653,12 +653,13 @@ static void *threadFunc(void *arg)
 
             l.forward_gpu(l, state);
             if (skipped_layers[j]){
-                l.output = l.output_gpu;      
+                // l.output = l.output_gpu;  
+                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output_gpu;
         }
-	l.output = l.output_gpu;  
-        // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+	// l.output = l.output_gpu;  
+        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
 
 	start_gpu_synchronize[count] = get_time_in_ms();
@@ -903,6 +904,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             data[i].isTest = true;
             data[i].isSet = false;
             data[i].isReclaiming = false;
+            printf("%d\n", data[i].thread_id);
             rc = pthread_create(&threads[i], NULL, threadFunc, (void *)&data[i]);
             if (rc) {
                 printf("Error: Unable to create thread, %d\n", rc);

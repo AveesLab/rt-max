@@ -26,12 +26,12 @@ layer make_upsample_layer(int batch, int w, int h, int c, int stride)
     l.outputs = l.out_w*l.out_h*l.out_c;
     l.inputs = l.w*l.h*l.c;
     l.delta = (float*)xcalloc(l.outputs * batch, sizeof(float));
-    // l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
-    float *h_output, *d_output;
+    l.output = (float*)xcalloc(l.outputs * batch, sizeof(float));
+    // float *h_output, *d_output;
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
-    l.output = h_output;
-    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    // (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    // l.output = h_output;
+    // cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
 
     l.forward = forward_upsample_layer;
     l.backward = backward_upsample_layer;
@@ -40,8 +40,8 @@ layer make_upsample_layer(int batch, int w, int h, int c, int stride)
     l.backward_gpu = backward_upsample_layer_gpu;
 
     l.delta_gpu =  cuda_make_array(l.delta, l.outputs*batch);
-    // l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
-    l.output_gpu = d_output;
+    l.output_gpu = cuda_make_array(l.output, l.outputs*batch);
+    // l.output_gpu = d_output;
 
     #endif
     // if(l.reverse) fprintf(stderr, "downsample              %2dx  %4d x%4d x%4d -> %4d x%4d x%4d\n", stride, w, h, c, l.out_w, l.out_h, l.out_c);

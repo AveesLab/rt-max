@@ -25,8 +25,8 @@ dropout_layer make_dropout_layer(int batch, int inputs, float probability, int d
     l.inputs = inputs;
     l.outputs = inputs;
     l.batch = batch;
-    // l.rand = (float*)xcalloc(inputs * batch, sizeof(float));
-    cudaHostAlloc((void**)&(l.rand), (inputs * batch * sizeof(float)), cudaHostAllocMapped);
+    l.rand = (float*)xcalloc(inputs * batch, sizeof(float));
+    // cudaHostAlloc((void**)&(l.rand), (inputs * batch * sizeof(float)), cudaHostAllocMapped);
 
     l.scale = 1./(1.0 - probability);
     l.forward = forward_dropout_layer;
@@ -34,8 +34,8 @@ dropout_layer make_dropout_layer(int batch, int inputs, float probability, int d
 #ifdef GPU
     l.forward_gpu = forward_dropout_layer_gpu;
     l.backward_gpu = backward_dropout_layer_gpu;
-    // l.rand_gpu = cuda_make_array(l.rand, inputs*batch);
-    cudaHostGetDevicePointer((void**)&(l.rand_gpu), (void*)(l.rand), 0);
+    l.rand_gpu = cuda_make_array(l.rand, inputs*batch);
+    // cudaHostGetDevicePointer((void**)&(l.rand_gpu), (void*)(l.rand), 0);
 
     if (l.dropblock) {
         l.drop_blocks_scale = cuda_make_array_pinned(l.rand, l.batch);

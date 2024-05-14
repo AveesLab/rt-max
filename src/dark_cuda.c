@@ -469,8 +469,8 @@ float *cuda_make_array_pinned(float *x, size_t n)
 {
     float *x_gpu;
     size_t size = sizeof(float)*n;
-    //cudaError_t status = cudaMalloc((void **)&x_gpu, size);
-    cudaError_t status = cudaHostAlloc((void **)&x_gpu, size, cudaHostRegisterMapped);
+    cudaError_t status = cudaMalloc((void **)&x_gpu, size);
+    // cudaError_t status = cudaHostAlloc((void **)&x_gpu, size, cudaHostRegisterMapped);
     if (status != cudaSuccess) fprintf(stderr, " Can't allocate CUDA-pinned memory on CPU-RAM \n");
     CHECK_CUDA(status);
     if (x) {

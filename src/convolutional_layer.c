@@ -590,13 +590,13 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
     l.inputs = l.w * l.h * l.c;
     l.activation = activation;
 
-    float *h_output, *d_output;
+    // float *h_output, *d_output;
 
-    (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
-    l.output = h_output;
-    cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
+    // (float*)cudaHostAlloc((void**)&h_output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    // l.output = h_output;
+    // cudaHostGetDevicePointer((void**)&d_output, (void*)h_output, 0);
 
-    // l.output = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
+    l.output = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
 #ifndef GPU
     if (train) l.delta = (float*)xcalloc(total_batch*l.outputs, sizeof(float));
 #endif  // not GPU
@@ -723,9 +723,9 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
             if (train) l.bias_updates_gpu = cuda_make_array(l.bias_updates, n);
         }
 
-        l.output_gpu = d_output;
+        // l.output_gpu = d_output;
 
-        // l.output_gpu = cuda_make_array(l.output, total_batch*out_h*out_w*n);
+        l.output_gpu = cuda_make_array(l.output, total_batch*out_h*out_w*n);
         if (train) l.delta_gpu = cuda_make_array(l.delta, total_batch*out_h*out_w*n);
 
         if(binary){
