@@ -442,7 +442,7 @@ static void *threadFunc(void *arg)
 {
 
     thread_data_t *data = (thread_data_t *)arg;
-    
+
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -544,7 +544,6 @@ static void *threadFunc(void *arg)
             }
         }
     }
-    
     srand(2222222);
     double remaining_time = 0.0;
 
@@ -556,9 +555,9 @@ static void *threadFunc(void *arg)
         // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
         openblas_setaffinity(k, sizeof(cpuset), &cpuset);
     }
-        
+
     for (i = 0; i < num_exp; i++) {
-    
+
         int count = i * data->num_thread + data->thread_id - 1;
 
         // __Time Sync__
@@ -658,6 +657,7 @@ static void *threadFunc(void *arg)
             }
             state.input = l.output_gpu;
         }
+
 	// l.output = l.output_gpu;  
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
@@ -677,7 +677,7 @@ static void *threadFunc(void *arg)
         pthread_mutex_unlock(&mutex_gpu);
 
 
-        //state.workspace = net.workspace_cpu;
+        state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
         if (gLayer == 0) state.input = X;
 
@@ -904,7 +904,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             data[i].isTest = true;
             data[i].isSet = false;
             data[i].isReclaiming = false;
-            printf("%d\n", data[i].thread_id);
             rc = pthread_create(&threads[i], NULL, threadFunc, (void *)&data[i]);
             if (rc) {
                 printf("Error: Unable to create thread, %d\n", rc);
