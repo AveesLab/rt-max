@@ -28,7 +28,7 @@
 
 pthread_barrier_t barrier;
 pthread_barrier_t barrier_reclaiming;
-static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
+static int coreIDOrder[MAXCORES] = {0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,1};
 // static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
@@ -123,14 +123,17 @@ static int is_GPU_larger(double a, double b) {
 
 static double average(double arr[]){
     double sum;
+    double max_ = 0;
     int total_num_exp = num_exp * num_thread;
     int skip_num_exp =  START_INDEX * num_thread;
     int end_num_exp =  END_INDEX * num_thread;
     int i;
     for(i = skip_num_exp ; i < total_num_exp - end_num_exp; i++) {
         sum += arr[i];
+        if (arr[i] > max_) max_ = arr[i];
     }
-    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.05;
+    return (sum / (total_num_exp-skip_num_exp-end_num_exp)) * 1.15;
+    //return max_;
 }
 
 static int compare(const void *a, const void *b) {
@@ -577,13 +580,6 @@ static void *threadFunc(void *arg)
 		start_time[data->thread_id] +=  R * num_thread;
 		remaining_time = start_time[data->thread_id] - get_time_in_ms();
 		if (remaining_time > 0) usleep(remaining_time * 1000);
-		else if (remaining_time < -ACCEPTABLE_JITTER) {
-			for (int idx = 1; idx < num_thread + 2; idx++) {
-				start_time[idx] += (fabs(remaining_time) * 2);
-				check_jitter[count + idx - num_thread] = fabs(remaining_time);
-				if (idx == 1) check_jitter[count + idx - num_thread -1] = fabs(remaining_time);
-			}
-		}
             }
         }
 
@@ -626,6 +622,10 @@ static void *threadFunc(void *arg)
 
         pthread_mutex_lock(&mutex_gpu);
 
+        while(data->thread_id != current_thread) {
+            pthread_cond_wait(&cond, &mutex_gpu);
+        }
+        
         start_gpu_infer[count] = get_time_in_ms();
 
         if (net.gpu_index != cuda_get_device())
@@ -640,6 +640,7 @@ static void *threadFunc(void *arg)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
+
 
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
@@ -673,7 +674,12 @@ static void *threadFunc(void *arg)
         end_gpu_infer[count] = get_time_in_ms();
 
         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
+        
+        if ( current_thread == num_thread ) current_thread = 1;
+        else current_thread++;
 
+	pthread_cond_broadcast(&cond); 
+	
         pthread_mutex_unlock(&mutex_gpu);
 
 
@@ -1225,6 +1231,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
     pthread_barrier_destroy(&barrier);
     pthread_barrier_destroy(&barrier_reclaiming);
+    pthread_cond_destroy(&cond);
     
     return 0;
 
