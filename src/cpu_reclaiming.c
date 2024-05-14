@@ -28,7 +28,7 @@
 
 pthread_barrier_t barrier;
 pthread_barrier_t barrier_reclaiming;
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
 // static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;

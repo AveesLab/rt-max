@@ -58,14 +58,14 @@ fi
 #./darknet detector sequential ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -core_id 3 -num_exp 100
 
 # Sequential with Multi-BLAS
-for var in {1..11}
+for var in {1..32}
 do
-    ./darknet detector sequential-multiblas ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_blas $var -num_exp 100
+    ./darknet detector sequential-multiblas ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_blas $var -num_exp 50
 done
 
 python3 gather_seq.py -model ${model}
 
-./darknet detector gpu-layer-test ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -num_exp 100
+./darknet detector gpu-layer-test ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 1 -num_exp 50
 
 # GPU-accelerated with 1 thread
 #for var in $(seq 1 $layer_num)

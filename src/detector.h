@@ -9,7 +9,7 @@ extern "C" {
 #ifdef MEASURE
 #define MAX(x,y) (((x) < (y) ? (y) : (x)))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
-#define MAXCORES 12
+#define MAXCORES 32
 #define MEASUREMENT_PATH "measure"
 #endif
 
