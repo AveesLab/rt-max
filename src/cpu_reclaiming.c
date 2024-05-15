@@ -11,9 +11,9 @@
 #include <sched.h>
 #include <unistd.h>
 
-#ifdef NVTX
-#include "nvToolsExt.h"
-#endif
+// #ifdef NVTX
+// #include "nvToolsExt.h"
+// #endif
 
 #ifdef WIN32
 #include <time.h>
@@ -487,6 +487,9 @@ void cpu_inference(network_state *state, network *net, layer *l, int layer_index
     }
     l->forward(*l, *state);
     state->input = l->output;
+    if(layer_index == net->n - 1) {
+        predictions = get_network_output(*net, 0);
+    }
 }
 
 void gpu_inference(network_state *state, network *net, layer *l, int layer_index)
@@ -502,6 +505,9 @@ void gpu_inference(network_state *state, network *net, layer *l, int layer_index
     //     l->output = l->output_gpu;      
     // }
     state->input = l->output_gpu;
+    if(layer_index == net->n - 1) {
+        predictions = get_network_output_gpu(*net);
+    }
 }
 
 void reclaiming_inference(network_state *state, network *net, layer *l, int layer_index)
@@ -514,6 +520,9 @@ void reclaiming_inference(network_state *state, network *net, layer *l, int laye
     }
     l->forward(*l, *state);
     state->input = l->output;
+    if(layer_index == net->n - 1) {
+        predictions = get_network_output(*net, 0);
+    }
 }
 
 
@@ -532,6 +541,9 @@ void SetTest(bool test, bool set, bool reclaiming)
 static void threadFunc(int arg)
 {
     int thread_id = arg;
+    layer l;
+    network net = net_list[thread_id];
+
     // __CPU AFFINITY SETTING__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -590,59 +602,57 @@ static void threadFunc(int arg)
     // int device = 1; // Choose CPU or GPU
     // extern gpu_yolo;
 
-    pthread_mutex_lock(&mutex_init);
+    // pthread_mutex_lock(&mutex_init);
     // double start_1 = get_time_in_ms();
-    if (!isSet) {
-        network net_init = parse_network_cfg_custom(g_cfgfile, 1, 1, device); // set batch=1
+    // if (!isSet) {
+    //     network net_init = parse_network_cfg_custom(g_cfgfile, 1, 1, device); // set batch=1
 
-        if (g_weightfile) {
-            load_weights(&net_init, g_weightfile);
-        }
-        if (net_init.letter_box) g_letter_box = 1;
-        net_init.benchmark_layers = g_benchmark_layers;
-        fuse_conv_batchnorm(net_init);
-        calculate_binary_weights(net_init);
+    //     if (g_weightfile) {
+    //         load_weights(&net_init, g_weightfile);
+    //     }
+    //     if (net_init.letter_box) g_letter_box = 1;
+    //     net_init.benchmark_layers = g_benchmark_layers;
+    //     fuse_conv_batchnorm(net_init);
+    //     calculate_binary_weights(net_init);
 
-        net_list[thread_id] = net_init;
-    }
-    network net = net_list[thread_id];
+    //     net_list[thread_id] = net_init;
+    // }
     // network net = parse_network_cfg_custom(cfgfile, 1, 1, device);
     // printf("parse_network_cfg_custom : %.3lf ms\n", get_time_in_ms() - start_1);
     // __Preprocess__
-    if (g_filename) strncpy(input, g_filename, 256);
-    else printf("Error! File is not exist.");
-    im = load_image(input, 0, 0, net.c);
-    resized = resize_min(im, net.w);
-    cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
-    X = cropped.data;
+    // if (g_filename) strncpy(input, g_filename, 256);
+    // else printf("Error! File is not exist.");
+    // im = load_image(input, 0, 0, net.c);
+    // resized = resize_min(im, net.w);
+    // cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
+    // X = cropped.data;
     
-    pthread_mutex_unlock(&mutex_init);
+    // pthread_mutex_unlock(&mutex_init);
 
-    layer l = net.layers[net.n - 1];
+    // layer l = net.layers[net.n - 1];
+    // extern int skip_layers[1000][10];
 
-    extern int skip_layers[1000][10];
-
-    // __Check Skip layer__
-    for(int i = gLayer; i < net.n; i++) {
-        for(int j = 0; j < 10; j++) {
-            if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
-                skipped_layers[skip_layers[i][j]] = 1;
-                // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
-            }
-        }
-    }
+    // // __Check Skip layer__
+    // for(int i = gLayer; i < net.n; i++) {
+    //     for(int j = 0; j < 10; j++) {
+    //         if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
+    //             skipped_layers[skip_layers[i][j]] = 1;
+    //             // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
+    //         }
+    //     }
+    // }
     
     srand(2222222);
     double remaining_time = 0.0;
 
-    openblas_thread = (MAXCORES - 1) - num_thread + 1;
-    openblas_set_num_threads(openblas_thread);
-    for (int k = 0; k < openblas_thread - 1; k++) {
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
-        // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
-        openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-    }
+    // openblas_thread = (MAXCORES - 2) - num_thread + 1;
+    // openblas_set_num_threads(openblas_thread);
+    // for (int k = 0; k < openblas_thread - 1; k++) {
+    //     CPU_ZERO(&cpuset);
+    //     CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
+    //     // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+    //     openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+    // }
         
     for (int i = 0; i < num_exp; i++) {
     
@@ -676,12 +686,12 @@ static void threadFunc(int arg)
         // }
 
 
-#ifdef NVTX
-        char task[100];
-        sprintf(task, "Task (cpu: %d)", thread_id);
-        nvtxRangeId_t nvtx_task;
-        nvtx_task = nvtxRangeStartA(task);
-#endif
+// #ifdef NVTX
+//         char task[100];
+//         sprintf(task, "Task (cpu: %d)", thread_id);
+//         nvtxRangeId_t nvtx_task;
+//         nvtx_task = nvtxRangeStartA(task);
+// #endif
 
         // printf("\nThread %d is set to CPU core %d\n\n", thread_id, sched_getcpu());
         
@@ -702,12 +712,12 @@ static void threadFunc(int arg)
         start_infer[count] = get_time_in_ms();
         // GPU Inference
 
-#ifdef NVTX
-        char task_gpu[100];
-        sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", thread_id);
-        nvtxRangeId_t nvtx_task_gpu;
-        nvtx_task_gpu = nvtxRangeStartA(task_gpu);
-#endif
+// #ifdef NVTX
+//         char task_gpu[100];
+//         sprintf(task_gpu, "Task (cpu: %d) - GPU Inference", thread_id);
+//         nvtxRangeId_t nvtx_task_gpu;
+//         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
+// #endif
 
         start_gpu_waiting[count] = get_time_in_ms();
 
@@ -750,9 +760,9 @@ static void threadFunc(int arg)
 	start_gpu_synchronize[count] = get_time_in_ms();
 	CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 	end_gpu_synchronize[count] = get_time_in_ms();
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_gpu);
-#endif
+// #ifdef NVTX
+//         nvtxRangeEnd(nvtx_task_gpu);
+// #endif
 
         end_gpu_infer[count] = get_time_in_ms();
 
@@ -770,12 +780,12 @@ static void threadFunc(int arg)
 
         start_reclaim_waiting[count] = get_time_in_ms();
 
-#ifdef NVTX
-        char task_reclaiming[100];
-        sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", thread_id);
-        nvtxRangeId_t nvtx_task_reclaiming;
-        nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
-#endif
+// #ifdef NVTX
+//         char task_reclaiming[100];
+//         sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", thread_id);
+//         nvtxRangeId_t nvtx_task_reclaiming;
+//         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
+// #endif
 
         pthread_mutex_lock(&mutex_reclaim);
 
@@ -809,9 +819,9 @@ static void threadFunc(int arg)
 
         end_reclaim_infer[count] = get_time_in_ms();
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_reclaiming);
-#endif
+// #ifdef NVTX
+//         nvtxRangeEnd(nvtx_task_reclaiming);
+// #endif
         }
         else{
             start_reclaim_waiting[count] = 0;
@@ -822,12 +832,12 @@ static void threadFunc(int arg)
 
 
         // CPU Inference
-#ifdef NVTX
-        char task_cpu[100];
-        sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", thread_id);
-        nvtxRangeId_t nvtx_task_cpu;
-        nvtx_task_cpu = nvtxRangeStartA(task_cpu);
-#endif
+// #ifdef NVTX
+//         char task_cpu[100];
+//         sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", thread_id);
+//         nvtxRangeId_t nvtx_task_cpu;
+//         nvtx_task_cpu = nvtxRangeStartA(task_cpu);
+// #endif
 
         start_cpu_infer[count] = get_time_in_ms();
         
@@ -855,14 +865,14 @@ static void threadFunc(int arg)
             cpu_inference(&state, &net, &l, j);
         }
 
-        if (gLayer == net.n) predictions = get_network_output_gpu(net); // 이거 그냥 각 inference 함수에 j == net.n이면 predicions 넣게 해도 될듯
-        else predictions = get_network_output(net, 0);
+        // if (gLayer == net.n) predictions = get_network_output_gpu(net); // 이거 그냥 각 inference 함수에 j == net.n이면 predicions 넣게 해도 될듯
+        // else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task_cpu);
-#endif
+// #ifdef NVTX
+//         nvtxRangeEnd(nvtx_task_cpu);
+// #endif
 
         end_cpu_infer[count] = get_time_in_ms();
         end_infer[count] = get_time_in_ms();
@@ -912,9 +922,9 @@ static void threadFunc(int arg)
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task);
-#endif
+// #ifdef NVTX
+//         nvtxRangeEnd(nvtx_task);
+// #endif
     }
 
     // free memory
@@ -966,6 +976,9 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     alphabet = load_alphabet();
     object_detection = strstr(g_cfgfile, target_model);
 
+    if (g_filename) strncpy(input, g_filename, 256);
+    else printf("Error! File is not exist.");
+
     // num_thread = MAXCORES - 1;
     
     int visible_exp = show_result;
@@ -984,6 +997,36 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (visible_exp) printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
         SetTest(true, false, false);
         for (i = 0; i < num_thread; i++) {
+            int threads_id = i + 1;
+            network net_init = parse_network_cfg_custom(g_cfgfile, 1, 1, device); // set batch=1
+
+            if (g_weightfile) {
+                load_weights(&net_init, g_weightfile);
+            }
+            if (net_init.letter_box) g_letter_box = 1;
+            net_init.benchmark_layers = g_benchmark_layers;
+            fuse_conv_batchnorm(net_init);
+            calculate_binary_weights(net_init);
+
+            net_list[threads_id] = net_init;
+
+            if(i == 0) {
+                
+                im = load_image(g_filename, 0, 0, net_init.c);
+                resized = resize_min(im, net_init.w);
+                cropped = crop_image(resized, (resized.w - net_init.w)/2, (resized.h - net_init.h)/2, net_init.w, net_init.h);
+                X = cropped.data;
+            }
+                cpu_set_t cpuset;
+
+            openblas_thread = (MAXCORES - 2) - num_thread + 1;
+            openblas_set_num_threads(openblas_thread);
+            for (int k = 0; k < openblas_thread - 1; k++) {
+                CPU_ZERO(&cpuset);
+                CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
+                // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+                openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+            }
             // data[i].datacfg = datacfg;
             // data[i].cfgfile = cfgfile;
             // data[i].weightfile = weightfile;
@@ -996,7 +1039,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             // data[i].outfile = outfile;
             // data[i].letter_box = letter_box;
             // data[i].benchmark_layers = benchmark_layers;
-            int threads_id = i + 1;
             // data[i].num_thread = num_thread;
             // data[i].isTest = true;
             // data[i].isSet = false;
