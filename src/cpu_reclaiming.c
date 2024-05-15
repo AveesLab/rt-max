@@ -81,7 +81,25 @@ int object_detection;
 
 int device = 1; // Choose CPU or GPU
 extern gpu_yolo;
-
+// typedef struct thread_data_t{
+    // char *datacfg;
+    // char *cfgfile;
+    // char *weightfile;
+    // char *filename;
+    // float thresh;
+    // float hier_thresh;
+    // int dont_show;
+    // int ext_output;
+    // int save_labels;
+    // char *outfile;
+    // int letter_box;
+    // int benchmark_layers;
+    // int thread_id;
+    // int num_thread;
+    // bool isTest;
+    // bool isSet;
+    // bool isReclaiming;
+// } thread_data_t;
 static double core_id_list[1000];
 static double start_preprocess[1000];
 static double end_preprocess[1000];
@@ -538,6 +556,28 @@ static void threadFunc(int arg)
     printf(" GPU isn't used \n");
     init_cpu();
 #endif  // GPU
+
+    // list *options = read_data_cfg(g_datacfg);
+    // char *name_list = option_find_str(options, "names", "data/names.list");
+    // int names_size = 0;
+    // char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
+
+    // char buff[256];
+    // char *input = buff;
+
+    // image **alphabet = load_alphabet();
+
+    // float nms = .45;    // 0.4F
+    // double time;
+
+    // int top = 5;
+    // int nboxes = 0;
+    // int index = 0;
+    // int i = 0;
+    // int j = 0;
+    // int k = 0;
+
+    // int* indexes = (int*)xcalloc(top, sizeof(int));
 
     // detection *dets;
 
