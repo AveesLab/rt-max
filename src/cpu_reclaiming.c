@@ -56,6 +56,7 @@ bool isSet;
 bool isReclaiming;
 
 int skipped_layers[1000] = {0, };
+int acclerator[306] = {0, }; 
 
 list *options;
 char *name_list;
@@ -194,8 +195,34 @@ static double maxOfThree(double a, double b, double c) {
     return max; 
 }
 
-static int write_result_gpu(char *file_path) 
-{
+static int write_result_gpu() 
+{        
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(g_cfgfile) + 1);
+    strncpy(model_name, g_cfgfile + 6, (strlen(g_cfgfile)-10));
+    model_name[strlen(g_cfgfile)-10] = '\0';
+    
+    strcat(file_path, "gpu-accel-GC/");
+
+    strcat(file_path, model_name);
+    strcat(file_path, "-multithread/");
+
+
+    char num_threads__[20];
+    sprintf(num_threads__, "%dthread/", num_thread);
+    strcat(file_path, num_threads__);
+
+
+
+    strcat(file_path, "gpu-accel_");
+
+    char gpu_portion[20];
+    sprintf(gpu_portion, "%03dglayer", gLayer);
+    strcat(file_path, gpu_portion);
+
+    strcat(file_path, ".csv");
+
     static int exist=0;
     FILE *fp;
     int tick = 0;
@@ -332,13 +359,40 @@ static int write_result_gpu(char *file_path)
 }
 
 
-static int write_result_reclaiming(char *file_path) 
+static int write_result_reclaiming() 
 {
+    char file_path_[256] = "measure/";
+
+    char* model_name_ = malloc(strlen(g_cfgfile) + 1);
+    strncpy(model_name_, g_cfgfile + 6, (strlen(g_cfgfile)-10));
+    model_name_[strlen(g_cfgfile)-10] = '\0';
+    
+
+    strcat(file_path_, "cpu-reclaiming-GRC/");
+    strcat(file_path_, model_name_);
+    strcat(file_path_, "-multithread/");
+
+    char num_threads___[20];
+    sprintf(num_threads___, "%dthread/", num_thread);
+    strcat(file_path_, num_threads___);
+
+    char gpu_portion_[20];
+    sprintf(gpu_portion_, "%dglayer/", gLayer);
+    strcat(file_path_, gpu_portion_);
+
+    strcat(file_path_, "cpu-reclaiming_");
+
+    char reclaim_portion[20];
+    sprintf(reclaim_portion, "%03drlayer", rLayer);
+    strcat(file_path_, reclaim_portion);
+
+    strcat(file_path_, ".csv");
+
     static int exist=0;
     FILE *fp;
     int tick = 0;
 
-    fp = fopen(file_path, "w+");
+    fp = fopen(file_path_, "w+");
 
     int i;
     if (fp == NULL) 
@@ -354,19 +408,19 @@ static int write_result_reclaiming(char *file_path)
             if(result == 0) { 
                 exist = 1;
 
-                fp = fopen(file_path,"w+");
+                fp = fopen(file_path_,"w+");
             }
 
             if(tick == 100)
             {
-                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
+                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path_);
 
                 return -1;
             }
             else tick++;
         }
     }
-    else printf("Write output in %s\n", file_path); 
+    else printf("Write output in %s\n", file_path_); 
 
     double sum_measure_data[num_exp * num_thread][37];
     for(i = 0; i < num_exp * num_thread; i++)
@@ -525,6 +579,42 @@ void reclaiming_inference(network_state *state, network *net, layer *l, int laye
     }
 }
 
+void initThread(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
+{
+    g_datacfg = datacfg;
+    g_cfgfile = cfgfile;
+    g_weightfile = weightfile;
+    g_filename = filename;
+    g_thresh = thresh;
+    g_hier_thresh = hier_thresh;
+    g_dont_show = dont_show;
+    g_ext_output = ext_output;
+    g_save_labels = save_labels;
+    g_outfile = outfile;
+    g_letter_box = letter_box;
+    g_benchmark_layers = benchmark_layers;
+
+    R = 0.0;
+    max_preprocess_time = 0.0;
+    max_gpu_infer_time = 0.0;
+    max_reclaim_infer_time = 0.0;
+    max_cpu_infer_time = 0.0;
+    release_interval = 0.0;
+
+    options = read_data_cfg(g_datacfg);
+    name_list = option_find_str(options, "names", "data/names.list");
+    names_size = 0;
+    names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
+    input = buff;
+
+    alphabet = load_alphabet();
+    object_detection = strstr(g_cfgfile, target_model);
+
+    if (g_filename) strncpy(input, g_filename, 256);
+    else printf("Error! File is not exist.");
+
+}
 
 void SetTest(bool test, bool set, bool reclaiming)
 {
@@ -696,14 +786,14 @@ static void threadFunc(int arg)
         // printf("\nThread %d is set to CPU core %d\n\n", thread_id, sched_getcpu());
         
         // __Preprocess__
-        start_preprocess[count] = get_time_in_ms();
+        // start_preprocess[count] = get_time_in_ms();
 
 
 
-        end_preprocess[count] = get_time_in_ms();
-        e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
+        // end_preprocess[count] = get_time_in_ms();
+        // e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
 
-        e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
+        // e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         // __Inference__
         // if (device) predictions = network_predict(net, X);
@@ -719,11 +809,22 @@ static void threadFunc(int arg)
 //         nvtx_task_gpu = nvtxRangeStartA(task_gpu);
 // #endif
 
-        start_gpu_waiting[count] = get_time_in_ms();
+        for(int j = 0; j < 306; j++) {
+            if(j < 204) {
+                acclerator[j] = 0;
+            }
+            else if(j < 260) {
+                acclerator[j] = 1;
+            }
+            else {
+                acclerator[j] = 2;
+            }
+        }
+        // start_gpu_waiting[count] = get_time_in_ms();
 
-        pthread_mutex_lock(&mutex_gpu);
+        // pthread_mutex_lock(&mutex_gpu);
 
-        start_gpu_infer[count] = get_time_in_ms();
+        // start_gpu_infer[count] = get_time_in_ms();
 
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
@@ -731,164 +832,194 @@ static void threadFunc(int arg)
         network_state state;
         state.index = 0;
         state.net = net;
-        // state.input = X;
-        state.input = net.input_state_gpu;
-        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-
-        cuda_push_array(state.input, net.input_pinned_cpu, size);
-        state.workspace = net.workspace;
-        for(int j = 0; j < gLayer; ++j){
-            // state.index = j;
-            // l = net.layers[j];
-            // if(l.delta_gpu && state.train){
-            //     fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
-            // }
-
-            // l.forward_gpu(l, state);
-            // if (skipped_layers[j]){
-            //     l.output = l.output_gpu;      
-            // }
-            // state.input = l.output_gpu;
-            gpu_inference(&state, &net, &l, j);
+        if(acclerator[0] == 0) {
+            state.input = net.input_state_gpu;
+            memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+            cuda_push_array(state.input, net.input_pinned_cpu, size);
         }
+        else state.input = X;
+        // state.input = X;
+        // state.input = net.input_state_gpu;
+        // memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+
+        // cuda_push_array(state.input, net.input_pinned_cpu, size);
+        state.workspace = net.workspace;
+        double gpu_time = 0;
+        for(int j = 0; j < net.n; ++j) {
+            // printf("%d\n", j);
+            if(acclerator[j] == 2) cpu_inference(&state, &net, &l, j);
+            else if(acclerator[j] == 0){
+                double aa = get_time_in_ms();
+                pthread_mutex_lock(&mutex_gpu);
+                gpu_inference(&state, &net, &l, j);
+                pthread_mutex_unlock(&mutex_gpu);
+                                CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+                double bb = get_time_in_ms();
+                gpu_time += (bb - aa);
+            }
+            else if(acclerator[j] == 1) {
+                if(isReclaiming == true){
+                    pthread_mutex_lock(&mutex_reclaim);
+                    reclaiming_inference(&state, &net, &l, j);
+                    pthread_mutex_unlock(&mutex_reclaim);
+                }
+                else cpu_inference(&state, &net, &l, j);
+            }
+            else printf("Layer %d does not be definded about acceleration info");
+        }
+        // printf("%.2f\n", gpu_time);
+        // for(int j = 0; j < gLayer; ++j){
+        //     // state.index = j;
+        //     // l = net.layers[j];
+        //     // if(l.delta_gpu && state.train){
+        //     //     fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
+        //     // }
+
+        //     // l.forward_gpu(l, state);
+        //     // if (skipped_layers[j]){
+        //     //     l.output = l.output_gpu;      
+        //     // }
+        //     // state.input = l.output_gpu;
+        //     gpu_inference(&state, &net, &l, j);
+        // }
 	    // l.output = l.output_gpu;  
         // cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         // state.input = l.output;
-	start_gpu_synchronize[count] = get_time_in_ms();
-	CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-	end_gpu_synchronize[count] = get_time_in_ms();
+	// start_gpu_synchronize[count] = get_time_in_ms();
+	// CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+	// end_gpu_synchronize[count] = get_time_in_ms();
 // #ifdef NVTX
 //         nvtxRangeEnd(nvtx_task_gpu);
 // #endif
 
-        end_gpu_infer[count] = get_time_in_ms();
+        // end_gpu_infer[count] = get_time_in_ms();
 
-        e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
+        // e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_waiting[count]; // [+] Waiting_GPU Time
 
-        pthread_mutex_unlock(&mutex_gpu);
+        // pthread_mutex_unlock(&mutex_gpu);
 
 
         //state.workspace = net.workspace_cpu;
-        gpu_yolo = 0;
-        if (gLayer == 0) state.input = X;
+        // gpu_yolo = 0;
+        // if (gLayer == 0) state.input = X;
 
         // Reclaiming Inference
-        if (isReclaiming) {
+//         if (isReclaiming) {
 
-        start_reclaim_waiting[count] = get_time_in_ms();
+//         start_reclaim_waiting[count] = get_time_in_ms();
 
-// #ifdef NVTX
-//         char task_reclaiming[100];
-//         sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", thread_id);
-//         nvtxRangeId_t nvtx_task_reclaiming;
-//         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
-// #endif
+// // #ifdef NVTX
+// //         char task_reclaiming[100];
+// //         sprintf(task_reclaiming, "Task (cpu: %d) - Reclaiming Inference", thread_id);
+// //         nvtxRangeId_t nvtx_task_reclaiming;
+// //         nvtx_task_reclaiming = nvtxRangeStartA(task_reclaiming);
+// // #endif
 
-        pthread_mutex_lock(&mutex_reclaim);
+//         pthread_mutex_lock(&mutex_reclaim);
 
-        start_reclaim_infer[count] = get_time_in_ms();
+//         start_reclaim_infer[count] = get_time_in_ms();
 
-        /* openblas_thread = (MAXCORES - 1) - num_thread + 1;
-        openblas_set_num_threads(openblas_thread);
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreIDOrder[thread_id], &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        for (int k = 0; k < openblas_thread - 1; k++) {
-            CPU_ZERO(&cpuset);
-            CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
-            // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
-            openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-        } */
+//         /* openblas_thread = (MAXCORES - 1) - num_thread + 1;
+//         openblas_set_num_threads(openblas_thread);
+//         CPU_ZERO(&cpuset);
+//         CPU_SET(coreIDOrder[thread_id], &cpuset);
+//         pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+//         for (int k = 0; k < openblas_thread - 1; k++) {
+//             CPU_ZERO(&cpuset);
+//             CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
+//             // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
+//             openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+//         } */
 
-        for(int j = gLayer; j < rLayer; ++j){
-            // state.index = j;
-            // l = net.layers[j];
-            // l.do_reclaiming = 1;
-            // if(l.delta && state.train && l.train){
-            //     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-            // }
-            // l.forward(l, state);
-            // state.input = l.output;
-            reclaiming_inference(&state, &net, &l, j);
-        }
+//         for(int j = gLayer; j < rLayer; ++j){
+//             // state.index = j;
+//             // l = net.layers[j];
+//             // l.do_reclaiming = 1;
+//             // if(l.delta && state.train && l.train){
+//             //     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+//             // }
+//             // l.forward(l, state);
+//             // state.input = l.output;
+//             reclaiming_inference(&state, &net, &l, j);
+//         }
 
-        pthread_mutex_unlock(&mutex_reclaim);
+//         pthread_mutex_unlock(&mutex_reclaim);
 
-        end_reclaim_infer[count] = get_time_in_ms();
+//         end_reclaim_infer[count] = get_time_in_ms();
 
-// #ifdef NVTX
-//         nvtxRangeEnd(nvtx_task_reclaiming);
-// #endif
-        }
-        else{
-            start_reclaim_waiting[count] = 0;
-            start_reclaim_infer[count] = 0;
-            end_reclaim_infer[count] = 0;
+// // #ifdef NVTX
+// //         nvtxRangeEnd(nvtx_task_reclaiming);
+// // #endif
+//         }
+//         else{
+//             start_reclaim_waiting[count] = 0;
+//             start_reclaim_infer[count] = 0;
+//             end_reclaim_infer[count] = 0;
 
-        }
+//         }
 
 
-        // CPU Inference
-// #ifdef NVTX
-//         char task_cpu[100];
-//         sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", thread_id);
-//         nvtxRangeId_t nvtx_task_cpu;
-//         nvtx_task_cpu = nvtxRangeStartA(task_cpu);
-// #endif
+//         // CPU Inference
+// // #ifdef NVTX
+// //         char task_cpu[100];
+// //         sprintf(task_cpu, "Task (cpu: %d) - CPU Inference", thread_id);
+// //         nvtxRangeId_t nvtx_task_cpu;
+// //         nvtx_task_cpu = nvtxRangeStartA(task_cpu);
+// // #endif
 
-        start_cpu_infer[count] = get_time_in_ms();
+//         start_cpu_infer[count] = get_time_in_ms();
         
-        int start_layer_cpu = 0;
-        if (isReclaiming) {
-            start_layer_cpu = rLayer;
-            // openblas_set_num_threads(1);
-            // CPU_ZERO(&cpuset);
-            // CPU_SET(coreIDOrder[thread_id], &cpuset);
-            // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-        }
-        else {
-            start_layer_cpu = gLayer;
-        }
+//         int start_layer_cpu = 0;
+//         if (isReclaiming) {
+//             start_layer_cpu = rLayer;
+//             // openblas_set_num_threads(1);
+//             // CPU_ZERO(&cpuset);
+//             // CPU_SET(coreIDOrder[thread_id], &cpuset);
+//             // pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+//         }
+//         else {
+//             start_layer_cpu = gLayer;
+//         }
 
-        for(int j = start_layer_cpu; j < net.n; ++j){
-            // state.index = j;
-            // l = net.layers[j];
-            // l.do_reclaiming = 0;
-            // if(l.delta && state.train && l.train){
-            //     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-            // }
-            // l.forward(l, state);
-            // state.input = l.output;
-            cpu_inference(&state, &net, &l, j);
-        }
+//         for(int j = start_layer_cpu; j < net.n; ++j){
+//             // state.index = j;
+//             // l = net.layers[j];
+//             // l.do_reclaiming = 0;
+//             // if(l.delta && state.train && l.train){
+//             //     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+//             // }
+//             // l.forward(l, state);
+//             // state.input = l.output;
+//             cpu_inference(&state, &net, &l, j);
+//         }
 
-        // if (gLayer == net.n) predictions = get_network_output_gpu(net); // 이거 그냥 각 inference 함수에 j == net.n이면 predicions 넣게 해도 될듯
-        // else predictions = get_network_output(net, 0);
-        reset_wait_stream_events();
-        //cuda_free(state.input);   // will be freed in the free_network()
+//         // if (gLayer == net.n) predictions = get_network_output_gpu(net); // 이거 그냥 각 inference 함수에 j == net.n이면 predicions 넣게 해도 될듯
+//         // else predictions = get_network_output(net, 0);
+//         // reset_wait_stream_events();
+//         //cuda_free(state.input);   // will be freed in the free_network()
 
-// #ifdef NVTX
-//         nvtxRangeEnd(nvtx_task_cpu);
-// #endif
+// // #ifdef NVTX
+// //         nvtxRangeEnd(nvtx_task_cpu);
+// // #endif
 
-        end_cpu_infer[count] = get_time_in_ms();
-        end_infer[count] = get_time_in_ms();
+//         end_cpu_infer[count] = get_time_in_ms();
+//         end_infer[count] = get_time_in_ms();
 
-        start_postprocess[count] = get_time_in_ms();
+        // start_postprocess[count] = get_time_in_ms();
 
         // __NMS & TOP acccuracy__
-        if (object_detection) {
-            dets = get_network_boxes(&net, im.w, im.h,g_thresh, g_hier_thresh, 0, 1, &nboxes, g_letter_box);
-            if (nms) {
-                if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
-                else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
-            }
-            draw_detections_v3(im, dets, nboxes, g_thresh, names, alphabet, l.classes, g_ext_output);
-        }
-        else {
+        // if (object_detection) {
+        //     dets = get_network_boxes(&net, im.w, im.h,g_thresh, g_hier_thresh, 0, 1, &nboxes, g_letter_box);
+        //     if (nms) {
+        //         if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+        //         else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+        //     }
+        //     draw_detections_v3(im, dets, nboxes, g_thresh, names, alphabet, l.classes, g_ext_output);
+        // }
+        // else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
             top_k(predictions, net.outputs, top, indexes);
             for(int j = 0; j < top; ++j){
@@ -897,7 +1028,7 @@ static void threadFunc(int arg)
                 else if (show_accuracy && thread_id == 1 && i == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
 
             }
-        }
+        // }
 
         // __Display__
         // if (!g_dont_show) {
@@ -905,9 +1036,9 @@ static void threadFunc(int arg)
         //     wait_key_cv(1);
         // }
 
-        end_postprocess[count] = get_time_in_ms();
-        e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
-        execution_time[count] = end_postprocess[count] - start_preprocess[count];
+        // end_postprocess[count] = get_time_in_ms();
+        // e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
+        // execution_time[count] = end_postprocess[count] - start_preprocess[count];
 
         // __Measure Result__
         core_id_list[count] = (double)sched_getcpu();
@@ -947,37 +1078,38 @@ static void threadFunc(int arg)
 void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-    g_datacfg = datacfg;
-    g_cfgfile = cfgfile;
-    g_weightfile = weightfile;
-    g_filename = filename;
-    g_thresh = thresh;
-    g_hier_thresh = hier_thresh;
-    g_dont_show = dont_show;
-    g_ext_output = ext_output;
-    g_save_labels = save_labels;
-    g_outfile = outfile;
-    g_letter_box = letter_box;
-    g_benchmark_layers = benchmark_layers;
+    initThread(datacfg, cfgfile, weightfile, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    // g_datacfg = datacfg;
+    // g_cfgfile = cfgfile;
+    // g_weightfile = weightfile;
+    // g_filename = filename;
+    // g_thresh = thresh;
+    // g_hier_thresh = hier_thresh;
+    // g_dont_show = dont_show;
+    // g_ext_output = ext_output;
+    // g_save_labels = save_labels;
+    // g_outfile = outfile;
+    // g_letter_box = letter_box;
+    // g_benchmark_layers = benchmark_layers;
 
-    R = 0.0;
-    max_preprocess_time = 0.0;
-    max_gpu_infer_time = 0.0;
-    max_reclaim_infer_time = 0.0;
-    max_cpu_infer_time = 0.0;
-    release_interval = 0.0;
+    // R = 0.0;
+    // max_preprocess_time = 0.0;
+    // max_gpu_infer_time = 0.0;
+    // max_reclaim_infer_time = 0.0;
+    // max_cpu_infer_time = 0.0;
+    // release_interval = 0.0;
 
-    options = read_data_cfg(g_datacfg);
-    name_list = option_find_str(options, "names", "data/names.list");
-    names_size = 0;
-    names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
-    input = buff;
+    // options = read_data_cfg(g_datacfg);
+    // name_list = option_find_str(options, "names", "data/names.list");
+    // names_size = 0;
+    // names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
+    // input = buff;
 
-    alphabet = load_alphabet();
-    object_detection = strstr(g_cfgfile, target_model);
+    // alphabet = load_alphabet();
+    // object_detection = strstr(g_cfgfile, target_model);
 
-    if (g_filename) strncpy(input, g_filename, 256);
-    else printf("Error! File is not exist.");
+    // if (g_filename) strncpy(input, g_filename, 256);
+    // else printf("Error! File is not exist.");
 
     // num_thread = MAXCORES - 1;
     
@@ -1154,33 +1286,33 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
-        char file_path[256] = "measure/";
+        // char file_path[256] = "measure/";
 
-        char* model_name = malloc(strlen(cfgfile) + 1);
-        strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
-        model_name[strlen(cfgfile)-10] = '\0';
+        // char* model_name = malloc(strlen(cfgfile) + 1);
+        // strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+        // model_name[strlen(cfgfile)-10] = '\0';
         
-        strcat(file_path, "gpu-accel-GC/");
+        // strcat(file_path, "gpu-accel-GC/");
 
-        strcat(file_path, model_name);
-        strcat(file_path, "-multithread/");
-
-
-        char num_threads__[20];
-        sprintf(num_threads__, "%dthread/", num_thread);
-        strcat(file_path, num_threads__);
+        // strcat(file_path, model_name);
+        // strcat(file_path, "-multithread/");
 
 
+        // char num_threads__[20];
+        // sprintf(num_threads__, "%dthread/", num_thread);
+        // strcat(file_path, num_threads__);
 
-        strcat(file_path, "gpu-accel_");
 
-        char gpu_portion[20];
-        sprintf(gpu_portion, "%03dglayer", gLayer);
-        strcat(file_path, gpu_portion);
 
-        strcat(file_path, ".csv");
+        // strcat(file_path, "gpu-accel_");
 
-        if(write_result_gpu(file_path) == -1) {
+        // char gpu_portion[20];
+        // sprintf(gpu_portion, "%03dglayer", gLayer);
+        // strcat(file_path, gpu_portion);
+
+        // strcat(file_path, ".csv");
+
+        if(write_result_gpu() == -1) {
             /* return error */
             exit(0);
         }
@@ -1338,33 +1470,33 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
         }
 
-        char file_path_[256] = "measure/";
+        // char file_path_[256] = "measure/";
 
-        char* model_name_ = malloc(strlen(cfgfile) + 1);
-        strncpy(model_name_, cfgfile + 6, (strlen(cfgfile)-10));
-        model_name_[strlen(cfgfile)-10] = '\0';
+        // char* model_name_ = malloc(strlen(cfgfile) + 1);
+        // strncpy(model_name_, cfgfile + 6, (strlen(cfgfile)-10));
+        // model_name_[strlen(cfgfile)-10] = '\0';
         
 
-        strcat(file_path_, "cpu-reclaiming-GRC/");
-        strcat(file_path_, model_name_);
-        strcat(file_path_, "-multithread/");
+        // strcat(file_path_, "cpu-reclaiming-GRC/");
+        // strcat(file_path_, model_name_);
+        // strcat(file_path_, "-multithread/");
 
-        char num_threads___[20];
-        sprintf(num_threads___, "%dthread/", num_thread);
-        strcat(file_path_, num_threads___);
+        // char num_threads___[20];
+        // sprintf(num_threads___, "%dthread/", num_thread);
+        // strcat(file_path_, num_threads___);
 
-        char gpu_portion_[20];
-        sprintf(gpu_portion_, "%dglayer/", gLayer);
-        strcat(file_path_, gpu_portion_);
+        // char gpu_portion_[20];
+        // sprintf(gpu_portion_, "%dglayer/", gLayer);
+        // strcat(file_path_, gpu_portion_);
 
-        strcat(file_path_, "cpu-reclaiming_");
+        // strcat(file_path_, "cpu-reclaiming_");
 
-        char reclaim_portion[20];
-        sprintf(reclaim_portion, "%03drlayer", rLayer);
-        strcat(file_path_, reclaim_portion);
+        // char reclaim_portion[20];
+        // sprintf(reclaim_portion, "%03drlayer", rLayer);
+        // strcat(file_path_, reclaim_portion);
 
-        strcat(file_path_, ".csv");
-        if(write_result_reclaiming(file_path_) == -1) {
+        // strcat(file_path_, ".csv");
+        if(write_result_reclaiming() == -1) {
             /* return error */
             exit(0);
         }
