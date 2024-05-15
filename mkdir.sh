@@ -84,6 +84,13 @@ done
 ## GPU-Accel_GC
 for num_thread in $(seq 1 32);
 do
+	mkdir -p gpu-accel-GC/yolov7-tiny-multithread/${num_thread}thread/
+done
+
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 32);
+do
 	mkdir -p gpu-accel-CG/densenet201-multithread/${num_thread}thread/
 done
 
@@ -209,6 +216,13 @@ for thread in {1..32}; do
 	for var in {0..306}
 		do
 		mkdir -p cpu-reclaiming-GRC/densenet201-multithread/${thread}thread/${var}glayer/
+		done
+done
+
+for thread in {1..32}; do
+	for var in {0..306}
+		do
+		mkdir -p cpu-reclaiming-GRC/yolov7-tiny-multithread/${thread}thread/${var}glayer/
 		done
 done
 
