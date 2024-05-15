@@ -377,8 +377,6 @@ struct layer {
     int receptive_w_scale;
     int receptive_h_scale;
 
-    char *acceleration;
-
     char  * cweights;
     int   * indexes;
     int   * input_layers;
