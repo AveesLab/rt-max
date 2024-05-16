@@ -317,8 +317,8 @@ static void threadFunc(thread_data_t data)
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
-    extern int skip_layers[1000][10];
-    int skipped_layers[1000] = {0, };
+    static  int skip_layers[1000][10];
+    static int skipped_layers[1000] = {0, };
     gLayer = net.n;
 
     for(i = gLayer; i < net.n; i++) {

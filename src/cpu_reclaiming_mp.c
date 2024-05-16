@@ -384,8 +384,8 @@ static void processFunc(process_data_t data, int write_fd)
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
 
-    extern int skip_layers[1000][10];
-    int skipped_layers[1000] = {0, };
+    static  int skip_layers[1000][10];
+    static int skipped_layers[1000] = {0, };
 
     for(i = gLayer; i < net.n; i++) {
         for(j = 0; j < 10; j++) {

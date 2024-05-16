@@ -300,7 +300,7 @@ static void threadFunc(thread_data_t data)
     calculate_binary_weights(net);
 
     // extern int skip_layers[1000];
-    int skipped_layers[1000] = {0, };
+    static int skipped_layers[1000] = {0, };
 
     for(i = gLayer; i < net.n; i++) {
         for(j = 0; j < 10; j++) {

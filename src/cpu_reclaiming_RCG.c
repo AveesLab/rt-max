@@ -510,8 +510,8 @@ static void threadFunc(thread_data_t data)
 
     layer l = net.layers[net.n - 1];
 
-    extern int skip_layers[1000][10];
-    int skipped_layers[1000] = {0, };
+    static  int skip_layers[1000][10];
+    static int skipped_layers[1000] = {0, };
 
     for(i = gLayer; i < net.n; i++) {
         for(j = 0; j < 10; j++) {

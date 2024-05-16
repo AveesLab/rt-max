@@ -2033,15 +2033,17 @@ void run_detector(int argc, char **argv)
     else if (0 == strcmp(argv[2], "data-parallel-mp")) data_parallel_mp(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
 #ifdef GPU
     else if (0 == strcmp(argv[2], "gpu-layer-test")) gpu_layer_test(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
-    else if (0 == strcmp(argv[2], "gpu-accel")) gpu_accel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "gpu-accel")) gpu_accel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "gpu-accel_glayer")) gpu_accel_glayer(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel_sleep")) gpu_accel_sleep(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel_pre_gpu")) gpu_accel_pre_gpu(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
-    else if (0 == strcmp(argv[2], "gpu-accel_gpu")) gpu_accel_gpu(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "gpu-accel_gpu")) gpu_accel_gpu(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel_gpu_copytime")) gpu_accel_gpu_copytime(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel-reverse")) gpu_accel_reverse(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel-mp")) gpu_accel_mp(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel-mp-reverse")) gpu_accel_mp_reverse(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);   
     else if (0 == strcmp(argv[2], "cpu-reclaiming")) cpu_reclaiming(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "cpu-reclaiming_rlayer")) cpu_reclaiming_rlayer(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "cpu-reclaiming-CRG")) cpu_reclaiming_CRG(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "cpu-reclaiming-RGC")) cpu_reclaiming_RGC(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "cpu-reclaiming-RCG")) cpu_reclaiming_RCG(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);

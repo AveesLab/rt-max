@@ -275,7 +275,7 @@ static void threadFunc(thread_data_t data)
     int object_detection = strstr(data.cfgfile, target_model);
 
     int device = 1; // Choose CPU or GPU
-    extern int skip_layers[1000];
+    static  int skip_layers[1000];
     extern gpu_yolo;
 
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
