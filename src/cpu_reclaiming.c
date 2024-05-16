@@ -343,7 +343,6 @@ static int write_result_gpu()
         
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
-        printf("cycletime = %.2f\n", cycle_time);
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
@@ -581,13 +580,12 @@ void gpu_inference(network_state *state, network *net, layer *l, int split_index
         }
 
         l->forward_gpu(*l, *state);
-
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         state->input = l->output_gpu;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
         }
     }
-    CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
     current_thread = (current_thread) % num_thread + 1;
     pthread_cond_broadcast(&cond);
     end_gpu_infer[count] = get_time_in_ms();
@@ -871,7 +869,7 @@ static void threadFunc(int arg)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-        if(acclerator[0] == 0) {
+        if(strcmp(inference_order[0], "GPU\0") == 0) {
             state.input = net.input_state_gpu;
             memcpy(net.input_pinned_cpu, X, size * sizeof(float));
             cuda_push_array(state.input, net.input_pinned_cpu, size);
@@ -903,7 +901,7 @@ static void threadFunc(int arg)
                     cpu_inference(&state, &net, &l, j, count, thread_id);
                 } 
             }
-            else printf("Layer %d does not be definded about acceleration info\n");
+            else printf("Layer %d does not be definded about acceleration info\n", j);
         }
 
         // printf("gpu = %.2f    cpu = %.2f     rec = %.2f\n", gpu_time, cpu_time, rec_time);
