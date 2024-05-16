@@ -56,8 +56,12 @@ layer make_yolo_layer(int batch, int w, int h, int n, int total, int *mask, int 
     l.class_ids = (int*)xcalloc(batch * l.w*l.h*l.n, sizeof(int));
     for (i = 0; i < batch * l.w*l.h*l.n; ++i) l.class_ids[i] = -1;
 
-    l.delta = (float*)xcalloc(batch * l.outputs, sizeof(float));
-    l.output = (float*)xcalloc(batch * l.outputs, sizeof(float));
+    // l.delta = (float*)xcalloc(batch * l.outputs, sizeof(float));
+    // l.output = (float*)xcalloc(batch * l.outputs, sizeof(float));
+    cudaHostAlloc((void**)&l.delta, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc((void**)&l.output, l.outputs * batch * sizeof(float), cudaHostAllocMapped);
+    cudaHostGetDevicePointer((void**)&(l.output_gpu), (void*)(l.output), 0);
+    cudaHostGetDevicePointer((void**)&(l.delta_gpu), (void*)(l.delta), 0);
     for(i = 0; i < total*2; ++i){
         l.biases[i] = .5;
     }
@@ -67,23 +71,25 @@ layer make_yolo_layer(int batch, int w, int h, int n, int total, int *mask, int 
 #ifdef GPU
     l.forward_gpu = forward_yolo_layer_gpu;
     l.backward_gpu = backward_yolo_layer_gpu;
-    l.output_gpu = cuda_make_array(l.output, batch*l.outputs);
+    // l.output_gpu = cuda_make_array(l.output, batch*l.outputs);
     l.output_avg_gpu = cuda_make_array(l.output, batch*l.outputs);
-    l.delta_gpu = cuda_make_array(l.delta, batch*l.outputs);
+    // l.delta_gpu = cuda_make_array(l.delta, batch*l.outputs);
 
-    free(l.output);
-    if (cudaSuccess == cudaHostAlloc(&l.output, batch*l.outputs*sizeof(float), cudaHostRegisterMapped)) l.output_pinned = 1;
-    else {
-        cudaGetLastError(); // reset CUDA-error
-        l.output = (float*)xcalloc(batch * l.outputs, sizeof(float));
-    }
+    // free(l.output);
 
-    free(l.delta);
-    if (cudaSuccess == cudaHostAlloc(&l.delta, batch*l.outputs*sizeof(float), cudaHostRegisterMapped)) l.delta_pinned = 1;
-    else {
-        cudaGetLastError(); // reset CUDA-error
-        l.delta = (float*)xcalloc(batch * l.outputs, sizeof(float));
-    }
+
+    // if (cudaSuccess == cudaHostAlloc(&l.output, batch*l.outputs*sizeof(float), cudaHostRegisterMapped)) l.output_pinned = 1;
+    // else {
+    //     cudaGetLastError(); // reset CUDA-error
+    //     l.output = (float*)xcalloc(batch * l.outputs, sizeof(float));
+    // }
+
+    // free(l.delta);
+    // if (cudaSuccess == cudaHostAlloc(&l.delta, batch*l.outputs*sizeof(float), cudaHostRegisterMapped)) l.delta_pinned = 1;
+    // else {
+    //     cudaGetLastError(); // reset CUDA-error
+    //     l.delta = (float*)xcalloc(batch * l.outputs, sizeof(float));
+    // }
 #endif
 
     // fprintf(stderr, "yolo\n");
@@ -671,7 +677,6 @@ void forward_yolo_layer(const layer l, network_state state)
     //int i, j, b, t, n;
     memcpy(l.output, state.input, l.outputs*l.batch * sizeof(float));
     int b, n;
-
     if (!gpu_yolo || !device) {
         for (b = 0; b < l.batch; ++b) {
             for (n = 0; n < l.n; ++n) {
@@ -691,6 +696,7 @@ void forward_yolo_layer(const layer l, network_state state)
 
     // delta is zeroed
     memset(l.delta, 0, l.outputs * l.batch * sizeof(float));
+
     if (!state.train) return;
 
     int i;
@@ -815,7 +821,6 @@ void forward_yolo_layer(const layer l, network_state state)
             ep_loss_threshold = min_val_cmp(final_badlebels_threshold, rolling_avg) * progress;
         }
 
-
         // reject some percent of the highest deltas to filter bad labels
         if (state.net.badlabels_rejection_percentage && start_point < iteration_num) {
             if (*state.net.badlabels_reject_threshold == 0)
@@ -932,6 +937,7 @@ void forward_yolo_layer(const layer l, network_state state)
         //    (l.iou_loss == MSE ? "mse" : (l.iou_loss == GIOU ? "giou" : "iou")), l.iou_normalizer, l.obj_normalizer, state.index, tot_iou / count, tot_giou / count, avg_cat / class_count, avg_obj / count, avg_anyobj / (l.w*l.h*l.n*l.batch), recall / count, recall75 / count, count,
         //    classification_loss, iou_loss, loss);
     }
+
 }
 
 void backward_yolo_layer(const layer l, network_state state)

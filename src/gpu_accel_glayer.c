@@ -24,25 +24,20 @@
 #define NUM_SPLIT 2
 
 pthread_barrier_t barrier;
-pthread_barrier_t barrier_reclaiming;
 
 static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU"}; // "GPU", "Reclaiming" "CPU"
 static int infer_start[NUM_SPLIT] = {0, };
 static int infer_end[NUM_SPLIT] = {0, };
 
 static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 7, 10, 2, 5, 8, 11, 1};
-// static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 static double start_time[MAXCORES] = {0,0,0,0,0,0,0,0,0,0,0,0};
 static int openblas_thread;
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex_reclaim = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-static pthread_cond_t cond2 = PTHREAD_COND_INITIALIZER;
 
 static int current_thread = 1;
-static int current_thread2 = 1;
 
 static double execution_time_wo_waiting;
 static char *g_datacfg;
@@ -99,9 +94,6 @@ static double start_infer[1000];
 static double start_gpu_waiting[1000];
 static double start_gpu_infer[1000];
 static double end_gpu_infer[1000];
-static double start_reclaim_waiting[1000];
-static double start_reclaim_infer[1000];
-static double end_reclaim_infer[1000];
 static double start_cpu_infer[1000];
 static double end_cpu_infer[1000];
 static double end_infer[1000];
@@ -114,8 +106,6 @@ static double start_gpu_synchronize[1000];
 static double end_gpu_synchronize[1000];
 static double e_gpu_synchronize[1000];
 
-static double waiting_reclaim[1000];
-static double e_reclaim_infer[1000];
 static double e_cpu_infer[1000];
 static double e_infer[1000];
 
@@ -134,7 +124,6 @@ static double frame_rate[1000];
 
 static float max_preprocess_time;
 static float max_gpu_infer_time;
-static float max_reclaim_infer_time;
 static float max_cpu_infer_time;
 static float release_interval;
 static float R;
@@ -347,6 +336,7 @@ static int write_result_gpu()
 
 static void cpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
 {
+
     start_cpu_infer[count] = get_time_in_ms();
     for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
         state->index = j;
@@ -367,9 +357,7 @@ static void cpu_inference(network_state *state, network *net, layer *l, int spli
 
 static void gpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
 {
-
     start_gpu_waiting[count] = get_time_in_ms();
-
     pthread_mutex_lock(&mutex_gpu);
 
     while(current_thread != thread_id) {
@@ -378,15 +366,16 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
     start_gpu_infer[count] = get_time_in_ms();
 
     for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
+
         state->index = j;
         l = &(net->layers[j]);
         if(l->delta_gpu && state->train){
             fill_ongpu(l->outputs * l->batch, 0, l->delta_gpu, 1);
         }
-
         l->forward_gpu(*l, *state);
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         state->input = l->output_gpu;
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
         }
@@ -416,7 +405,6 @@ static void initThread(char *datacfg, char *cfgfile, char *weightfile, char *fil
     R = 0.0;
     max_preprocess_time = 0.0;
     max_gpu_infer_time = 0.0;
-    max_reclaim_infer_time = 0.0;
     max_cpu_infer_time = 0.0;
     release_interval = 0.0;
 
@@ -515,7 +503,7 @@ static void threadFunc(int arg)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-        if(strcmp(inference_order[0], "GPU\0") == 0) {
+        if(gLayer != 0) {
             state.input = net.input_state_gpu;
             memcpy(net.input_pinned_cpu, X, size * sizeof(float));
             cuda_push_array(state.input, net.input_pinned_cpu, size);
@@ -526,7 +514,6 @@ static void threadFunc(int arg)
         double gpu_time = 0;
         double cpu_time = 0;
         double rec_time = 0;
-
         for(int j = 0; j < NUM_SPLIT; ++j) {
             if(strcmp(inference_order[j], "GPU\0") == 0) {
                 gpu_inference(&state, &net, &l, j, count, thread_id);
@@ -540,15 +527,18 @@ static void threadFunc(int arg)
         // end_cpu_infer[count] = get_time_in_ms();
         end_infer[count] = get_time_in_ms();
 
-        if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
-        top_k(predictions, net.outputs, top, indexes);
-        for(int j = 0; j < top; ++j){
-            g_index = indexes[j];
-            if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",g_index, names[g_index], predictions[g_index], (net.hierarchy->parent[g_index] >= 0) ? names[net.hierarchy->parent[g_index]] : "Root");
-            else if (show_accuracy && thread_id == 1 && i == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
 
+        if(!object_detection) {
+            
+            if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+            top_k(predictions, net.outputs, top, indexes);
+            for(int j = 0; j < top; ++j){
+                g_index = indexes[j];
+                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",g_index, names[g_index], predictions[g_index], (net.hierarchy->parent[g_index] >= 0) ? names[net.hierarchy->parent[g_index]] : "Root");
+                else if (show_accuracy && thread_id == 1 && i == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
+
+            }
         }
-
         // end_postprocess[count] = get_time_in_ms();
         // e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
         // execution_time[count] = end_postprocess[count] - start_preprocess[count];
@@ -559,8 +549,6 @@ static void threadFunc(int arg)
         waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
         e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
         e_gpu_synchronize[count] = end_gpu_synchronize[count] - start_gpu_synchronize[count];
-        waiting_reclaim[count] = start_reclaim_infer[count] - start_reclaim_waiting[count];//start_reclaim_waiting[i];
-        e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
         e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
         e_infer[count] = end_infer[count] - start_infer[count];
 
@@ -587,7 +575,9 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
     num_thread = num_thread;
 
     // =====================GPU-ACCEL=====================
-    if (visible_exp) printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+    if (visible_exp) {
+        printf("\n::TEST:: GPU-Accel with %d threads >> 0 - %d layers use GPU\n", num_thread, gLayer);
+    }
     SetTest(true, false, false);
     pthread_barrier_init(&barrier, NULL, num_thread);
 
@@ -649,7 +639,9 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
         printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
     }
     
-    if (visible_exp) printf("\n::EXP-1:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", num_thread, gLayer, R);
+    if (visible_exp) {
+        printf("\n::EXP-1:: GPU-Accel with %d threads >> 0 - %d layers use GPU [R : %.2f]\n", num_thread, gLayer, R);
+    }
     SetTest(false, true, false);
     reset_check_jitter();
     pthread_barrier_init(&barrier, NULL, num_thread);
@@ -676,8 +668,9 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
     if (visible_exp) {
         printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
     }
-
-    if (visible_exp) printf("\n::EXP-2:: GPU-Accel with %d threads with %d gpu-layer [R : %.2f]\n", num_thread, gLayer, R);
+    if (visible_exp) {
+        printf("\n::EXP-2:: GPU-Accel with %d threads >> 0 - %d layers use GPU [R : %.2f]\n", num_thread, gLayer, R);
+    }
     SetTest(false, true, false);
     reset_check_jitter();
     pthread_barrier_init(&barrier, NULL, num_thread);
@@ -711,7 +704,6 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
     }
 
     pthread_barrier_destroy(&barrier);
-    pthread_barrier_destroy(&barrier_reclaiming);
     
     return 0;
 
