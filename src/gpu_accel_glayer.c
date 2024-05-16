@@ -29,7 +29,7 @@ static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU"}; // "GPU", "Reclaimi
 static int infer_start[NUM_SPLIT] = {0, };
 static int infer_end[NUM_SPLIT] = {0, };
 
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 7, 10, 2, 5, 8, 11, 1};
+static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 static double start_time[MAXCORES] = {0,0,0,0,0,0,0,0,0,0,0,0};
