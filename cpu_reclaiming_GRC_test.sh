@@ -1,5 +1,8 @@
 #!/bin/bash
 # 평균을 계산하고 반환하는 함수
+
+MAXCORES=31
+
 calculate_average_int() {
     local file_path=$1
     local column_name=$2
@@ -201,7 +204,7 @@ for glayer in $(seq $layer_start $layer_end); do
 	last_rlayer=$(($glayer + 1))
     fi
     for ((rlayer = $last_rlayer; rlayer <= $layer_num; rlayer++)); do
-	    if (( num_thread < 11 )); then
+	    if (( num_thread < MAXCORES )); then
 		formatted_rlayer=$(printf "%03d" $(($rlayer - 1)))
 		file_path_="measure/${reclaiming_accel_type}/${model}-multithread/${num_thread}thread/${glayer}glayer/cpu-reclaiming_${formatted_rlayer}rlayer.csv"
 		if [[ -f "$file_path_" ]]; then

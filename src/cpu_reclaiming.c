@@ -657,15 +657,16 @@ static void *threadFunc(void *arg)
                 cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
             state.input = l.output_gpu;
+            start_gpu_synchronize[count] = get_time_in_ms();
+	        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+	        end_gpu_synchronize[count] = get_time_in_ms();
         }
 
 	// l.output = l.output_gpu;  
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
 
-	start_gpu_synchronize[count] = get_time_in_ms();
-	CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-	end_gpu_synchronize[count] = get_time_in_ms();
+
 	
 #ifdef NVTX
         nvtxRangeEnd(nvtx_task_gpu);
@@ -893,6 +894,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
         if (visible_exp) printf("\n::TEST:: GPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
         
         for (i = 0; i < num_thread; i++) {
+
             data[i].datacfg = datacfg;
             data[i].cfgfile = cfgfile;
             data[i].weightfile = weightfile;
@@ -910,6 +912,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             data[i].isTest = true;
             data[i].isSet = false;
             data[i].isReclaiming = false;
+
             rc = pthread_create(&threads[i], NULL, threadFunc, (void *)&data[i]);
             if (rc) {
                 printf("Error: Unable to create thread, %d\n", rc);
