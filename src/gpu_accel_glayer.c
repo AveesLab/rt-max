@@ -511,9 +511,7 @@ static void threadFunc(int arg)
         else state.input = X;
 
         state.workspace = net.workspace;
-        double gpu_time = 0;
-        double cpu_time = 0;
-        double rec_time = 0;
+
         for(int j = 0; j < NUM_SPLIT; ++j) {
             if(strcmp(inference_order[j], "GPU\0") == 0) {
                 gpu_inference(&state, &net, &l, j, count, thread_id);

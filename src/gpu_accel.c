@@ -21,13 +21,13 @@
 #define START_INDEX 5
 #define END_INDEX 2
 #define ACCEPTABLE_JITTER 3
-#define NUM_SPLIT 2
+#define NUM_SPLIT 6
 
 pthread_barrier_t barrier;
 
-static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU"}; // "GPU", "Reclaiming" "CPU"
-static int infer_start[NUM_SPLIT] = {0, 0};
-static int infer_end[NUM_SPLIT] = {0, 306};
+static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU", "GPU", "CPU", "GPU", "CPU"}; // "GPU", "Reclaiming" "CPU"
+static int infer_start[NUM_SPLIT] = {0, 150, 155, 200, 210, 280};
+static int infer_end[NUM_SPLIT] = {150, 155, 200, 210, 280, 306};
 
 static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 7, 10, 2, 5, 8, 11, 1};
 static network net_list[MAXCORES];
@@ -91,22 +91,24 @@ static double e_preprocess[1000];
 static double e_preprocess_max[1000];
 
 static double start_infer[1000];
-static double start_gpu_waiting[1000];
-static double start_gpu_infer[1000];
-static double end_gpu_infer[1000];
-static double start_cpu_infer[1000];
-static double end_cpu_infer[1000];
+
+static double start_gpu_waiting[3][1000];
+static double start_gpu_infer[3][1000];
+static double end_gpu_infer[3][1000];
+static double start_cpu_infer[3][1000];
+static double end_cpu_infer[3][1000];
 static double end_infer[1000];
 
-static double waiting_gpu[1000];
-static double e_gpu_infer[1000];
-static double e_gpu_infer_max[1000];
+static double waiting_gpu[3][1000];
+static double e_gpu_infer[3][1000];
+static double e_gpu_infer_max[3][1000];
 
-static double start_gpu_synchronize[1000];
-static double end_gpu_synchronize[1000];
-static double e_gpu_synchronize[1000];
+static double start_gpu_synchronize[3][1000];
+static double end_gpu_synchronize[3][1000];
+static double e_gpu_synchronize[3][1000];
 
-static double e_cpu_infer[1000];
+static double e_cpu_infer[3][1000];
+
 static double e_infer[1000];
 
 
@@ -235,7 +237,7 @@ static int write_result_gpu()
     }
     else printf("Write output in %s\n", file_path); 
 
-    double sum_measure_data[num_exp * num_thread][34];
+    double sum_measure_data[num_exp * num_thread][20 + (NUM_SPLIT / 2) * 14];
     for(i = 0; i < num_exp * num_thread; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -245,34 +247,40 @@ static int write_result_gpu()
         sum_measure_data[i][4] = e_preprocess_max[i];
         sum_measure_data[i][5] = max_preprocess_time;
         sum_measure_data[i][6] = start_infer[i]; 
-        sum_measure_data[i][7] = start_gpu_waiting[i];
-        sum_measure_data[i][8] = waiting_gpu[i];
-        sum_measure_data[i][9] = start_gpu_infer[i];
-        sum_measure_data[i][10] = e_gpu_infer[i];
-        sum_measure_data[i][11] = end_gpu_infer[i];
-        sum_measure_data[i][12] = e_gpu_infer_max[i];
-        sum_measure_data[i][13] = max_gpu_infer_time;
-        sum_measure_data[i][14] = start_cpu_infer[i];
-        sum_measure_data[i][15] = e_cpu_infer[i];
-        sum_measure_data[i][16] = end_cpu_infer[i];
-        sum_measure_data[i][17] = max_cpu_infer_time;
-        sum_measure_data[i][18] = end_infer[i];
-        sum_measure_data[i][19] = e_infer[i];
-        sum_measure_data[i][20] = start_postprocess[i];
-        sum_measure_data[i][21] = e_postprocess[i];
-        sum_measure_data[i][22] = end_postprocess[i];
-        sum_measure_data[i][23] = execution_time[i];
-        sum_measure_data[i][24] = execution_time_max[i];
-        sum_measure_data[i][25] = release_interval;
-        sum_measure_data[i][26] = 0.0;
-        sum_measure_data[i][27] = 0.0;
-        sum_measure_data[i][28] = 0.0;
-        sum_measure_data[i][29] = 0.0;
-        sum_measure_data[i][30] = check_jitter[i];
-        sum_measure_data[i][31] = start_gpu_synchronize[i];
-        sum_measure_data[i][32] = e_gpu_synchronize[i];
-        sum_measure_data[i][33] = end_gpu_synchronize[i];
+        sum_measure_data[i][7] = end_infer[i];
+        sum_measure_data[i][8] = e_infer[i];
+        sum_measure_data[i][9] = start_postprocess[i];
+        sum_measure_data[i][10] = e_postprocess[i];
+        sum_measure_data[i][11] = end_postprocess[i];
+        sum_measure_data[i][12] = execution_time[i];
+        sum_measure_data[i][13] = execution_time_max[i];
+        sum_measure_data[i][14] = release_interval;
+        sum_measure_data[i][15] = 0.0;
+        sum_measure_data[i][16] = 0.0;
+        sum_measure_data[i][17] = 0.0;
+        sum_measure_data[i][18] = 0.0;
+        sum_measure_data[i][19] = check_jitter[i];
     }
+    
+    for(int j = 0; j < NUM_SPLIT / 2; ++j) {
+        for(i = 0; i < num_exp * num_thread; i++) {
+            sum_measure_data[i][20 + 14 * j] = start_gpu_waiting[j][i];
+            sum_measure_data[i][21 + 14 * j] = waiting_gpu[j][i];
+            sum_measure_data[i][22 + 14 * j] = start_gpu_infer[j][i];
+            sum_measure_data[i][23 + 14 * j] = e_gpu_infer[j][i];
+            sum_measure_data[i][24 + 14 * j] = end_gpu_infer[j][i];
+            sum_measure_data[i][25 + 14 * j] = e_gpu_infer_max[j][i];
+            sum_measure_data[i][26 + 14 * j] = max_gpu_infer_time;
+            sum_measure_data[i][27 + 14 * j] = start_cpu_infer[j][i];
+            sum_measure_data[i][28 + 14 * j] = e_cpu_infer[j][i];
+            sum_measure_data[i][29 + 14 * j] = end_cpu_infer[j][i];
+            sum_measure_data[i][30 + 14 * j] = max_cpu_infer_time;
+            sum_measure_data[i][31 + 14 * j] = start_gpu_synchronize[j][i];
+            sum_measure_data[i][32 + 14 * j] = e_gpu_synchronize[j][i];
+            sum_measure_data[i][33 + 14 * j] = end_gpu_synchronize[j][i];
+        }
+    }
+
 
     qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
 
@@ -288,46 +296,85 @@ static int write_result_gpu()
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    // fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    //         "core_id", 
+    //         "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
+    //         "start_infer", "end_infer", 
+    //         "e_infer",
+    //         "start_postprocess", "e_postprocess", "end_postprocess", 
+    //         "execution_time", "execution_time_max", "release_interval",
+    //         "cycle_time", "frame_rate",
+    //         "num_thread", "R", "check_jitter", 
+    //         "start_gpu_waiting", "waiting_gpu", 
+    //         "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
+    //         "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "e_cpu_infer_max_value",
+    //         "start_gpu_synchronize", "e_gpu_synchronize", "end_gpu_synchronize");
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
-            "start_infer", 
-            "start_gpu_waiting", "waiting_gpu", 
-            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
-            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "e_cpu_infer_max_value", "end_infer", 
+            "start_infer", "end_infer", 
             "e_infer",
             "start_postprocess", "e_postprocess", "end_postprocess", 
             "execution_time", "execution_time_max", "release_interval",
             "cycle_time", "frame_rate",
-            "num_thread", "R", "check_jitter",
-            "start_gpu_synchronize", "e_gpu_synchronize", "end_gpu_synchronize");
-
+            "num_thread", "R", "check_jitter");
+    char *headers[] = {"start_gpu_waiting", "waiting_gpu", 
+            "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "e_cpu_infer_max_value",
+            "start_gpu_synchronize", "e_gpu_synchronize", "end_gpu_synchronize"};
+    for (int i = 0; i <  NUM_SPLIT / 2; ++i) {
+        for(int j = 0; j < 14; ++j) {
+            char dynamic_header[100];  // Buffer to hold the new header with number
+            sprintf(dynamic_header, "%s_%d", headers[j], i + 1);  // Create new header with number
+            fprintf(fp, "%s", dynamic_header);
+            if (j < 14) {
+                fprintf(fp, ",");
+            }
+        }
+    }
+    fprintf(fp, "\n");
     double frame_rate = 0.0;
     double cycle_time = 0.0;
 
     for(i = 0; i < num_exp * num_thread - startIdx - endIdx; i++)
     {
-        if (new_sum_measure_data[i][30] > ACCEPTABLE_JITTER) continue;
+        if (new_sum_measure_data[i][19] > ACCEPTABLE_JITTER) continue;
         
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
-        new_sum_measure_data[i][26] = cycle_time;
-        new_sum_measure_data[i][27] = frame_rate;
-        new_sum_measure_data[i][28] = (double)num_thread;
-        new_sum_measure_data[i][29] = R;
+        new_sum_measure_data[i][15] = cycle_time;
+        new_sum_measure_data[i][16] = frame_rate;
+        new_sum_measure_data[i][17] = (double)num_thread;
+        new_sum_measure_data[i][18] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
+        // fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
+        //         new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
+        //         new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
+        //         new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
+        //         new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
+        //         new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
+        //         new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], 
+        //         new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28], new_sum_measure_data[i][29]
+        //         , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32], new_sum_measure_data[i][33]);
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
                 new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14], new_sum_measure_data[i][15],
-                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19],
-                new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], 
-                new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28], new_sum_measure_data[i][29]
-                , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32], new_sum_measure_data[i][33]);
+                new_sum_measure_data[i][16], new_sum_measure_data[i][17], new_sum_measure_data[i][18], new_sum_measure_data[i][19]);
+    
+        for (int k = 0; k <  NUM_SPLIT / 2; ++k) {
+            for(int j = 0; j < 14; ++j) {
+                fprintf(fp, "%.2f", new_sum_measure_data[i][j + (14*k) + 20]);
+                if (j < 14) {
+                    fprintf(fp, ",");
+                }
+            }
+        }
+        fprintf(fp, "\n");
     }
     
     fclose(fp);
@@ -337,7 +384,7 @@ static int write_result_gpu()
 
 static void cpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
 {
-    start_cpu_infer[count] = get_time_in_ms();
+    start_cpu_infer[split_index / 2][count] = get_time_in_ms();
     for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
         state->index = j;
         l = &(net->layers[j]);
@@ -350,21 +397,21 @@ static void cpu_inference(network_state *state, network *net, layer *l, int spli
         if(j == net->n - 1) {
             predictions = get_network_output(*net, 0);
         }
-        end_cpu_infer[count] = get_time_in_ms();
+        end_cpu_infer[split_index / 2][count] = get_time_in_ms();
 
     }
 }
 
 static void gpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
 {
-    start_gpu_waiting[count] = get_time_in_ms();
+    start_gpu_waiting[split_index / 2][count] = get_time_in_ms();
 
     pthread_mutex_lock(&mutex_gpu);
 
     while(current_thread != thread_id) {
         pthread_cond_wait(&cond, &mutex_gpu);
     }
-    start_gpu_infer[count] = get_time_in_ms();
+    start_gpu_infer[split_index / 2][count] = get_time_in_ms();
 
     for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
         state->index = j;
@@ -382,7 +429,7 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
     }
     current_thread = (current_thread) % num_thread + 1;
     pthread_cond_broadcast(&cond);
-    end_gpu_infer[count] = get_time_in_ms();
+    end_gpu_infer[split_index / 2][count] = get_time_in_ms();
     pthread_mutex_unlock(&mutex_gpu);
 }
 
@@ -481,7 +528,7 @@ static void threadFunc(int arg)
             pthread_barrier_wait(&barrier);
         }
 
-        // start_preprocess[count]=get_time_in_ms();
+        start_preprocess[count]=get_time_in_ms();
         // start_preprocess[count] = get_time_in_ms();
         // end_preprocess[count] = get_time_in_ms();
         // e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
@@ -500,7 +547,7 @@ static void threadFunc(int arg)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-        if(strcmp(inference_order[0], "GPU\0") == 0) {
+        if(strcmp(inference_order[0], "GPU\0") == 0 && infer_end[0] != 0) {
             state.input = net.input_state_gpu;
             memcpy(net.input_pinned_cpu, X, size * sizeof(float));
             cuda_push_array(state.input, net.input_pinned_cpu, size);
@@ -538,11 +585,14 @@ static void threadFunc(int arg)
         // __Measure Result__
         core_id_list[count] = (double)sched_getcpu();
         
-        waiting_gpu[count] = start_gpu_infer[count] - start_gpu_waiting[count];
-        e_gpu_infer[count] = end_gpu_infer[count] - start_gpu_infer[count];
-        e_gpu_synchronize[count] = end_gpu_synchronize[count] - start_gpu_synchronize[count];
-        e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
-        e_infer[count] = end_infer[count] - start_infer[count];
+        for(int j = 0; j < NUM_SPLIT / 2; j++) {
+            waiting_gpu[j][count] = start_gpu_infer[j][count] - start_gpu_waiting[j][count];
+            e_gpu_infer[j][count] = end_gpu_infer[j][count] - start_gpu_infer[j][count];
+            e_gpu_synchronize[j][count] = end_gpu_synchronize[j][count] - start_gpu_synchronize[j][count];
+            e_cpu_infer[j][count] = end_cpu_infer[j][count] - start_cpu_infer[j][count];
+            e_infer[count] = end_infer[count] - start_infer[count];
+        }
+
 
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
     }
