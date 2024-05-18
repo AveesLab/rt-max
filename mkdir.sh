@@ -484,3 +484,12 @@ for var in {1..138}
 	do
 	mkdir -p cpu-reclaiming-mp/enetb0/${var}glayer/
 	done
+	
+## GPU-Accel_1thread
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	for var in {0..11}
+	do
+		mkdir -p gpu-accel_layer_test/${model}-multithread/${var}thread/
+	done
+done

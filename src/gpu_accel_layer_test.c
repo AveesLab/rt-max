@@ -98,6 +98,8 @@ static double start_cpu_infer[1000];
 static double end_cpu_infer[1000];
 static double end_infer[1000];
 
+static double layer_infer[400][1000];
+static int num_network;
 
 static double waiting_gpu[1000];
 static double e_gpu_infer[1000];
@@ -110,7 +112,6 @@ static double e_gpu_synchronize[1000];
 static double e_cpu_infer[1000];
 static double e_infer[1000];
 
-static double layer_time[400][1000];
 
 static double start_postprocess[1000];
 static double end_postprocess[1000];
@@ -129,7 +130,6 @@ static float max_gpu_infer_time;
 static float max_cpu_infer_time;
 static float release_interval;
 static float R;
-static int num_network;
 
 static int reset_check_jitter() {
     for (int check_num = 0; check_num < 1000; check_num++) {
@@ -174,104 +174,6 @@ static double maxOfThree(double a, double b, double c) {
     }
     return max; 
 }
-static int write_acceleration_info() {
-    int startIdx = num_thread * START_INDEX; // Delete some ROWs
-    int endIdx = num_thread * END_INDEX; // Delete some ROWs
-
-    char file_path[256] = "measure/";
-
-    char* model_name = malloc(strlen(g_cfgfile) + 1);
-    strncpy(model_name, g_cfgfile + 6, (strlen(g_cfgfile)-10));
-    model_name[strlen(g_cfgfile)-10] = '\0';
-    
-    strcat(file_path, "gpu-accel-GC/");
-
-    strcat(file_path, model_name);
-    strcat(file_path, "-multithread/");
-
-
-    char num_threads__[20];
-    sprintf(num_threads__, "%dthread/", num_thread);
-    strcat(file_path, num_threads__);
-
-
-
-    strcat(file_path, "gpu-accel_");
-
-    char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
-    strcat(file_path, gpu_portion);
-
-    char splitnum[20];
-    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
-    strcat(file_path, splitnum);
-
-    strcat(file_path, "_accel_info");
-
-    strcat(file_path, ".csv");
-
-    static int exist=0;
-    FILE *fp;
-    int tick = 0;
-
-    fp = fopen(file_path, "w+");
-
-    int i;
-    if (fp == NULL) 
-    {
-        /* make directory */
-        while(!exist)
-        {
-            int result;
-
-            usleep(10 * 1000);
-
-            result = mkdir(MEASUREMENT_PATH, 0766);
-            if(result == 0) { 
-                exist = 1;
-
-                fp = fopen(file_path,"w+");
-            }
-
-            if(tick == 100)
-            {
-                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
-
-                return -1;
-            }
-            else tick++;
-        }
-    }
-    else printf("Write output in %s\n", file_path); 
-
-    char layer_id[20];
-    for (int i = 0; i < num_network; i++) {
-        sprintf(layer_id, "layer[%d]", i);
-        fprintf(fp, "%s,", layer_id);
-    }
-    fprintf(fp, "\n");
-
-    for (int j = 0; j < num_network; j++) {
-        for(int i = 0; i < NUM_SPLIT; i++) {
-            if(j < infer_end[i]) {
-                fprintf(fp, "%s,", inference_order[i]);
-                break;
-            }
-        }
-    }
-    fprintf(fp, "\n");
-
-    for(i = 0; i < num_exp * num_thread - startIdx - endIdx; i++)
-    {
-        for (int j = 0; j < num_network; j++) {
-            fprintf(fp, "%0.3f,", layer_time[j][i + startIdx]);
-        }
-        fprintf(fp, "\n");
-
-    }
-    
-    return 1;
-}
 
 static int write_result_gpu() 
 {        
@@ -281,7 +183,7 @@ static int write_result_gpu()
     strncpy(model_name, g_cfgfile + 6, (strlen(g_cfgfile)-10));
     model_name[strlen(g_cfgfile)-10] = '\0';
     
-    strcat(file_path, "gpu-accel-GC/");
+    strcat(file_path, "gpu-accel_layer_test/");
 
     strcat(file_path, model_name);
     strcat(file_path, "-multithread/");
@@ -293,15 +195,14 @@ static int write_result_gpu()
 
 
 
-    strcat(file_path, "gpu-accel_");
+    if(gLayer != 0) {
+        strcat(file_path, "full_gpu");
+    }
+    else {
+        strcat(file_path, "full_cpu");
+    }
 
-    char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
-    strcat(file_path, gpu_portion);
 
-    char splitnum[20];
-    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
-    strcat(file_path, splitnum);
     strcat(file_path, ".csv");
 
     static int exist=0;
@@ -391,7 +292,7 @@ static int write_result_gpu()
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
             "start_infer", 
@@ -404,6 +305,13 @@ static int write_result_gpu()
             "cycle_time", "frame_rate",
             "num_thread", "R", "check_jitter",
             "start_gpu_synchronize", "e_gpu_synchronize", "end_gpu_synchronize");
+
+    char layer_id[20];
+    for (int i = 0; i < num_network; i++) {
+        sprintf(layer_id, "layer[%d]", i);
+        fprintf(fp, "%s,", layer_id);
+    }
+    fprintf(fp, "\n");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
@@ -422,7 +330,7 @@ static int write_result_gpu()
         new_sum_measure_data[i][28] = (double)num_thread;
         new_sum_measure_data[i][29] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f,",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
@@ -431,6 +339,12 @@ static int write_result_gpu()
                 new_sum_measure_data[i][20], new_sum_measure_data[i][21], new_sum_measure_data[i][22], new_sum_measure_data[i][23], 
                 new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], new_sum_measure_data[i][28], new_sum_measure_data[i][29]
                 , new_sum_measure_data[i][30], new_sum_measure_data[i][31], new_sum_measure_data[i][32], new_sum_measure_data[i][33]);
+    
+        for (int j = 0; j < num_network; j++) {
+            fprintf(fp, "%0.3f,", layer_infer[j][i + startIdx]);
+        }
+
+        fprintf(fp, "\n");
     }
     
     fclose(fp);
@@ -438,20 +352,20 @@ static int write_result_gpu()
     return 1;
 }
 
-static void cpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
+static void cpu_inference(network_state *state, network *net, layer *l, int count, int thread_id)
 {
 
     start_cpu_infer[count] = get_time_in_ms();
-    for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
+    for(int j = 0; j < net->n; j++) {
         state->index = j;
         l = &(net->layers[j]);
         l->do_reclaiming = 0;
         if(l->delta && state->train && l->train){
             scal_cpu(l->outputs * l->batch, 0, l->delta, 1);
         }
-        double layer_start = get_time_in_ms();
+        double layer_start = get_time_in_ms();       
         l->forward(*l, *state);
-        layer_time[j][count] = get_time_in_ms() - layer_start;
+        layer_infer[j][count] = get_time_in_ms() - layer_start;
         state->input = l->output;
         if(j == net->n - 1) {
             predictions = get_network_output(*net, 0);
@@ -461,7 +375,7 @@ static void cpu_inference(network_state *state, network *net, layer *l, int spli
     }
 }
 
-static void gpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
+static void gpu_inference(network_state *state, network *net, layer *l, int count, int thread_id)
 {
     start_gpu_waiting[count] = get_time_in_ms();
     pthread_mutex_lock(&mutex_gpu);
@@ -470,7 +384,7 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
         pthread_cond_wait(&cond, &mutex_gpu);
     }
     start_gpu_infer[count] = get_time_in_ms();
-    for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
+    for(int j = 0; j < net->n; j++) {
 
         state->index = j;
         l = &(net->layers[j]);
@@ -479,9 +393,9 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
         }
         double layer_start = get_time_in_ms();
         l->forward_gpu(*l, *state);
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-        layer_time[j][count] = get_time_in_ms() - layer_start;
         state->input = l->output_gpu;
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        layer_infer[j][count] = get_time_in_ms() - layer_start;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
         }
@@ -618,14 +532,11 @@ static void threadFunc(int arg)
 
         state.workspace = net.workspace;
 
-        for(int j = 0; j < NUM_SPLIT; ++j) {
-            if(strcmp(inference_order[j], "GPU\0") == 0) {
-                gpu_inference(&state, &net, &l, j, count, thread_id);
-            }
-            else if(strcmp(inference_order[j], "CPU\0") == 0) {
-                cpu_inference(&state, &net, &l, j, count, thread_id);
-            }
-            else printf("Layer %d does not be definded about acceleration info\n", j);
+        if (gLayer != 0){
+            gpu_inference(&state, &net, &l, count, thread_id);
+        }
+        else {
+            cpu_inference(&state, &net, &l, count, thread_id);
         }
 
         // end_cpu_infer[count] = get_time_in_ms();
@@ -664,7 +575,7 @@ static void threadFunc(int arg)
 }
 
 
-void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void gpu_accel_layer_test(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
@@ -704,7 +615,7 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
             infer_start[1] = gLayer;
             infer_end[0] = gLayer;
             infer_end[1] = net_init.n;
-            num_network = net_init.n;  
+            num_network = net_init.n;
             im = load_image(g_filename, 0, 0, net_init.c);
             resized = resize_min(im, net_init.w);
             cropped = crop_image(resized, (resized.w - net_init.w)/2, (resized.h - net_init.h)/2, net_init.w, net_init.h);
@@ -807,9 +718,6 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
         exit(0);
     }
 
-    if(write_acceleration_info() == -1) {
-        exit(0);
-    }
     pthread_barrier_destroy(&barrier);
     
     return 0;
@@ -817,7 +725,7 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
 }
 #else
 
-void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void gpu_accel_layer_test(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
     printf("!!ERROR!! GPU = 0 \n");
