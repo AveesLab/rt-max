@@ -26,8 +26,8 @@
 pthread_barrier_t barrier;
 
 char inference_order[NUM_SPLIT][20] = {"GPU", "Reclaiming", "CPU"}; // "GPU", "Reclaiming" "CPU"
-int infer_start[NUM_SPLIT] = {0, 1, 260};
-int infer_end[NUM_SPLIT] = {1, 260, 306};
+int infer_start[NUM_SPLIT] = {0, 0, 50};
+int infer_end[NUM_SPLIT] = {0, 50, 136};
 
 static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 // static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
@@ -725,7 +725,7 @@ static void threadFunc(int arg)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-        if(strcmp(inference_order[0], "GPU\0") == 0) {
+        if(strcmp(inference_order[0], "GPU\0") == 0 && infer_end[0] != 0) {
             state.input = net.input_state_gpu;
             memcpy(net.input_pinned_cpu, X, size * sizeof(float));
             cuda_push_array(state.input, net.input_pinned_cpu, size);
