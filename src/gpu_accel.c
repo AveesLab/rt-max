@@ -29,7 +29,7 @@ static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU", "GPU", "CPU", "GPU",
 static int infer_start[NUM_SPLIT] = {0, 150, 155, 200, 210, 280};
 static int infer_end[NUM_SPLIT] = {150, 155, 200, 210, 280, 306};
 
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 7, 10, 2, 5, 8, 11, 1};
+static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 static double start_time[MAXCORES] = {0,0,0,0,0,0,0,0,0,0,0,0};
@@ -648,11 +648,11 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
             cpu_set_t cpuset;
 
-            openblas_thread = (MAXCORES - 2) - num_thread + 1;
+            openblas_thread = (MAXCORES - 1) - num_thread + 1;
             openblas_set_num_threads(openblas_thread);
             for (int k = 0; k < openblas_thread - 1; k++) {
                 CPU_ZERO(&cpuset);
-                CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
+                CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
                 openblas_setaffinity(k, sizeof(cpuset), &cpuset);
             }
         }

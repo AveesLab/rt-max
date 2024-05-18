@@ -34,7 +34,7 @@ static char inference_order[NUM_SPLIT][20] = {"GPU", "Reclaiming", "CPU"}; // "G
 static int infer_start[NUM_SPLIT] = {0, };
 static int infer_end[NUM_SPLIT] = {204, };
 
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 1, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 // static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
@@ -212,7 +212,7 @@ static int write_result_gpu()
     strncpy(model_name, g_cfgfile + 6, (strlen(g_cfgfile)-10));
     model_name[strlen(g_cfgfile)-10] = '\0';
     
-    strcat(file_path, "gpu-accel-GC/");
+       strcat(file_path, "cpu-reclaiming-GRC/");
 
     strcat(file_path, model_name);
     strcat(file_path, "-multithread/");
@@ -224,10 +224,10 @@ static int write_result_gpu()
 
 
 
-    strcat(file_path, "gpu-accel_");
+    strcat(file_path, "cpu-reclaiming_");
 
     char gpu_portion[20];
-    sprintf(gpu_portion, "%03dglayer", gLayer);
+    sprintf(gpu_portion, "%03drlayer", rLayer);
     strcat(file_path, gpu_portion);
 
     strcat(file_path, ".csv");

@@ -606,11 +606,11 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
 
             cpu_set_t cpuset;
 
-            openblas_thread = (MAXCORES - 2) - num_thread + 1;
+            openblas_thread = (MAXCORES - 1) - num_thread + 1;
             openblas_set_num_threads(openblas_thread);
             for (int k = 0; k < openblas_thread - 1; k++) {
                 CPU_ZERO(&cpuset);
-                CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
+                CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
                 // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 1) - k] );
                 openblas_setaffinity(k, sizeof(cpuset), &cpuset);
             }
