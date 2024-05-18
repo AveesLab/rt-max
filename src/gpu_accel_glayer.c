@@ -25,11 +25,11 @@
 
 pthread_barrier_t barrier;
 
-static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU"}; // "GPU", "Reclaiming" "CPU"
+static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU"}; // "GPU", "CPU"
 static int infer_start[NUM_SPLIT] = {0, };
 static int infer_end[NUM_SPLIT] = {0, };
 
-static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 4, 7, 10, 2, 5, 8, 11, 1};
+static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 static network net_list[MAXCORES];
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 static double start_time[MAXCORES] = {0,0,0,0,0,0,0,0,0,0,0,0};
@@ -711,15 +711,6 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
             X = cropped.data;
 
             cpu_set_t cpuset;
-
-            openblas_thread = (MAXCORES - 2) - num_thread + 1;
-            openblas_set_num_threads(openblas_thread);
-            for (int k = 0; k < openblas_thread - 1; k++) {
-                CPU_ZERO(&cpuset);
-                CPU_SET(coreIDOrder[(MAXCORES - 2) - k], &cpuset);
-                // printf("Rcore : %d\n",coreIDOrder[(MAXCORES - 2) - k] );
-                openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-            }
         }
         rc = pthread_create(&threads[i], NULL, threadFunc, threads_id);
         if (rc) {
