@@ -55,6 +55,7 @@ static int g_benchmark_layers;
 static bool isTest;
 static bool isSet;
 static bool isReclaiming;
+static int division_count;
 
 static int skipped_layers [1000] = {0, };
 extern int skip_layers[1000][10];
@@ -111,6 +112,7 @@ static double e_cpu_infer[1000];
 static double e_infer[1000];
 
 static double layer_time[400][1000];
+static double max_layer_time[400];
 
 static double start_postprocess[1000];
 static double end_postprocess[1000];
@@ -440,7 +442,6 @@ static int write_result_gpu()
 
 static void cpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
 {
-
     start_cpu_infer[count] = get_time_in_ms();
     for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
         state->index = j;
@@ -452,13 +453,19 @@ static void cpu_inference(network_state *state, network *net, layer *l, int spli
         double layer_start = get_time_in_ms();
         l->forward(*l, *state);
         layer_time[j][count] = get_time_in_ms() - layer_start;
+        
+	/*if(!isTest && layer_time[j][count] < max_layer_time[j]) {
+            while(layer_time[j][count] < max_layer_time[j]) {
+                layer_time[j][count] = get_time_in_ms() - layer_start;
+            }
+        }*/
+        
         state->input = l->output;
         if(j == net->n - 1) {
             predictions = get_network_output(*net, 0);
         }
-        end_cpu_infer[count] = get_time_in_ms();
-
     }
+    end_cpu_infer[count] = get_time_in_ms();
 }
 
 static void gpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
@@ -481,6 +488,13 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
         l->forward_gpu(*l, *state);
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         layer_time[j][count] = get_time_in_ms() - layer_start;
+        
+        /*if(!isTest && (layer_time[j][count] < max_layer_time[j])) {
+            while(layer_time[j][count] < max_layer_time[j]) {
+                layer_time[j][count] = get_time_in_ms() - layer_start;
+            }
+        }*/
+        
         state->input = l->output_gpu;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
@@ -723,7 +737,17 @@ void gpu_accel_glayer(char *datacfg, char *cfgfile, char *weightfile, char *file
         pthread_join(threads[i], NULL);
     }
 
-	max_preprocess_time = average(e_preprocess);
+    for(int h = 0; h < num_network; h++) {	
+        for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
+            max_layer_time[h] += layer_time[h][k];
+            division_count += 1;
+        }
+        max_layer_time[h] /= (float)division_count;
+        max_layer_time[h] *= 1.03;
+        division_count = 0;
+    }
+    
+    max_preprocess_time = average(e_preprocess);
     max_gpu_infer_time = average(e_gpu_infer);
     max_cpu_infer_time = average(e_cpu_infer);
     execution_time_wo_waiting = max_gpu_infer_time + max_cpu_infer_time; // Delete Preprocess
