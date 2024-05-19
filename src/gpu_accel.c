@@ -21,13 +21,13 @@
 #define START_INDEX 5
 #define END_INDEX 2
 #define ACCEPTABLE_JITTER 3
-#define NUM_SPLIT 6
+#define NUM_SPLIT 8
 
 pthread_barrier_t barrier;
 
-static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU", "GPU", "CPU", "GPU", "CPU"}; // "GPU", "Reclaiming" "CPU"
-static int infer_start[NUM_SPLIT] = {0, 150, 155, 200, 210, 280};
-static int infer_end[NUM_SPLIT] = {150, 155, 200, 210, 280, 306};
+static char inference_order[NUM_SPLIT][20] = {"GPU", "CPU", "GPU", "CPU", "GPU", "CPU", "GPU", "CPU"}; // "GPU", "Reclaiming" "CPU"
+static int infer_start[NUM_SPLIT] = {0, 50, 150, 180, 200, 250, 250, 300};
+static int infer_end[NUM_SPLIT] = {50, 150, 180, 200, 250, 260, 300, 306};
 
 static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 static network net_list[MAXCORES];
@@ -55,6 +55,7 @@ static int g_benchmark_layers;
 static bool isTest;
 static bool isSet;
 static bool isReclaiming;
+static int division_count;
 
 static int skipped_layers[1000] = {0, };
 int skip_layers[1000][10];
@@ -92,25 +93,27 @@ static double e_preprocess_max[1000];
 
 static double start_infer[1000];
 
-static double start_gpu_waiting[3][1000];
-static double start_gpu_infer[3][1000];
-static double end_gpu_infer[3][1000];
-static double start_cpu_infer[3][1000];
-static double end_cpu_infer[3][1000];
+static double start_gpu_waiting[4][1000];
+static double waiting_gpu[4][1000];
+static double start_gpu_infer[4][1000];
+static double e_gpu_infer[4][1000];
+static double end_gpu_infer[4][1000];
+static double start_cpu_infer[4][1000];
+static double e_cpu_infer[4][1000];
+static double end_cpu_infer[4][1000];
+
 static double end_infer[1000];
 
-static double waiting_gpu[3][1000];
-static double e_gpu_infer[3][1000];
-static double e_gpu_infer_max[3][1000];
+static double e_gpu_infer_max[4][1000];
 
-static double start_gpu_synchronize[3][1000];
-static double end_gpu_synchronize[3][1000];
-static double e_gpu_synchronize[3][1000];
-
-static double e_cpu_infer[3][1000];
+static double start_gpu_synchronize[4][1000];
+static double end_gpu_synchronize[4][1000];
+static double e_gpu_synchronize[4][1000];
 
 static double e_infer[1000];
 
+static double layer_time[400][1000];
+static double max_layer_time[400];
 
 static double start_postprocess[1000];
 static double end_postprocess[1000];
@@ -130,6 +133,7 @@ static float max_reclaim_infer_time;
 static float max_cpu_infer_time;
 static float release_interval;
 static float R;
+static int num_network;
 
 static int reset_check_jitter() {
     for (int check_num = 0; check_num < 1000; check_num++) {
@@ -175,6 +179,105 @@ static double maxOfThree(double a, double b, double c) {
     return max; 
 }
 
+static int write_acceleration_info() {
+    int startIdx = num_thread * START_INDEX; // Delete some ROWs
+    int endIdx = num_thread * END_INDEX; // Delete some ROWs
+
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(g_cfgfile) + 1);
+    strncpy(model_name, g_cfgfile + 6, (strlen(g_cfgfile)-10));
+    model_name[strlen(g_cfgfile)-10] = '\0';
+    
+    strcat(file_path, "gpu-accel-GC/");
+
+    strcat(file_path, model_name);
+    strcat(file_path, "-multithread/");
+
+
+    char num_threads__[20];
+    sprintf(num_threads__, "%dthread/", num_thread);
+    strcat(file_path, num_threads__);
+
+
+
+    strcat(file_path, "gpu-accel_");
+
+    char gpu_portion[20];
+    sprintf(gpu_portion, "%03dglayer", infer_end[0]);
+    strcat(file_path, gpu_portion);
+
+    char splitnum[20];
+    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
+    strcat(file_path, splitnum);
+
+    strcat(file_path, "_accel_info");
+
+    strcat(file_path, ".csv");
+
+    static int exist=0;
+    FILE *fp;
+    int tick = 0;
+
+    fp = fopen(file_path, "w+");
+
+    int i;
+    if (fp == NULL) 
+    {
+        /* make directory */
+        while(!exist)
+        {
+            int result;
+
+            usleep(10 * 1000);
+
+            result = mkdir(MEASUREMENT_PATH, 0766);
+            if(result == 0) { 
+                exist = 1;
+
+                fp = fopen(file_path,"w+");
+            }
+
+            if(tick == 100)
+            {
+                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
+
+                return -1;
+            }
+            else tick++;
+        }
+    }
+    else printf("Write output in %s\n", file_path); 
+
+    char layer_id[20];
+    for (int i = 0; i < num_network; i++) {
+        sprintf(layer_id, "layer[%d]", i);
+        fprintf(fp, "%s,", layer_id);
+    }
+    fprintf(fp, "\n");
+
+    for (int j = 0; j < num_network; j++) {
+        for(int i = 0; i < NUM_SPLIT; i++) {
+            if(j < infer_end[i]) {
+                fprintf(fp, "%s,", inference_order[i]);
+                break;
+            }
+        }
+    }
+    fprintf(fp, "\n");
+
+    for(i = 0; i < num_exp * num_thread - startIdx - endIdx; i++)
+    {
+        for (int j = 0; j < num_network; j++) {
+            fprintf(fp, "%0.3f,", layer_time[j][i + startIdx]);
+        }
+        fprintf(fp, "\n");
+
+    }
+    
+    return 1;
+}
+
 static int write_result_gpu() 
 {        
     char file_path[256] = "measure/";
@@ -200,6 +303,10 @@ static int write_result_gpu()
     char gpu_portion[20];
     sprintf(gpu_portion, "%03dglayer", infer_end[0]);
     strcat(file_path, gpu_portion);
+
+    char splitnum[20];
+    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
+    strcat(file_path, splitnum);
 
     strcat(file_path, ".csv");
 
@@ -327,12 +434,11 @@ static int write_result_gpu()
             char dynamic_header[100];  // Buffer to hold the new header with number
             sprintf(dynamic_header, "%s_%d", headers[j], i + 1);  // Create new header with number
             fprintf(fp, "%s", dynamic_header);
-            if (j < 14) {
-                fprintf(fp, ",");
-            }
+            fprintf(fp, ",");
         }
     }
     fprintf(fp, "\n");
+
     double frame_rate = 0.0;
     double cycle_time = 0.0;
 
@@ -342,6 +448,7 @@ static int write_result_gpu()
         
         if (i == 0) cycle_time = NAN;
         else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
+
         if (i == 0) frame_rate = NAN;
         else frame_rate = 1000/cycle_time;
 
@@ -392,14 +499,22 @@ static void cpu_inference(network_state *state, network *net, layer *l, int spli
         if(l->delta && state->train && l->train){
             scal_cpu(l->outputs * l->batch, 0, l->delta, 1);
         }
+        double layer_start = get_time_in_ms();
         l->forward(*l, *state);
+        layer_time[j][count] = get_time_in_ms() - layer_start;
+
+        if(!isTest && layer_time[j][count] < max_layer_time[j]) {
+            while(layer_time[j][count] < max_layer_time[j]) {
+                layer_time[j][count] = get_time_in_ms() - layer_start;
+            }
+        }
+
         state->input = l->output;
         if(j == net->n - 1) {
             predictions = get_network_output(*net, 0);
         }
-        end_cpu_infer[split_index / 2][count] = get_time_in_ms();
-
     }
+    end_cpu_infer[split_index / 2][count] = get_time_in_ms();
 }
 
 static void gpu_inference(network_state *state, network *net, layer *l, int split_index, int count, int thread_id)
@@ -411,6 +526,7 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
     while(current_thread != thread_id) {
         pthread_cond_wait(&cond, &mutex_gpu);
     }
+
     start_gpu_infer[split_index / 2][count] = get_time_in_ms();
 
     for(int j = infer_start[split_index]; j < infer_end[split_index]; j++) {
@@ -420,8 +536,17 @@ static void gpu_inference(network_state *state, network *net, layer *l, int spli
             fill_ongpu(l->outputs * l->batch, 0, l->delta_gpu, 1);
         }
 
+        double layer_start = get_time_in_ms();
         l->forward_gpu(*l, *state);
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        layer_time[j][count] = get_time_in_ms() - layer_start;
+
+        if(!isTest && (layer_time[j][count] < max_layer_time[j])) {
+            while(layer_time[j][count] < max_layer_time[j]) {
+                layer_time[j][count] = get_time_in_ms() - layer_start;
+            }
+        }
+
         state->input = l->output_gpu;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
@@ -568,14 +693,15 @@ static void threadFunc(int arg)
 
         end_infer[count] = get_time_in_ms();
 
+        if(!object_detection) {    
+            if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+            top_k(predictions, net.outputs, top, indexes);
+            for(int j = 0; j < top; ++j){
+                g_index = indexes[j];
+                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",g_index, names[g_index], predictions[g_index], (net.hierarchy->parent[g_index] >= 0) ? names[net.hierarchy->parent[g_index]] : "Root");
+                else if (show_accuracy && thread_id == 1 && i == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
 
-        if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
-        top_k(predictions, net.outputs, top, indexes);
-        for(int j = 0; j < top; ++j){
-            g_index = indexes[j];
-            if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",g_index, names[g_index], predictions[g_index], (net.hierarchy->parent[g_index] >= 0) ? names[net.hierarchy->parent[g_index]] : "Root");
-            else if (show_accuracy && thread_id == 1 && i == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
-
+            }
         }
 
         // end_postprocess[count] = get_time_in_ms();
@@ -590,10 +716,8 @@ static void threadFunc(int arg)
             e_gpu_infer[j][count] = end_gpu_infer[j][count] - start_gpu_infer[j][count];
             e_gpu_synchronize[j][count] = end_gpu_synchronize[j][count] - start_gpu_synchronize[j][count];
             e_cpu_infer[j][count] = end_cpu_infer[j][count] - start_cpu_infer[j][count];
-            e_infer[count] = end_infer[count] - start_infer[count];
         }
-
-
+        e_infer[count] = end_infer[count] - start_infer[count];
         execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
     }
     pthread_exit(NULL);
@@ -641,6 +765,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         net_list[threads_id] = net_init;
 
         if(i == 0) {
+            num_network = net_init.n;
             im = load_image(g_filename, 0, 0, net_init.c);
             resized = resize_min(im, net_init.w);
             cropped = crop_image(resized, (resized.w - net_init.w)/2, (resized.h - net_init.h)/2, net_init.w, net_init.h);
@@ -666,6 +791,16 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
+    }
+
+    for(int h = 0; h < num_network; h++) {	
+        for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
+            max_layer_time[h] += layer_time[h][k];
+            division_count += 1;
+        }
+        max_layer_time[h] /= (float)division_count;
+        max_layer_time[h] *= 1.03;
+        division_count = 0;
     }
 
 	max_preprocess_time = average(e_preprocess);
@@ -749,6 +884,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
     if(write_result_gpu() == -1) {
         /* return error */
+        exit(0);
+    }
+
+    if(write_acceleration_info() == -1) {
         exit(0);
     }
 
