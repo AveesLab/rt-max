@@ -755,9 +755,15 @@ static void threadFunc(int arg)
         // __Preprocess__
 
         start_preprocess[count]=get_time_in_ms();
-        // end_preprocess[count] = get_time_in_ms();
-        // e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
-        // e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
+
+        im = load_image(g_filename, 0, 0, net.c);
+        resized = resize_min(im, net.w);
+        cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
+        X = cropped.data;
+
+        end_preprocess[count] = get_time_in_ms();
+        e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
+        e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         start_infer[count] = get_time_in_ms();
 
@@ -796,9 +802,17 @@ static void threadFunc(int arg)
 
         end_infer[count] = get_time_in_ms();
 
-        // start_postprocess[count] = get_time_in_ms();
+        start_postprocess[count] = get_time_in_ms();
 
         if(!object_detection) {
+            dets = get_network_boxes(&net, im.w, im.h, g_thresh,g_hier_thresh, 0, 1, &nboxes, g_letter_box);
+            if (nms) {
+                if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+                else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+            }
+            draw_detections_v3(im, dets, nboxes, g_thresh, names, alphabet, l.classes, g_ext_output);
+        }
+        else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
             top_k(predictions, net.outputs, top, indexes);
             for(int j = 0; j < top; ++j){
@@ -808,9 +822,11 @@ static void threadFunc(int arg)
             }
         }
 
-        // end_postprocess[count] = get_time_in_ms();
-        // e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
-        // execution_time[count] = end_postprocess[count] - start_preprocess[count];
+
+
+        end_postprocess[count] = get_time_in_ms();
+        e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
+        execution_time[count] = end_postprocess[count] - start_preprocess[count];
 
         // __Measure Result__
 
@@ -881,10 +897,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
             if(i == 0) {
                 num_network = net_init.n;  
-                im = load_image(g_filename, 0, 0, net_init.c);
-                resized = resize_min(im, net_init.w);
-                cropped = crop_image(resized, (resized.w - net_init.w)/2, (resized.h - net_init.h)/2, net_init.w, net_init.h);
-                X = cropped.data;
             }
             
             cpu_set_t cpuset;
