@@ -21,13 +21,13 @@
 #define START_INDEX 5
 #define END_INDEX 2
 #define ACCEPTABLE_JITTER 3
-#define NUM_SPLIT 3
+#define NUM_SPLIT 4
 
 pthread_barrier_t barrier;
 
-char inference_order[NUM_SPLIT][20] = {"GPU", "Reclaiming", "CPU"}; // "GPU", "Reclaiming" "CPU"
-int infer_start[NUM_SPLIT] = {0, 200, 250};
-int infer_end[NUM_SPLIT] = {200, 250, 306};
+char inference_order[NUM_SPLIT][20] = {}; // "GPU", "Reclaiming" "CPU"
+int infer_start[NUM_SPLIT] = {0, };
+int infer_end[NUM_SPLIT] = {0, };
 
 static int coreIDOrder[MAXCORES] = {0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
 // static int coreIDOrder[MAXCORES] = {0,1,2,3,4,5,6,7,8,9,10,11};
@@ -797,7 +797,9 @@ static void threadFunc(int arg)
             else if(strcmp(inference_order[j], "Reclaiming\0") == 0) {
                 reclaiming_inference(&state, &net, &l, j, count, thread_id);
             }
-            else printf("Layer %d does not be definded about acceleration info\n", j);
+            else {
+                break;
+            } 
         }
 
         end_infer[count] = get_time_in_ms();
@@ -897,6 +899,15 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
             if(i == 0) {
                 num_network = net_init.n;  
+                infer_end[0] = gLayer;
+                infer_start[1] = gLayer;
+                infer_end[1] = rLayer;
+                infer_start[2] = rLayer;
+                infer_end[2] = net_init.n;
+                strcpy(inference_order[0], "GPU");
+                strcpy(inference_order[1], "Reclaiming");
+                strcpy(inference_order[2], "CPU");         
+                strcpy(inference_order[3], "NULL");
             }
             
             cpu_set_t cpuset;
