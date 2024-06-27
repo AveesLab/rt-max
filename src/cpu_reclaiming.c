@@ -474,6 +474,23 @@ static int write_result_reclaiming()
     return 1;
 }
 
+void InitNetwork(int threads_id)
+{
+    network net_init = parse_network_cfg_custom(g_cfgfile, 1, 1, device); // set batch=1
+
+    if (g_weightfile) {
+        load_weights(&net_init, g_weightfile);
+    }
+
+    if (net_init.letter_box) g_letter_box = 1;
+    net_init.benchmark_layers = g_benchmark_layers;
+    fuse_conv_batchnorm(net_init);
+    calculate_binary_weights(net_init);
+
+    net_list[threads_id] = net_init;
+    num_network = net_init.n; 
+}
+
 void cpu_inference(network_state *state, network *net, layer *l, int count, int thread_id)
 {
     start_cpu_infer[count] = get_time_in_ms();
@@ -666,10 +683,22 @@ void initThread(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     alphabet = load_alphabet();
     object_detection = strstr(g_cfgfile, target_model);
 
+    isTest = true;
+
     if (g_filename) strncpy(input, g_filename, 256);
     else printf("Error! File is not exist.");
 
     visible_exp = show_result;
+
+    cpu_set_t cpuset;
+
+    openblas_thread = (MAXCORES - 1) - num_thread + 1;
+    openblas_set_num_threads(openblas_thread);
+    for (int k = 0; k < openblas_thread - 1; k++) {
+        CPU_ZERO(&cpuset);
+        CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
+        openblas_setaffinity(k, sizeof(cpuset), &cpuset);
+    }
 
     if (visible_exp) printf("\nCPU-Reclaiming with %d threads with %d gpu-layer & %d reclaim-layer\n", num_thread, gLayer, rLayer);
 
@@ -790,8 +819,6 @@ static void threadFunc(int arg)
 
         state.input = net.input_state_gpu;
 
-        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
-
         cuda_push_array(state.input, X, size);
 
         state.workspace = net.workspace;
@@ -804,12 +831,9 @@ static void threadFunc(int arg)
 
 
         postprocess(net, im, l, thread_id, i, count);
-
     }
-
     pthread_exit(NULL);
 }
-
 
 void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
@@ -821,7 +845,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     int i;
 
     if (num_thread < (MAXCORES-1)/*&& (rLayer > 0)*/ ) {
-        isTest = true;
 
         for(int q = 0; q <= 2; q++) {
         // =====================RECLAMING=====================
@@ -834,29 +857,7 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
 
                 int threads_id = i + 1;
                 if(isTest) {
-                    network net_init = parse_network_cfg_custom(g_cfgfile, 1, 1, device); // set batch=1
-
-                    if (g_weightfile) {
-                        load_weights(&net_init, g_weightfile);
-                    }
-
-                    if (net_init.letter_box) g_letter_box = 1;
-                    net_init.benchmark_layers = g_benchmark_layers;
-                    fuse_conv_batchnorm(net_init);
-                    calculate_binary_weights(net_init);
-
-                    net_list[threads_id] = net_init;
-                    num_network = net_init.n;  
-                
-                    cpu_set_t cpuset;
-
-                    openblas_thread = (MAXCORES - 1) - num_thread + 1;
-                    openblas_set_num_threads(openblas_thread);
-                    for (int k = 0; k < openblas_thread - 1; k++) {
-                        CPU_ZERO(&cpuset);
-                        CPU_SET(coreIDOrder[(MAXCORES - 1) - k], &cpuset);
-                        openblas_setaffinity(k, sizeof(cpuset), &cpuset);
-                    }
+                    InitNetwork(threads_id);            
                 }
                 rc = pthread_create(&threads[i], NULL, threadFunc, threads_id);
                 if (rc) {
