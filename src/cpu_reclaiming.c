@@ -491,6 +491,18 @@ void InitNetwork(int threads_id)
     num_network = net_init.n; 
 }
 
+void SetAffinity(int thread_id)
+{
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(coreIDOrder[thread_id], &cpuset); // cpu core index
+    int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+    if (ret != 0) {
+        fprintf(stderr, "pthread_setaffinity_np() failed \n");
+        exit(0);
+    } 
+}
+
 void cpu_inference(network_state *state, network *net, layer *l, int count, int thread_id)
 {
     start_cpu_infer[count] = get_time_in_ms();
@@ -519,8 +531,22 @@ void cpu_inference(network_state *state, network *net, layer *l, int count, int 
     end_cpu_infer[count] = get_time_in_ms();
 }
 
-void gpu_inference(network_state *state, network *net, layer *l, int count, int thread_id)
+void gpu_inference(network_state *state, network *net, layer *l, int count, int thread_id, float *X)
 {
+    if (net->gpu_index != cuda_get_device())
+        cuda_set_device(net->gpu_index);
+    int size = get_network_input_size(*net) * net->batch;
+    state->index = 0;
+    state->net = *net;
+    state->truth = 0;
+    state->train = 0;
+    state->delta = 0;
+
+    state->input = net->input_state_gpu;
+
+    cuda_push_array(state->input, X, size);
+
+    state->workspace = net->workspace;
     start_gpu_waiting[count] = get_time_in_ms();
 
     pthread_mutex_lock(&mutex_gpu);
@@ -749,14 +775,7 @@ static void threadFunc(int arg)
     int thread_id = arg;
 
     // __CPU AFFINITY SETTING__
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(coreIDOrder[thread_id], &cpuset); // cpu core index
-    int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-    if (ret != 0) {
-        fprintf(stderr, "pthread_setaffinity_np() failed \n");
-        exit(0);
-    } 
+    SetAffinity(thread_id);
 
     // __GPU SETUP__
 #ifdef GPU   // GPU
@@ -806,24 +825,9 @@ static void threadFunc(int arg)
         start_infer[count] = get_time_in_ms();
 
         // GPU Inference
-
-        if (net.gpu_index != cuda_get_device())
-            cuda_set_device(net.gpu_index);
-        int size = get_network_input_size(net) * net.batch;
         network_state state;
-        state.index = 0;
-        state.net = net;
-        state.truth = 0;
-        state.train = 0;
-        state.delta = 0;
 
-        state.input = net.input_state_gpu;
-
-        cuda_push_array(state.input, X, size);
-
-        state.workspace = net.workspace;
-
-        gpu_inference(&state, &net, &l, count, thread_id);
+        gpu_inference(&state, &net, &l, count, thread_id, X);
         reclaiming_inference(&state, &net, &l, count, thread_id);
         cpu_inference(&state, &net, &l, count, thread_id);
 
@@ -845,7 +849,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
     int i;
 
     if (num_thread < (MAXCORES-1)/*&& (rLayer > 0)*/ ) {
-
         for(int q = 0; q <= 2; q++) {
         // =====================RECLAMING=====================
             if (visible_exp) printf("\n::EXP-%d:: CPU-Reclaiming with %d threads with %d gpu-layer & %d reclaiming-layer [R : %.2f]\n", q, num_thread, gLayer, rLayer, R);
@@ -854,7 +857,6 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
             pthread_barrier_init(&barrier, NULL, num_thread);
 
             for (i = 0; i < num_thread; i++) {
-
                 int threads_id = i + 1;
                 if(isTest) {
                     InitNetwork(threads_id);            
@@ -875,10 +877,8 @@ void cpu_reclaiming(char *datacfg, char *cfgfile, char *weightfile, char *filena
                 isTest = false;
             }
         }
-
         WriteResult();
     }
-
     pthread_barrier_destroy(&barrier);
     
     return 0;
