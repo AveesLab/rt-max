@@ -77,7 +77,7 @@ float *predictions;
 // float *X;
 
 char *target_model = "yolo";
-int object_detection = NULL;
+int object_detection;
 
 int device = 1; // Choose CPU or GPU
 extern gpu_yolo;
