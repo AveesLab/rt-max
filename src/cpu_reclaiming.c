@@ -115,6 +115,7 @@ static double e_gpu_synchronize[1000];
 static double e_infer[1000];
 
 static double layer_time[400][1000];
+static double layer_time_logic[400][1000];
 static double max_layer_time[400];
 
 static double start_postprocess[1000];
@@ -181,6 +182,107 @@ static double maxOfThree(double a, double b, double c) {
         max = c;
     }
     return max; 
+}
+static int write_acceleration_info_before_compensation() {
+    int startIdx = num_thread * START_INDEX; // Delete some ROWs
+    int endIdx = num_thread * END_INDEX; // Delete some ROWs
+
+    char file_path[256] = "measure/";
+
+    char* model_name = malloc(strlen(g_cfgfile) + 1);
+    strncpy(model_name, g_cfgfile + 6, (strlen(g_cfgfile)-10));
+    model_name[strlen(g_cfgfile)-10] = '\0';
+    
+    strcat(file_path, "cpu-reclaiming-GRC/");
+
+    strcat(file_path, model_name);
+    strcat(file_path, "-multithread/");
+
+
+    char num_threads__[20];
+    sprintf(num_threads__, "%dthread/", num_thread);
+    strcat(file_path, num_threads__);
+
+    char gpu_portion[20];
+    sprintf(gpu_portion, "%dglayer/", gLayer);
+    strcat(file_path, gpu_portion);
+
+    strcat(file_path, "cpu-reclaiming_");
+
+    char rec_portion[20];
+    sprintf(rec_portion, "%03drlayer", rLayer);
+    strcat(file_path, rec_portion);
+
+    char splitnum[20];
+    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
+    strcat(file_path, splitnum);
+
+    strcat(file_path, "_accel_info_no_compensation");
+
+    strcat(file_path, ".csv");
+
+    static int exist=0;
+    FILE *fp;
+    int tick = 0;
+
+    fp = fopen(file_path, "w+");
+
+    int i;
+    if (fp == NULL) 
+    {
+        /* make directory */
+        while(!exist)
+        {
+            int result;
+
+            usleep(10 * 1000);
+
+            result = mkdir(MEASUREMENT_PATH, 0766);
+            if(result == 0) { 
+                exist = 1;
+
+                fp = fopen(file_path,"w+");
+            }
+
+            if(tick == 100)
+            {
+                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
+
+                return -1;
+            }
+            else tick++;
+        }
+    }
+    else printf("Write output in %s\n", file_path); 
+
+    char layer_id[20];
+    for (int i = 0; i < num_network; i++) {
+        sprintf(layer_id, "layer[%d]", i);
+        fprintf(fp, "%s,", layer_id);
+    }
+    fprintf(fp, "\n");
+
+    for(int j = 0; j < gLayer; j++) {
+        fprintf(fp, "%s,", "GPU");
+    }
+    for(int j = gLayer; j < rLayer; j++) {
+        fprintf(fp, "%s,", "Reclaiming");
+    }
+    for(int j = rLayer; j < num_network; j++) {
+        fprintf(fp, "%s,", "CPU");
+    }
+
+    fprintf(fp, "\n");
+
+    for(i = 0; i < num_exp * num_thread - startIdx - endIdx; i++)
+    {
+        for (int j = 0; j < num_network; j++) {
+            fprintf(fp, "%0.3f,", layer_time_logic[j][i + startIdx]);
+        }
+        fprintf(fp, "\n");
+    }
+    
+    return 1;
 }
 
 static int write_acceleration_info() {
@@ -273,6 +375,11 @@ static int write_acceleration_info() {
     }
 
     fprintf(fp, "\n");
+
+    for (int j = 0; j < num_network; j++) {
+        fprintf(fp, "%0.3f,", max_layer_time[j]);
+    }
+    fprintf(fp, "\n\n");
 
     for(i = 0; i < num_exp * num_thread - startIdx - endIdx; i++)
     {
@@ -507,25 +614,26 @@ void cpu_inference(network_state *state, network *net, layer *l, int count, int 
 {
     start_cpu_infer[count] = get_time_in_ms();
     for(int j = rLayer; j < num_network; j++) {
+        double layer_start = get_time_in_ms();
         state->index = j;
         l = &(net->layers[j]);
         l->do_reclaiming = 0;
         if(l->delta && state->train && l->train){
             scal_cpu(l->outputs * l->batch, 0, l->delta, 1);
         }
-        double layer_start = get_time_in_ms();
         l->forward(*l, *state);
-        layer_time[j][count] = get_time_in_ms() - layer_start;
-
-        if(!isTest && layer_time[j][count] < max_layer_time[j]) {
-            while(layer_time[j][count] < max_layer_time[j]) {
-                layer_time[j][count] = get_time_in_ms() - layer_start;
-            }
-        }
-
+        
         state->input = l->output;
         if(j == net->n - 1) {
             predictions = get_network_output(*net, 0);
+        }
+        layer_time[j][count] = get_time_in_ms() - layer_start;
+        layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+
+        if(!isTest && layer_time[j][count] < max_layer_time[j]) {// max_layer_time[j] 저장
+            while(layer_time_logic[j][count] < max_layer_time[j]) {
+                layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+            }
         }
     }
     end_cpu_infer[count] = get_time_in_ms();
@@ -558,26 +666,27 @@ void gpu_inference(network_state *state, network *net, layer *l, int count, int 
     start_gpu_infer[count] = get_time_in_ms();
 
     for(int j = 0; j < gLayer; j++) {
+        double layer_start = get_time_in_ms();
         state->index = j;
         l = &(net->layers[j]);
         if(l->delta_gpu && state->train){
             fill_ongpu(l->outputs * l->batch, 0, l->delta_gpu, 1);
         }
 
-        double layer_start = get_time_in_ms();
         l->forward_gpu(*l, *state);
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-        layer_time[j][count] = get_time_in_ms() - layer_start;
-
-        if(!isTest && (layer_time[j][count] < max_layer_time[j])) {
-            while(layer_time[j][count] < max_layer_time[j]) {
-                layer_time[j][count] = get_time_in_ms() - layer_start;
-            }
-        }
 
         state->input = l->output_gpu;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
+        }
+        layer_time[j][count] = get_time_in_ms() - layer_start; //practice
+        layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+
+        if(!isTest && (layer_time[j][count] < max_layer_time[j])) { // max_layer_time[j] 저장
+            while(layer_time_logic[j][count] < max_layer_time[j]) {
+                layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+            }
         }
     }
 
@@ -600,26 +709,28 @@ void reclaiming_inference(network_state *state, network *net, layer *l, int coun
     start_reclaim_infer[count] = get_time_in_ms();
 
     for(int j = gLayer; j < rLayer; j++) {
+        double layer_start = get_time_in_ms();
         state->index = j;
         l = &(net->layers[j]);
         l->do_reclaiming = 1;
         if(l->delta && state->train && l->train){
             scal_cpu(l->outputs * l->batch, 0, l->delta, 1);
         }
-        double layer_start = get_time_in_ms();
         l->forward(*l, *state);
-        layer_time[j][count] = get_time_in_ms() - layer_start;
 
-        if(!isTest && layer_time[j][count] < max_layer_time[j]) {
-            while(layer_time[j][count] < max_layer_time[j]) {
-                layer_time[j][count] = get_time_in_ms() - layer_start;
-            }
-        }
 
         state->input = l->output;
         if(j == net->n - 1) {
             predictions = get_network_output(*net, 0);
         }
+        layer_time[j][count] = get_time_in_ms() - layer_start;
+        layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+
+        if(!isTest && layer_time[j][count] < max_layer_time[j]) {// max_layer_time[j] 저장
+            while(layer_time_logic[j][count] < max_layer_time[j]) {
+                layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+            }
+        }    
     }
 
     current_thread2 = (current_thread2) % num_thread + 1;
@@ -658,12 +769,7 @@ void postprocess(network net, image im, layer l, int thread_id, int exp_count, i
             else if (show_accuracy && thread_id == 1 && exp_count == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
         }
     }
-
-    end_postprocess[count] = get_time_in_ms();
-    e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
-    execution_time[count] = end_postprocess[count] - start_preprocess[count];
-
-    
+   
     // __Measure Result__
 
     core_id_list[count] = (double)sched_getcpu();
@@ -674,6 +780,12 @@ void postprocess(network net, image im, layer l, int thread_id, int exp_count, i
     e_reclaim_infer[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
     e_cpu_infer[count] = end_cpu_infer[count] - start_cpu_infer[count];
     e_infer[count] = end_infer[count] - start_infer[count];
+    
+    end_postprocess[count] = get_time_in_ms();
+    e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
+    execution_time[count] = end_postprocess[count] - start_preprocess[count];
+// busywait 넣기
+
     execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
 }
 
@@ -742,9 +854,8 @@ void CalcMaxTime(int num_network)
             max_layer_time[h] *= 1.03;
             division_count = 0;
         }
+        max_preprocess_time = average(e_preprocess);
     }
-
-    max_preprocess_time = average(e_preprocess);
     max_reclaim_infer_time = average(e_reclaim_infer);
     max_gpu_infer_time = average(e_gpu_infer);
     max_cpu_infer_time = average(e_cpu_infer);
@@ -767,6 +878,10 @@ void WriteResult()
     if(write_acceleration_info() == -1) {
         exit(0);
     }
+
+    if(write_acceleration_info_before_compensation() == -1) {
+        exit(0);
+    }
 }
 
 #ifdef GPU
@@ -778,19 +893,10 @@ static void threadFunc(int arg)
     SetAffinity(thread_id);
 
     // __GPU SETUP__
-#ifdef GPU   // GPU
     if(gpu_index >= 0){
         cuda_set_device(gpu_index);
         CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
     }
-#ifdef CUDNN_HALF
-    printf(" CUDNN_HALF=1 \n");
-#endif  // CUDNN_HALF
-#else
-    gpu_index = -1;
-    printf(" GPU isn't used \n");
-    init_cpu();
-#endif  // GPU
 
     network net = net_list[thread_id];
     layer l;
@@ -820,6 +926,13 @@ static void threadFunc(int arg)
 
         end_preprocess[count] = get_time_in_ms();
         e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
+        e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
+
+        if(!isTest && e_preprocess[count] < max_preprocess_time) {// max_layer_time[j] 저장
+            while(e_preprocess_max[count] < max_preprocess_time) {
+                e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
+            }
+        }
         e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         start_infer[count] = get_time_in_ms();
