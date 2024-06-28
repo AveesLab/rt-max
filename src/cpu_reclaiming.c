@@ -107,6 +107,8 @@ static double end_cpu_infer[1000];
 static double end_infer[1000];
 
 static double e_gpu_infer_max[1000];
+static double e_cpu_infer_max[1000];
+static double e_reclaim_infer_max[1000];
 
 static double start_gpu_synchronize[1000];
 static double end_gpu_synchronize[1000];
@@ -153,7 +155,7 @@ static int is_GPU_larger(double a, double b) {
 }
 
 static double average(double arr[]){
-    double sum;
+    double sum = 0;
     int total_num_exp = num_exp * num_thread;
     int skip_num_exp =  START_INDEX * num_thread;
     int end_num_exp =  END_INDEX * num_thread;
@@ -460,21 +462,7 @@ static int write_result_reclaiming()
     }
     else printf("Write output in %s\n", file_path); 
 
-    // int data_count = 0;
-    // int write_index = 0;
-
-    // for(i = 0; i < NUM_SPLIT; i++) {
-    //     if(strcmp(inference_order[i], "GPU\0") == 0) {
-    //         data_count += 7;
-    //     }
-    //     else if(strcmp(inference_order[i], "CPU\0") == 0) {
-    //         data_count += 4;
-    //     }
-    //     else if(strcmp(inference_order[i], "Reclaiming") == 0) {
-    //         data_count += 6;
-    //     }
-    // }
-    double sum_measure_data[num_exp * num_thread][37];
+    double sum_measure_data[num_exp * num_thread][39];
     for(i = 0; i < num_exp * num_thread; i++)
     {
         sum_measure_data[i][0] = core_id_list[i];
@@ -514,7 +502,8 @@ static int write_result_reclaiming()
         sum_measure_data[i][34] = start_cpu_infer[i];
         sum_measure_data[i][35] = e_cpu_infer[i];
         sum_measure_data[i][36] = end_cpu_infer[i];
-        sum_measure_data[i][37] = max_cpu_infer_time;  
+        sum_measure_data[i][37] = e_cpu_infer_max[i];  
+        sum_measure_data[i][38] = max_cpu_infer_time;  
     }
 
 
@@ -532,7 +521,7 @@ static int write_result_reclaiming()
         newIndex++;
     }
 
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
             "core_id", 
             "start_preprocess", "e_preprocess", "end_preprocess", "e_preprocess_max", "e_preprocess_max_value",
             "start_infer", "end_infer", 
@@ -545,7 +534,7 @@ static int write_result_reclaiming()
             "start_gpu_infer", "e_gpu_infer", "end_gpu_infer", "e_gpu_infer_max", "e_gpu_infer_max_value",
             "start_reclaim_waiting", "waiting_reclaim", 
             "start_reclaim_infer", "e_reclaim_infer", "end_reclaim_infer", "e_reclaim_infer_max_value",
-            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "e_cpu_infer_max_value");
+            "start_cpu_infer", "e_cpu_infer", "end_cpu_infer", "end_cpu_infer_max", "e_cpu_infer_max_value");
 
     double frame_rate = 0.0;
     double cycle_time = 0.0;
@@ -565,7 +554,7 @@ static int write_result_reclaiming()
         new_sum_measure_data[i][18] = (double)num_thread;
         new_sum_measure_data[i][19] = R;
 
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
+        fprintf(fp, "%0.0f,%0.2f,%02f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
                 new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
                 new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
                 new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], 
@@ -575,7 +564,7 @@ static int write_result_reclaiming()
                 new_sum_measure_data[i][24], new_sum_measure_data[i][25], new_sum_measure_data[i][26], new_sum_measure_data[i][27], 
                 new_sum_measure_data[i][28], new_sum_measure_data[i][29], new_sum_measure_data[i][30], new_sum_measure_data[i][31], 
                 new_sum_measure_data[i][32], new_sum_measure_data[i][33], new_sum_measure_data[i][34], new_sum_measure_data[i][35],
-                new_sum_measure_data[i][36], new_sum_measure_data[i][37]);
+                new_sum_measure_data[i][36], new_sum_measure_data[i][37], new_sum_measure_data[i][38]);
     }
 
     fclose(fp);
@@ -632,12 +621,19 @@ void cpu_inference(network_state *state, network *net, layer *l, int count, int 
         layer_time[j][count] = get_time_in_ms() - layer_start;
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
 
-        if(!isTest && layer_time[j][count] < max_layer_time[j]) {// max_layer_time[j] 저장
+        if(!isTest && layer_time_logic[j][count] < max_layer_time[j]) {// max_layer_time[j] 저장
             while(layer_time_logic[j][count] < max_layer_time[j]) {
                 layer_time_logic[j][count] = get_time_in_ms() - layer_start;
             }
         }
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+    }
+    end_cpu_infer[count] = get_time_in_ms();
+    e_cpu_infer_max[count] = end_cpu_infer[count] - start_cpu_infer[count];
+    if(!isTest && e_cpu_infer_max[count] < max_cpu_infer_time) {// max_layer_time[j] 저장
+        while(e_cpu_infer_max[count] < max_cpu_infer_time) {
+            e_cpu_infer_max[count] = get_time_in_ms() - start_cpu_infer[count];
+        }
     }
     end_cpu_infer[count] = get_time_in_ms();
 }
@@ -697,6 +693,13 @@ void gpu_inference(network_state *state, network *net, layer *l, int count, int 
     current_thread = (current_thread) % num_thread + 1;
     pthread_cond_broadcast(&cond);
     end_gpu_infer[count] = get_time_in_ms();
+    e_gpu_infer_max[count] = end_gpu_infer[count] - start_gpu_infer[count];
+    if(!isTest && e_gpu_infer_max[count] < max_gpu_infer_time) {// max_layer_time[j] 저장
+        while(e_gpu_infer_max[count] < max_gpu_infer_time) {
+            e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_infer[count];
+        }
+    }
+    end_gpu_infer[count] = get_time_in_ms();
     pthread_mutex_unlock(&mutex_gpu);
 }
 
@@ -741,6 +744,13 @@ void reclaiming_inference(network_state *state, network *net, layer *l, int coun
     current_thread2 = (current_thread2) % num_thread + 1;
     pthread_cond_broadcast(&cond2);
     end_reclaim_infer[count] = get_time_in_ms();
+    e_reclaim_infer_max[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
+    if(!isTest && e_reclaim_infer_max[count] < max_reclaim_infer_time) {// max_layer_time[j] 저장
+        while(e_reclaim_infer_max[count] < max_reclaim_infer_time) {
+            e_reclaim_infer_max[count] = get_time_in_ms() - start_reclaim_infer[count];
+        }
+    }
+    end_reclaim_infer[count] = get_time_in_ms();
     pthread_mutex_unlock(&mutex_reclaim);
 }
 
@@ -765,7 +775,6 @@ void postprocess(network net, image im, layer l, int thread_id, int exp_count, i
         draw_detections_v3(im, dets, nboxes, g_thresh, names, alphabet, l.classes, g_ext_output);
     }
     else {
-
         if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
         top_k(predictions, net.outputs, top, indexes);
         for(int j = 0; j < top; ++j){
@@ -855,6 +864,20 @@ void initThread(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 
 void CalcMaxTime(int num_network)
 {
+    float max_preprocess_print = average(e_preprocess);
+    float max_execution_print = average(execution_time);
+    float max_gpu_infer_print = average(e_gpu_infer);
+    float max_reclaim_infer_print = average(e_reclaim_infer);
+    float max_cpu_infer_print = average(e_cpu_infer);
+    execution_time_wo_waiting = max_preprocess_print + max_gpu_infer_print + max_reclaim_infer_print + max_cpu_infer_print;
+    R = maxOfThree(max_gpu_infer_print, max_reclaim_infer_print, execution_time_wo_waiting/num_thread);
+    release_interval = R * num_thread;
+    max_preprocess_time = average(e_preprocess);
+    max_execution_time = release_interval;
+    max_reclaim_infer_time = average(e_reclaim_infer);
+    max_gpu_infer_time = average(e_gpu_infer);
+    max_cpu_infer_time = average(e_cpu_infer);
+
     if(isTest) {
         for(int h = 0; h < num_network; h++) {	
             for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
@@ -867,14 +890,6 @@ void CalcMaxTime(int num_network)
         }
 
     }
-    max_preprocess_time = average(e_preprocess);
-    max_execution_time = average(execution_time);
-    max_reclaim_infer_time = average(e_reclaim_infer);
-    max_gpu_infer_time = average(e_gpu_infer);
-    max_cpu_infer_time = average(e_cpu_infer);
-    execution_time_wo_waiting = max_gpu_infer_time + max_reclaim_infer_time + max_cpu_infer_time; // Delete Preprocess
-    R = maxOfThree(max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting/num_thread);
-    release_interval = R * num_thread;
 
     if (visible_exp) {
         printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, e_infer_reclaim : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_time, max_cpu_infer_time, max_gpu_infer_time, max_reclaim_infer_time, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
@@ -921,14 +936,15 @@ static void threadFunc(int arg)
         int count = i * num_thread + thread_id - 1;
 
         // // __Time Sync__
-        // if(!isTest) {
+        if(!isTest) {
             if(i < START_INDEX) {
 		        pthread_barrier_wait(&barrier);
+                usleep(R * thread_id * 1000);
             }
-        // }
-        // else{
-        //     pthread_barrier_wait(&barrier);
-        // }
+        }
+        else{
+            pthread_barrier_wait(&barrier);
+        }
 
         // __Preprocess__
         start_preprocess[count]=get_time_in_ms();
@@ -941,11 +957,12 @@ static void threadFunc(int arg)
         e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
         e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
-        if(!isTest && e_preprocess[count] < max_preprocess_time) {// max_layer_time[j] 저장
+        if(!isTest && e_preprocess_max[count] < max_preprocess_time) {// max_layer_time[j] 저장
             while(e_preprocess_max[count] < max_preprocess_time) {
                 e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
             }
         }
+        end_preprocess[count] = get_time_in_ms();
         e_preprocess_max[count] = get_time_in_ms() - start_preprocess[count];
 
         start_infer[count] = get_time_in_ms();
@@ -958,7 +975,6 @@ static void threadFunc(int arg)
         cpu_inference(&state, &net, &l, count, thread_id);
 
         end_infer[count] = get_time_in_ms();
-
 
         postprocess(net, im, l, thread_id, i, count);
     }
