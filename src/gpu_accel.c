@@ -570,21 +570,12 @@ static void cpu_inference(network_state *state, network *net, layer *l, int coun
             predictions = get_network_output(*net, 0);
         }
         layer_time[j][count] = get_time_in_ms() - layer_start;
-        layer_time_logic[j][count] = get_time_in_ms() - layer_start;
 
-        if(!isTest && layer_time_logic[j][count] < max_layer_time[j]) {// max_layer_time[j] 저장
-            while(layer_time_logic[j][count] < max_layer_time[j]) {
-                layer_time_logic[j][count] = get_time_in_ms() - layer_start;
-            }
-        }
+        double remaining_time = max_layer_time[j] - layer_time[j][count];
+
+        if (!isTest && remaining_time > 0) usleep(remaining_time * 1000);
+
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
-    }
-    end_cpu_infer[count] = get_time_in_ms();
-    e_cpu_infer_max[count] = end_cpu_infer[count] - start_cpu_infer[count];
-    if(!isTest && e_cpu_infer_max[count] < max_cpu_infer_time) {// max_layer_time[j] 저장
-        while(e_cpu_infer_max[count] < max_cpu_infer_time) {
-            e_cpu_infer_max[count] = get_time_in_ms() - start_cpu_infer[count];
-        }
     }
     end_cpu_infer[count] = get_time_in_ms();
 }
@@ -630,26 +621,17 @@ static void gpu_inference(network_state *state, network *net, layer *l, int coun
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
         }
-        layer_time[j][count] = get_time_in_ms() - layer_start; //practice
-        layer_time_logic[j][count] = get_time_in_ms() - layer_start;
+        layer_time[j][count] = get_time_in_ms() - layer_start;
 
-        if(!isTest && (layer_time_logic[j][count] < max_layer_time[j])) { // max_layer_time[j] 저장
-            while(layer_time_logic[j][count] < max_layer_time[j]) {
-                layer_time_logic[j][count] = get_time_in_ms() - layer_start;
-            }
-        }
+        double remaining_time = max_layer_time[j] - layer_time[j][count];
+
+        if (!isTest && remaining_time > 0) usleep(remaining_time * 1000);
+
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
     }
 
     current_thread = (current_thread) % num_thread + 1;
     pthread_cond_broadcast(&cond);
-    end_gpu_infer[count] = get_time_in_ms();
-    e_gpu_infer_max[count] = end_gpu_infer[count] - start_gpu_infer[count];
-    if(!isTest && e_gpu_infer_max[count] < max_gpu_infer_time) {// max_layer_time[j] 저장
-        while(e_gpu_infer_max[count] < max_gpu_infer_time) {
-            e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_infer[count];
-        }
-    }
     end_gpu_infer[count] = get_time_in_ms();
     pthread_mutex_unlock(&mutex_gpu);
 }
