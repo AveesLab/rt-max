@@ -580,13 +580,12 @@ static void cpu_inference(network_state *state, network *net, layer *l, int coun
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
     }
     end_cpu_infer[count] = get_time_in_ms();
-    e_cpu_infer_max[count] = end_cpu_infer[count] - start_cpu_infer[count];
-    if(!isTest && e_cpu_infer_max[count] < max_cpu_infer_time) {// max_layer_time[j] 저장
-        while(e_cpu_infer_max[count] < max_cpu_infer_time) {
-            e_cpu_infer_max[count] = get_time_in_ms() - start_cpu_infer[count];
-        }
-    }
-    end_cpu_infer[count] = get_time_in_ms();
+    // e_cpu_infer_max[count] = end_cpu_infer[count] - start_cpu_infer[count];
+    // if(!isTest && e_cpu_infer_max[count] < max_cpu_infer_time) {// max_layer_time[j] 저장
+    //     while(e_cpu_infer_max[count] < max_cpu_infer_time) {
+    //         e_cpu_infer_max[count] = get_time_in_ms() - start_cpu_infer[count];
+    //     }
+    // }
 }
 
 static void gpu_inference(network_state *state, network *net, layer *l, int count, int thread_id, float *X)
@@ -628,12 +627,12 @@ static void gpu_inference(network_state *state, network *net, layer *l, int coun
         }
 
         l->forward_gpu(*l, *state);
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
         state->input = l->output_gpu;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
         }
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         layer_time[j][count] = get_time_in_ms() - layer_start; //practice
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
 
@@ -645,16 +644,15 @@ static void gpu_inference(network_state *state, network *net, layer *l, int coun
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
     }
 
-    current_thread = (current_thread) % num_thread + 1;
-    pthread_cond_broadcast(&cond);
     end_gpu_infer[count] = get_time_in_ms();
     e_gpu_infer_max[count] = end_gpu_infer[count] - start_gpu_infer[count];
-    if(!isTest && e_gpu_infer_max[count] < max_gpu_infer_time) {// max_layer_time[j] 저장
-        while(e_gpu_infer_max[count] < max_gpu_infer_time) {
-            e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_infer[count];
-        }
-    }
-    end_gpu_infer[count] = get_time_in_ms();
+    // if(!isTest && e_gpu_infer_max[count] < max_gpu_infer_time) {// max_layer_time[j] 저장
+    //     while(e_gpu_infer_max[count] < max_gpu_infer_time) {
+    //         e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_infer[count];
+    //     }
+    // }
+    current_thread = (current_thread) % num_thread + 1;
+    pthread_cond_broadcast(&cond);
     pthread_mutex_unlock(&mutex_gpu);
 }
 
@@ -707,7 +705,6 @@ static void postprocess(network net, image im, layer l, int thread_id, int exp_c
             execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
         }
     } 
-    end_postprocess[count] = get_time_in_ms();
     execution_time_max[count] = end_postprocess[count] - start_preprocess[count];
 }
 
@@ -777,18 +774,18 @@ static void CalcMaxTime(int num_network)
     max_gpu_infer_time = average(e_gpu_infer);
     max_cpu_infer_time = average(e_cpu_infer);
 
-    if(isTest) {
+    // if(isTest) {
         for(int h = 0; h < num_network; h++) {	
+            double sum = 0;
             for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
-                max_layer_time[h] += layer_time[h][k];
+                sum += layer_time[h][k];
                 division_count += 1;
             }
-            max_layer_time[h] /= (float)division_count;
-            max_layer_time[h] *= 1.03;
+            sum /= (float)division_count;
+            max_layer_time[h] = sum * 1.03;
             division_count = 0;
         }
-
-    }
+    // }
 
     if (visible_exp) {
         printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_print, max_cpu_infer_print, max_gpu_infer_print, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
@@ -888,7 +885,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     int i;
 
     // if (num_thread < (MAXCORES-1)/*&& (rLayer > 0)*/ ) {
-        for(int q = 0; q < 3; q++) {
+        for(int q = 0; q < 50; q++) {
         // =====================RECLAMING=====================
             if (visible_exp) printf("\n::EXP-%d:: GPU-accel with %d threads with %d gpu-layer [R : %.2f]\n", q, num_thread, gLayer, R);
 
