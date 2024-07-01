@@ -626,12 +626,6 @@ void cpu_inference(network_state *state, network *net, layer *l, int count, int 
     }
     end_cpu_infer[count] = get_time_in_ms();
     e_cpu_infer_max[count] = end_cpu_infer[count] - start_cpu_infer[count];
-    if(!isTest && e_cpu_infer_max[count] < max_cpu_infer_time) {// max_layer_time[j] 저장
-        while(e_cpu_infer_max[count] < max_cpu_infer_time) {
-            e_cpu_infer_max[count] = get_time_in_ms() - start_cpu_infer[count];
-        }
-    }
-    end_cpu_infer[count] = get_time_in_ms();
 }
 
 void gpu_inference(network_state *state, network *net, layer *l, int count, int thread_id, float *X)
@@ -673,12 +667,12 @@ void gpu_inference(network_state *state, network *net, layer *l, int count, int 
         }
 
         l->forward_gpu(*l, *state);
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
 
         state->input = l->output_gpu;
         if(j == net->n - 1) {
             predictions = get_network_output_gpu(*net);
         }
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         layer_time[j][count] = get_time_in_ms() - layer_start; //practice
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
 
@@ -690,16 +684,11 @@ void gpu_inference(network_state *state, network *net, layer *l, int count, int 
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;
     }
 
-    current_thread = (current_thread) % num_thread + 1;
-    pthread_cond_broadcast(&cond);
     end_gpu_infer[count] = get_time_in_ms();
     e_gpu_infer_max[count] = end_gpu_infer[count] - start_gpu_infer[count];
-    if(!isTest && e_gpu_infer_max[count] < max_gpu_infer_time) {// max_layer_time[j] 저장
-        while(e_gpu_infer_max[count] < max_gpu_infer_time) {
-            e_gpu_infer_max[count] = get_time_in_ms() - start_gpu_infer[count];
-        }
-    }
-    end_gpu_infer[count] = get_time_in_ms();
+
+    current_thread = (current_thread) % num_thread + 1;
+    pthread_cond_broadcast(&cond);
     pthread_mutex_unlock(&mutex_gpu);
 }
 
@@ -741,16 +730,12 @@ void reclaiming_inference(network_state *state, network *net, layer *l, int coun
         layer_time_logic[j][count] = get_time_in_ms() - layer_start;  
     }
 
-    current_thread2 = (current_thread2) % num_thread + 1;
-    pthread_cond_broadcast(&cond2);
+
     end_reclaim_infer[count] = get_time_in_ms();
     e_reclaim_infer_max[count] = end_reclaim_infer[count] - start_reclaim_infer[count];
-    if(!isTest && e_reclaim_infer_max[count] < max_reclaim_infer_time) {// max_layer_time[j] 저장
-        while(e_reclaim_infer_max[count] < max_reclaim_infer_time) {
-            e_reclaim_infer_max[count] = get_time_in_ms() - start_reclaim_infer[count];
-        }
-    }
-    end_reclaim_infer[count] = get_time_in_ms();
+
+    current_thread2 = (current_thread2) % num_thread + 1;
+    pthread_cond_broadcast(&cond2);
     pthread_mutex_unlock(&mutex_reclaim);
 }
 
@@ -805,7 +790,6 @@ void postprocess(network net, image im, layer l, int thread_id, int exp_count, i
             execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
         }
     } 
-    end_postprocess[count] = get_time_in_ms();
     execution_time_max[count] = end_postprocess[count] - start_preprocess[count];
 }
 
@@ -877,18 +861,16 @@ void CalcMaxTime(int num_network)
     max_reclaim_infer_time = average(e_reclaim_infer);
     max_gpu_infer_time = average(e_gpu_infer);
     max_cpu_infer_time = average(e_cpu_infer);
-
-    if(isTest) {
-        for(int h = 0; h < num_network; h++) {	
-            for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
-                max_layer_time[h] += layer_time[h][k];
-                division_count += 1;
-            }
-            max_layer_time[h] /= (float)division_count;
-            max_layer_time[h] *= 1.03;
-            division_count = 0;
+    
+    for(int h = 0; h < num_network; h++) {	
+        double sum = 0;
+        for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
+            sum += layer_time[h][k];
+            division_count += 1;
         }
-
+        sum /= (float)division_count;
+        max_layer_time[h] = sum * 1.03;
+        division_count = 0;
     }
 
     if (visible_exp) {
