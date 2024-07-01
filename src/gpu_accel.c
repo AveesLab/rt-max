@@ -885,7 +885,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     int i;
 
     // if (num_thread < (MAXCORES-1)/*&& (rLayer > 0)*/ ) {
-        for(int q = 0; q < 50; q++) {
+        for(int q = 0; q < 3; q++) {
         // =====================RECLAMING=====================
             if (visible_exp) printf("\n::EXP-%d:: GPU-accel with %d threads with %d gpu-layer [R : %.2f]\n", q, num_thread, gLayer, R);
 
