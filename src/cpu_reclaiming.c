@@ -422,10 +422,6 @@ static int write_result_reclaiming()
     sprintf(reclaim_portion, "%03drlayer", rLayer);
     strcat(file_path, reclaim_portion);
 
-    char splitnum[20];
-    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
-    strcat(file_path, splitnum);
-
     strcat(file_path, ".csv");
 
     static int exist=0;
@@ -649,9 +645,13 @@ void gpu_inference(network_state *state, network *net, layer *l, int count, int 
     state->train = 0;
     state->delta = 0;
 
-    state->input = net->input_state_gpu;
-
-    cuda_push_array(state->input, X, size);
+    if(gLayer != 0) {
+        state->input = net->input_state_gpu;
+        cuda_push_array(state->input, X, size);
+    }
+    else {
+        state->input = X;
+    }
 
     state->workspace = net->workspace;
     start_gpu_waiting[count] = get_time_in_ms();

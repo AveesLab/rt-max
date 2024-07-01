@@ -599,11 +599,15 @@ static void gpu_inference(network_state *state, network *net, layer *l, int coun
     state->truth = 0;
     state->train = 0;
     state->delta = 0;
-
-    state->input = net->input_state_gpu;
-
-    cuda_push_array(state->input, X, size);
-
+    
+    if(gLayer != 0) {
+        state->input = net->input_state_gpu;
+        cuda_push_array(state->input, X, size);
+    }
+    else {
+        state->input = X;
+    }
+    
     state->workspace = net->workspace;
     start_gpu_waiting[count] = get_time_in_ms();
 
