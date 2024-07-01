@@ -765,7 +765,6 @@ static void CalcMaxTime(int num_network)
     max_gpu_infer_time = average(e_gpu_infer);
     max_cpu_infer_time = average(e_cpu_infer);
 
-    // if(isTest) {
     for(int h = 0; h < num_network; h++) {	
         double sum = 0;
         for(int k = num_thread * START_INDEX; k < num_thread * (num_exp - END_INDEX); k++) {
@@ -776,7 +775,6 @@ static void CalcMaxTime(int num_network)
         max_layer_time[h] = sum * 1.03;
         division_count = 0;
     }
-    // }
 
     if (visible_exp) {
         printf("e_pre : %0.02f, e_infer_cpu : %0.02f, e_infer_gpu : %0.02f, execution_time : %0.02f, TOTAL/N: %0.02f, Release interval: %0.02f\n", max_preprocess_print, max_cpu_infer_print, max_gpu_infer_print, execution_time_wo_waiting, execution_time_wo_waiting/num_thread, release_interval);
