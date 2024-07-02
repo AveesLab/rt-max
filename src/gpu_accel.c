@@ -676,7 +676,13 @@ static void postprocess(network net, image im, layer l, int thread_id, int exp_c
             else if (show_accuracy && thread_id == 1 && exp_count == 3)printf("%s: %f\n",names[g_index], predictions[g_index]);
         }
     }
-   
+
+    // __Display__
+    // if (!data.dont_show) {
+    //     show_image(im, "predictions");
+    //     wait_key_cv(1);
+    // } 
+    
     // __Measure Result__
 
     core_id_list[count] = (double)sched_getcpu();
@@ -812,7 +818,7 @@ static void threadFunc(int arg)
     }
 
     network net = net_list[thread_id];
-    layer l;
+    layer l = net.layers[net.n - 1];
 
     srand(2222222);
     double remaining_time = 0.0;
