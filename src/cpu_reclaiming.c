@@ -216,10 +216,6 @@ static int write_acceleration_info_before_compensation() {
     sprintf(rec_portion, "%03drlayer", rLayer);
     strcat(file_path, rec_portion);
 
-    char splitnum[20];
-    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
-    strcat(file_path, splitnum);
-
     strcat(file_path, "_accel_info_no_compensation");
 
     strcat(file_path, ".csv");
@@ -317,10 +313,6 @@ static int write_acceleration_info() {
     char rec_portion[20];
     sprintf(rec_portion, "%03drlayer", rLayer);
     strcat(file_path, rec_portion);
-
-    char splitnum[20];
-    sprintf(splitnum, "_%03dsplit", NUM_SPLIT);
-    strcat(file_path, splitnum);
 
     strcat(file_path, "_accel_info");
 
