@@ -1,0 +1,13 @@
+==================EXP 1=================
+Experiment Configuration:
+Architecture: GPU-accel
+Model: densenet201
+Device: GPU
+Number of Experiments: 20
+Number of threads: 6
+Data File: ./cfg/imagenet1k.data
+Config File: ./cfg/densenet201.cfg
+Input File: data/dog.jpg
+========================================
+[2024-10-17 20:30:19] Experiment Started!!!
+[2024-10-17 20:30:19] Start gpu-accel-nano architecture with glayer 0 (1-thread)!!

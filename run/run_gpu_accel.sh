@@ -64,7 +64,7 @@ echo "==================EXP 1================="
 echo "Experiment Configuration:"
 echo "Architecture: GPU-accel"
 echo "Model: $MODEL"
-echo "Device: CPU"
+echo "Device: GPU"
 echo "Number of Experiments: $num_exp"
 echo "Number of threads: $num_thread"
 echo "Data File: $DATA"
@@ -98,22 +98,24 @@ cd ~/rt-max
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Experiment Started!!!" | tee -a "$LOG_PATH"
 START_SEC=$(date +"%s")
 
-ARCH=data-parallel_nano
-
+ARCH=gpu-accel-nano
+glayers=$(seq 0 306)
 for thread in $(seq 1 $num_thread)
 do
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Start $ARCH architecture with (${thread}-thread)!!" | tee -a "$LOG_PATH"
-    START=$(date +%s)
-    ./darknet detector $ARCH "$DATA" "$CFG" ./weights/${MODEL}.weights "$INPUT" -num_exp $num_exp -num_thread $thread
-    END=$(date +%s)
-    elapsed_time=$((END - START))
-    hours=$((elapsed_time / 3600))
-    minutes=$(((elapsed_time % 3600) / 60))
-    seconds=$((elapsed_time % 60))
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] End $ARCH architecture with (${thread}-thread)!!" | tee -a "$LOG_PATH"
-    echo "Elapsed time: ${hours}h ${minutes}m ${seconds}s" | tee -a "$LOG_PATH"
+    for glayer in $glayers #"${glayers[@]}"
+    do
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Start $ARCH architecture with glayer $glayer (${thread}-thread)!!" | tee -a "$LOG_PATH"
+        START=$(date +%s)
+        ./darknet detector $ARCH "$DATA" "$CFG" ./weights/${MODEL}.weights "$INPUT" -num_exp $num_exp -num_thread $thread -isGPU 1 -glayer $glayer
+        END=$(date +%s)
+        elapsed_time=$((END - START))
+        hours=$((elapsed_time / 3600))
+        minutes=$(((elapsed_time % 3600) / 60))
+        seconds=$((elapsed_time % 60))
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] End $ARCH architecture with glayer $glayer (${thread}-thread)!!" | tee -a "$LOG_PATH"
+        echo "Elapsed time: ${hours}h ${minutes}m ${seconds}s" | tee -a "$LOG_PATH"
+    done
 done
-
 END_SEC=$(date +"%s")
 ELAPSED_TIME=$((END_SEC - START_SEC))
 HOURS=$((ELAPSED_TIME / 3600))
