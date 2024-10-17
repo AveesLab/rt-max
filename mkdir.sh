@@ -113,6 +113,36 @@ do
 done
 
 ## GPU-Accel_GC
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p gpu-accel-nano/$model/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-nano/densenet201-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-nano/resnet152-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-nano/csmobilenet-v2-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
+for num_thread in $(seq 1 11);
+do
+	mkdir -p gpu-accel-nano/enetb0-multithread/${num_thread}thread/
+done
+
+## GPU-Accel_GC
 for num_thread in $(seq 1 11);
 do
 	mkdir -p gpu-accel-CG/densenet201-multithread/${num_thread}thread/
