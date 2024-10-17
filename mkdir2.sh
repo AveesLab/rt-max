@@ -35,43 +35,9 @@ do
 	do
 		for model in "${models[@]}"
 		do
-			case "$model" in
-				densenet201)
-					layer_num=306
-					;;
-				resnet152)
-					layer_num=206
-					;;
-				enetb0)
-					layer_num=136
-					;;
-				csmobilenet-v2)
-					layer_num=81
-					;;
-				squeezenet)
-					layer_num=50
-					;;
-				yolov7)
-					layer_num=143
-					;;
-				yolov7-tiny)
-					layer_num=99
-					;;
-				yolov4)
-					layer_num=162
-					;;
-				yolov4-tiny)
-					layer_num=38
-					;;
-				*)
-					exit 1
-					;;
-			esac
-			for var in $(seq 0 1 ${layer_num})
-			do
-				# echo $gpu_accel_arch/${model}-multithread/${thread}thread/${var}glayer
-				mkdir -p $gpu_accel_arch/${model}-multithread/${thread}thread/${var}glayer
-			done
+			# echo $gpu_accel_arch/${model}-multithread/${thread}thread/${var}glayer
+			mkdir -p $gpu_accel_arch/${model}-multithread/${thread}thread/
+			
 		done
 	done
 done
