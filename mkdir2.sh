@@ -2,19 +2,22 @@ num_thread=6
 mkdir measure
 cd measure
 
-models=("yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0")
+models=(
+	"yolov7-tiny" "densenet201" "resnet152" "enetb0"
+	#"yolov4" "yolov4-tiny" "yolov7" "csmobilenet-v2" "squeezenet"
+	)
 archs=(
-    "cpu-reclaiming" "cpu-reclaiming-GRC" "cpu-reclaiming-RGC" "data-parallel-mp" "data-parallel_r_test_jitter"
-    "gpu-accel_1thread" "gpu-accel_jitter" "gpu-accel-mp-reverse" "pipeline"
-    "cpu-reclaiming-CRG" "cpu-reclaiming-mp" "data-parallel" "data-parallel_nano"
-    "data-parallel_sleep" "gpu-accel-CG" "gpu-accel_layer_test" "gpu-accel-nano" "sequential"
-    "cpu-reclaiming-GCR" "cpu-reclaiming-RCG" "data-parallel_jitter" "data-parallel_r_test"
-    "gpu-accel" "gpu-accel-GC" "gpu-accel-mp" "layer_time" "sequential-multiblas"
+	"sequential" "pipeline" "data-parallel" "data-parallel_nano" "gpu-accel" "gpu-accel-nano"
+    # "data-parallel_jitter" "data-parallel_r_test" "data-parallel_sleep" "data-parallel-mp" "data-parallel_r_test_jitter"
+    # "gpu-accel_1thread" "gpu-accel_jitter" "gpu-accel-mp-reverse" "gpu-accel-GC" "gpu-accel-mp" "gpu-accel-CG" "gpu-accel_layer_test"
+    # "cpu-reclaiming-CRG" "cpu-reclaiming-mp" "cpu-reclaiming" "cpu-reclaiming-GRC" "cpu-reclaiming-RGC" "cpu-reclaiming-GCR" "cpu-reclaiming-RCG"
+    # "layer_time" "sequential-multiblas"
 )
 gpu_accel_archs=(
-	"gpu-accel_1thread" "gpu-accel_jitter" "gpu-accel-mp-reverse"
-    "gpu-accel-CG" "gpu-accel_layer_test" "gpu-accel-nano"
-    "gpu-accel" "gpu-accel-GC" "gpu-accel-mp"
+	"gpu-accel" "gpu-accel-nano"
+	# "gpu-accel_1thread" "gpu-accel_jitter" "gpu-accel-mp-reverse"
+    # "gpu-accel-CG" "gpu-accel_layer_test"
+    # "gpu-accel-GC" "gpu-accel-mp"
 )
 
 for arch in "${archs[@]}"
