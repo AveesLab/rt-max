@@ -1,0 +1,13 @@
+==================EXP 1=================
+Experiment Configuration:
+Architecture: Data-parallel
+Model: densenet201
+Device: CPU
+Number of Experiments: 20
+Number of threads: 6
+Data File: ./cfg/imagenet1k.data
+Config File: ./cfg/densenet201.cfg
+Input File: data/dog.jpg
+========================================
+[2024-10-17 20:03:38] Experiment Started!!!
+[2024-10-17 20:03:38] Start data-parallel_nano architecture with (1-thread)!!

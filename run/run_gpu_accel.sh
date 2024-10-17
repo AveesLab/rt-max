@@ -62,7 +62,7 @@ num_thread=6
 {
 echo "==================EXP 1================="
 echo "Experiment Configuration:"
-echo "Architecture: Data-parallel"
+echo "Architecture: GPU-accel"
 echo "Model: $MODEL"
 echo "Device: CPU"
 echo "Number of Experiments: $num_exp"
