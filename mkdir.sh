@@ -39,6 +39,37 @@ do
 	mkdir -p data-parallel-mp/$model/
 done
 
+## data-parallel_r_test
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_r_test/$model/
+done
+
+## data-parallel_r_test_jitter
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_r_test_jitter/$model/
+done
+
+## data-parallel_sleep
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_sleep/$model/
+done
+
+## data-parallel_jitter
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_jitter/$model/
+done
+
+## data-parallel_nano
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
+	mkdir -p data-parallel_nano/$model/
+done
+
+
 ## GPU-Accel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
