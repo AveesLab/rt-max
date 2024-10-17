@@ -1,0 +1,25 @@
+==================EXP 1=================
+Experiment Configuration:
+Architecture: GPU-accel
+Model: densenet201
+Device: GPU
+Number of Experiments: 20
+Number of threads: 6
+Data File: ./cfg/imagenet1k.data
+Config File: ./cfg/densenet201.cfg
+Input File: data/dog.jpg
+========================================
+==================EXP 1=================
+Experiment Configuration:
+Architecture: GPU-accel
+Model: densenet201
+Device: GPU
+Number of Experiments: 20
+Number of threads: 6
+Data File: ./cfg/imagenet1k.data
+Config File: ./cfg/densenet201.cfg
+Input File: data/dog.jpg
+========================================
+[2024-10-17 21:00:57] Experiment Started!!!
+[2024-10-17 21:00:57] Experiment Ended!!!
+total Elapsed time: 0h 0m 0s

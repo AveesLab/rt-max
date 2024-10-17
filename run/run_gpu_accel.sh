@@ -81,17 +81,17 @@ echo "========================================"
 # fi
 
 # 실험 실행
-{
-echo "experiment will be started in 5s"
-sleep 1s
-echo "4s"
-sleep 1s
-echo "3s"
-sleep 1s
-echo "2s"
-sleep 1s
-echo "1s"
-}
+# {
+# echo "experiment will be started in 5s"
+# sleep 1s
+# echo "4s"
+# sleep 1s
+# echo "3s"
+# sleep 1s
+# echo "2s"
+# sleep 1s
+# echo "1s"
+# }
 
 cd ~/rt-max
 
@@ -99,21 +99,34 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Experiment Started!!!" | tee -a "$LOG_PATH"
 START_SEC=$(date +"%s")
 
 ARCH=gpu-accel-nano
-glayers=$(seq 0 306)
-for thread in $(seq 1 $num_thread)
+steps=(64 32 16 8 4 2 1)
+for step in "${steps[@]}"
 do
-    for glayer in $glayers #"${glayers[@]}"
+    glayers=$(seq 0 $step $layer_num)
+    for thread in $(seq 1 $num_thread)
     do
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Start $ARCH architecture with glayer $glayer (${thread}-thread)!!" | tee -a "$LOG_PATH"
-        START=$(date +%s)
-        ./darknet detector $ARCH "$DATA" "$CFG" ./weights/${MODEL}.weights "$INPUT" -num_exp $num_exp -num_thread $thread -isGPU 1 -glayer $glayer
-        END=$(date +%s)
-        elapsed_time=$((END - START))
-        hours=$((elapsed_time / 3600))
-        minutes=$(((elapsed_time % 3600) / 60))
-        seconds=$((elapsed_time % 60))
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] End $ARCH architecture with glayer $glayer (${thread}-thread)!!" | tee -a "$LOG_PATH"
-        echo "Elapsed time: ${hours}h ${minutes}m ${seconds}s" | tee -a "$LOG_PATH"
+        for glayer in $glayers
+        do
+            formatted_glayer=$(printf "%03d" $glayer)
+            file_path="/home/avees/rt-max/measure/${ARCH}/${MODEL}-multithread/${thread}thread/gpu-accel-${formatted_glayer}glayer.csv"
+            if ls $file_path 1> /dev/null 2>&1; then
+                :
+            else
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Start $ARCH architecture with glayer $glayer (${thread}-thread) [STEP: ${step}]!!" | tee -a "$LOG_PATH"
+                START=$(date +%s)
+                ./darknet detector $ARCH "$DATA" "$CFG" ./weights/${MODEL}.weights "$INPUT" -num_exp $num_exp -num_thread $thread -isGPU 1 -glayer $glayer
+                END=$(date +%s)
+                elapsed_time=$((END - START))
+                hours=$((elapsed_time / 3600))
+                minutes=$(((elapsed_time % 3600) / 60))
+                seconds=$((elapsed_time % 60))
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] End $ARCH architecture with glayer $glayer (${thread}-thread) [STEP: ${step}]!!" | tee -a "$LOG_PATH"
+                echo "Elapsed time: ${hours}h ${minutes}m ${seconds}s" | tee -a "$LOG_PATH"
+                sleep 0.1s
+            fi
+
+
+        done
     done
 done
 END_SEC=$(date +"%s")
