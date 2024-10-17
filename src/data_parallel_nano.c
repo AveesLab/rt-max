@@ -587,11 +587,11 @@ void data_parallel_nano(char *datacfg, char *cfgfile, char *weightfile, char *fi
     model_name_[strlen(cfgfile)-10] = '\0';
     
 
-    strcat(file_path_, "data-parallel/");
+    strcat(file_path_, "data-parallel_nano/");
     strcat(file_path_, model_name_);
     strcat(file_path_, "/");
 
-    strcat(file_path_, "data-parallel_R_");
+    strcat(file_path_, "data-parallel_nano_");
 
     char thread_[20];
     sprintf(thread_, "%dthread", num_thread);
