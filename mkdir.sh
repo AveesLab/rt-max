@@ -48,6 +48,12 @@ done
 ## GPU-Accel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
+	mkdir -p gpu-accel_gpu/$model/
+done
+
+## GPU-Accel
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
+do
 	mkdir -p gpu-accel_jitter/$model/
 done
 
