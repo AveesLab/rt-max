@@ -9,6 +9,7 @@ ZED_CAMERA=0
 ZED_CAMERA_v2_8=0
 
 OPENBLAS=1
+BLIS=1
 MULTI_PROCESSOR=1
 
 NVTX=1
@@ -139,6 +140,12 @@ ifeq ($(OPENBLAS), 1)
 COMMON+= -I/usr/include/OpenBLAS
 CFLAGS+= -DOPENBLAS
 LDFLAGS+= -L/usr/include/OpenBLAS/lib -lopenblas -lpthread -lgfortran
+endif
+
+ifeq ($(BLIS), 1)
+COMMON+= -I/usr/include/BLIS
+CFLAGS+= -DBLIS
+LDFLAGS+= -L/usr/local/lib -lblis -lm
 endif
 
 ifeq ($(MULTI_PROCESSOR), 1)

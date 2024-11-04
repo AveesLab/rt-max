@@ -87,12 +87,12 @@ void gemm_nn_bin_transposed_32bit_packed(int M, int N, int K, float ALPHA,
 void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, int w, int h, int out_w, int out_h, int c,
     int pad, int stride, int batch);
 
-
+ 
 void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
                     float *A, int lda,
                     float *B, int ldb,
                     float BETA,
-                    float *C, int ldc);
+                    float *C, int ldc, bool do_reclaiming);
 
 void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A, int lda,

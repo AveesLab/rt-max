@@ -22,7 +22,7 @@
 #define MAX_EXP 1000
 
 // CPU 코어 순서 정의 (예: 4~11번 코어 사용)
-static int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
+static int coreIDOrder[MAXCORES] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
 // 스레드에 전달할 데이터 구조체
 typedef struct thread_data_t {

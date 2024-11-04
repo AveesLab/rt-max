@@ -182,7 +182,10 @@ void forward_connected_layer(connected_layer l, network_state state)
     float *a = state.input;
     float *b = l.weights;
     float *c = l.output;
-    gemm(0,1,m,n,k,1,a,k,b,k,1,c,n);
+    bool is_reclaiming_layer;
+    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+    else is_reclaiming_layer = false;
+    gemm(0,1,m,n,k,1,a,k,b,k,1,c,n, is_reclaiming_layer);
     if(l.batch_normalize){
         if(state.train){
             mean_cpu(l.output, l.batch, l.outputs, 1, l.mean);
@@ -230,7 +233,10 @@ void backward_connected_layer(connected_layer l, network_state state)
     float *a = l.delta;
     float *b = state.input;
     float *c = l.weight_updates;
-    gemm(1,0,m,n,k,1,a,m,b,n,1,c,n);
+    bool is_reclaiming_layer;
+    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+    else is_reclaiming_layer = false;
+    gemm(1,0,m,n,k,1,a,m,b,n,1,c,n, is_reclaiming_layer);
 
     m = l.batch;
     k = l.outputs;
@@ -240,7 +246,7 @@ void backward_connected_layer(connected_layer l, network_state state)
     b = l.weights;
     c = state.delta;
 
-    if(c) gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
+    if(c) gemm(0,0,m,n,k,1,a,k,b,n,1,c,n, is_reclaiming_layer);
 }
 
 

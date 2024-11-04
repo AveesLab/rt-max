@@ -1240,8 +1240,10 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
             float *a = l.weights +j*l.nweights / l.groups;
             float *b = state.workspace;
             float *c = l.output +(i*l.groups + j)*n*m;
-
-            //gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
+	    bool is_reclaiming_layer;
+	    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+	    else is_reclaiming_layer = false;
+            //gemm(0,0,m,n,k,1,a,k,b,n,1,c,n, false);
             //gemm_nn_custom(m, n, k, 1, a, k, b, n, c, n);
             if (l.xnor && l.align_bit_weights && !state.train && l.stride_x == l.stride_y)
             {
@@ -1386,7 +1388,7 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
 
                 }
 
-                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
+                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n, is_reclaiming_layer);
                 // bit-count to float
             }
             //c += n*m;
@@ -1544,6 +1546,10 @@ void backward_convolutional_layer(convolutional_layer l, network_state state)
     int n = l.size*l.size*l.c / l.groups;
     int k = l.out_w*l.out_h;
 
+    bool is_reclaiming_layer;
+    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+    else is_reclaiming_layer = false;
+	    
     if (l.activation == SWISH) gradient_array_swish(l.output, l.outputs*l.batch, l.activation_input, l.delta);
     else if (l.activation == MISH) gradient_array_mish(l.outputs*l.batch, l.activation_input, l.delta);
     else if (l.activation == HARD_MISH) gradient_array_hard_mish(l.outputs*l.batch, l.activation_input, l.delta);
@@ -1577,14 +1583,14 @@ void backward_convolutional_layer(convolutional_layer l, network_state state)
                 l.dilation, l.dilation, // dilation (h, w)
                 b);                 // output
 
-            gemm(0, 1, m, n, k, 1, a, k, b, k, 1, c, n);
+            gemm(0, 1, m, n, k, 1, a, k, b, k, 1, c, n, is_reclaiming_layer);
 
             if (state.delta) {
                 a = l.weights + j*l.nweights / l.groups;
                 b = l.delta + (i*l.groups + j)*m*k;
                 c = state.workspace;
 
-                gemm(1, 0, n, k, m, 1, a, n, b, k, 0, c, k);
+                gemm(1, 0, n, k, m, 1, a, n, b, k, 0, c, k, is_reclaiming_layer);
 
                 //col2im_cpu(state.workspace, l.c / l.groups, l.h, l.w, l.size, l.stride,
                 //     l.pad, state.delta + (i*l.groups + j)*l.c / l.groups*l.h*l.w);

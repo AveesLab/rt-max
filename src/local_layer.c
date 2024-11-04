@@ -98,7 +98,9 @@ void forward_local_layer(const local_layer l, network_state state)
     for(i = 0; i < l.batch; ++i){
         copy_cpu(l.outputs, l.biases, 1, l.output + i*l.outputs, 1);
     }
-
+    bool is_reclaiming_layer;
+    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+    else is_reclaiming_layer = false;
     for(i = 0; i < l.batch; ++i){
         float *input = state.input + i*l.w*l.h*l.c;
         im2col_cpu(input, l.c, l.h, l.w,
@@ -113,7 +115,7 @@ void forward_local_layer(const local_layer l, network_state state)
             int n = 1;
             int k = l.size*l.size*l.c;
 
-            gemm(0,0,m,n,k,1,a,k,b,locations,1,c,locations);
+            gemm(0,0,m,n,k,1,a,k,b,locations,1,c,locations, is_reclaiming_layer);
         }
     }
     activate_array(l.output, l.outputs*l.batch, l.activation);
@@ -123,7 +125,9 @@ void backward_local_layer(local_layer l, network_state state)
 {
     int i, j;
     int locations = l.out_w*l.out_h;
-
+    bool is_reclaiming_layer;
+    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+    else is_reclaiming_layer = false;
     gradient_array(l.output, l.outputs*l.batch, l.activation, l.delta);
 
     for(i = 0; i < l.batch; ++i){
@@ -143,7 +147,7 @@ void backward_local_layer(local_layer l, network_state state)
             int n = l.size*l.size*l.c;
             int k = 1;
 
-            gemm(0,1,m,n,k,1,a,locations,b,locations,1,c,n);
+            gemm(0,1,m,n,k,1,a,locations,b,locations,1,c,n, is_reclaiming_layer);
         }
 
         if(state.delta){
@@ -156,7 +160,7 @@ void backward_local_layer(local_layer l, network_state state)
                 int n = 1;
                 int k = l.n;
 
-                gemm(1,0,m,n,k,1,a,m,b,locations,0,c,locations);
+                gemm(1,0,m,n,k,1,a,m,b,locations,0,c,locations, is_reclaiming_layer);
             }
 
             col2im_cpu(l.col_image, l.c,  l.h,  l.w,  l.size,  l.stride, l.pad, state.delta+i*l.c*l.h*l.w);

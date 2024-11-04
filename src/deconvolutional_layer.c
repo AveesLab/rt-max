@@ -137,7 +137,9 @@ void forward_deconvolutional_layer(const deconvolutional_layer l, network_state 
     int m = l.size*l.size*l.n;
     int n = l.h*l.w;
     int k = l.c;
-
+	    bool is_reclaiming_layer;
+	    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+	    else is_reclaiming_layer = false;
     fill_cpu(l.outputs*l.batch, 0, l.output, 1);
 
     for(i = 0; i < l.batch; ++i){
@@ -145,7 +147,7 @@ void forward_deconvolutional_layer(const deconvolutional_layer l, network_state 
         float *b = state.input + i*l.c*l.h*l.w;
         float *c = l.col_image;
 
-        gemm(1,0,m,n,k,1,a,m,b,n,0,c,n);
+        gemm(1,0,m,n,k,1,a,m,b,n,0,c,n, is_reclaiming_layer);
 
         col2im_cpu(c, l.n, out_h, out_w, l.size, l.stride, 0, l.output+i*l.n*size);
     }
@@ -160,7 +162,9 @@ void backward_deconvolutional_layer(deconvolutional_layer l, network_state state
     int out_w = deconvolutional_out_width(l);
     int size = out_h*out_w;
     int i;
-
+    bool is_reclaiming_layer;
+    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+    else is_reclaiming_layer = false;
     gradient_array(l.output, size*l.n*l.batch, l.activation, l.delta);
     backward_bias(l.bias_updates, l.delta, l.batch, l.n, size);
 
@@ -175,7 +179,7 @@ void backward_deconvolutional_layer(deconvolutional_layer l, network_state state
 
         im2col_cpu(l.delta + i*l.n*size, l.n, out_h, out_w,
                 l.size, l.stride, 0, b);
-        gemm(0,1,m,n,k,alpha,a,k,b,k,1,c,n);
+        gemm(0,1,m,n,k,alpha,a,k,b,k,1,c,n, is_reclaiming_layer);
 
         if(state.delta){
             int m = l.c;
@@ -186,7 +190,7 @@ void backward_deconvolutional_layer(deconvolutional_layer l, network_state state
             float *b = l.col_image;
             float *c = state.delta + i*n*m;
 
-            gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
+            gemm(0,0,m,n,k,1,a,k,b,n,1,c,n, is_reclaiming_layer);
         }
     }
 }

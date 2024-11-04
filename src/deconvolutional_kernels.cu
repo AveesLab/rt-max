@@ -71,8 +71,10 @@ extern "C" void backward_deconvolutional_layer_gpu(deconvolutional_layer layer, 
             float *a = layer.weights_gpu;
             float *b = layer.col_image_gpu;
             float *c = state.delta + i*n*m;
-
-            gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
+	    bool is_reclaiming_layer;
+	    if (l.do_reclaiming == 1) is_reclaiming_layer = true;
+	    else is_reclaiming_layer = false;
+            gemm(0,0,m,n,k,1,a,k,b,n,1,c,n, false);
         }
     }
 }
