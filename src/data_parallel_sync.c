@@ -44,6 +44,7 @@ typedef struct thread_data_t {
 
 // 스레드 결과를 저장하기 위한 구조체
 typedef struct {
+    double start_time[MAX_EXP];
     int thread_id;
     int num_iterations;
     double core_id[MAX_EXP];
@@ -132,6 +133,7 @@ static void* threadFunc(void* arg)
 
         // __Preprocess (이미지 전처리)__
         double start_time = get_time_in_ms();
+        result->start_time[i] = start_time;
         image im = load_image(input, 0, 0, net.c);
         image resized = resize_min(im, net.w);
         image cropped = crop_image(resized, (resized.w - net.w) / 2, (resized.h - net.h) / 2, net.w, net.h);
@@ -251,8 +253,8 @@ void data_parallel_sync(char *datacfg, char *cfgfile, char *weightfile, char *fi
     for (int i = 0; i < num_thread; i++) {
         thread_result_t *result = &thread_results[i];
         for (int j = 0; j < result->num_iterations; j++) {
-            printf("Thread %d, Iteration %d --- [Core ID: %0.0lf] Pre: %.3lf ms, Infer: %.3lf ms, Post: %.3lf ms, Total: %.3lf ms\n",
-                   result->thread_id, j, result->core_id[j], result->e_preprocess[j], result->e_infer[j], result->e_postprocess[j], result->execution_time[j]);
+            printf("Thread %d, Iteration %d --- [Core ID: %0.0lf] Pre: %.3lf ms, Infer: %.3lf ms, Post: %.3lf ms, Total: %.3lf ms, Start Time: %.3lf\n",
+                   result->thread_id, j, result->core_id[j], result->e_preprocess[j], result->e_infer[j], result->e_postprocess[j], result->execution_time[j], result->start_time[j]);
         }
     }
 
