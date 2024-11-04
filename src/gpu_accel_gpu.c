@@ -624,7 +624,7 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
 #ifdef MEASURE
 
-        optimal_core = 11;
+        optimal_core = num_thread;
 
         R = 0.0;
         sleep_time = 0.0;
