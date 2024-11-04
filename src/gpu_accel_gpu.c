@@ -680,7 +680,7 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
         avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
 
-        double wcet_ratio = 1.07;
+        double wcet_ratio = 1.1;
         // max_preprocess_time = max_preprocess_time * wcet_ratio; // Pre
         max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
         max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
@@ -744,7 +744,7 @@ void gpu_accel_gpu(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         avg_gpu_infer_time = avg_gpu_infer_time / (optimal_core * num_exp - startIdx + 1);
         avg_execution_time = avg_execution_time / (optimal_core * num_exp - startIdx + 1);
 
-        wcet_ratio = 1.03;
+        wcet_ratio = 1.1;
         // max_preprocess_time = max_preprocess_time * wcet_ratio; // Pre
         max_gpu_infer_time = avg_gpu_infer_time * wcet_ratio; // GPU_infer
         max_execution_time = avg_execution_time * wcet_ratio; // CPU_infer + Post
