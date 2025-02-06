@@ -10,10 +10,6 @@
 #include <sched.h>
 #include <unistd.h>
 
-#ifdef NVTX
-#include "nvToolsExt.h"
-#endif
-
 #ifdef MEASURE
 #ifdef WIN32
 #include <time.h>
@@ -23,23 +19,8 @@
 #endif
 #endif
 
-#ifdef MEASURE
-static double start_preprocess[1000];
-static double end_preprocess[1000];
-static double e_preprocess[1000];
-
-static double start_infer[1000];
-static double end_infer[1000];
-static double e_infer[1000];
-
-static double start_postprocess[1000];
-static double end_postprocess[1000];
-static double e_postprocess[1000];
-#endif
 
 static double execution_time[1000];
-static double frame_rate[1000];
-
 
 /* Timestamp in ms */
 double get_time_in_ms(void)
@@ -48,99 +29,6 @@ double get_time_in_ms(void)
     clock_gettime(CLOCK_MONOTONIC,&time_after_boot);
     return (time_after_boot.tv_sec*1000+time_after_boot.tv_nsec*0.000001);
 }
-
-#ifdef MEASURE
-static int write_result(char *file_path) 
-{
-    static int exist=0;
-    FILE *fp;
-    int tick = 0;
-
-    fp = fopen(file_path, "w+");
-
-    int i;
-    if (fp == NULL) 
-    {
-        /* make directory */
-        while(!exist)
-        {
-            int result;
-
-            usleep(10 * 1000);
-
-            result = mkdir(MEASUREMENT_PATH, 0766);
-            if(result == 0) { 
-                exist = 1;
-
-                fp = fopen(file_path,"w+");
-            }
-
-            if(tick == 100)
-            {
-                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
-
-                return -1;
-            }
-            else tick++;
-        }
-    }
-    else printf("\nWrite output in %s\n", file_path); 
-
-    double sum_measure_data[num_exp][12];
-    for(i = 0; i < num_exp; i++)
-    {
-        sum_measure_data[i][0] = start_preprocess[i];
-        sum_measure_data[i][1] = e_preprocess[i];
-        sum_measure_data[i][2] = end_preprocess[i];
-        sum_measure_data[i][3] = start_infer[i];
-        sum_measure_data[i][4] = e_infer[i];
-        sum_measure_data[i][5] = end_infer[i];
-        sum_measure_data[i][6] = start_postprocess[i];
-        sum_measure_data[i][7] = e_postprocess[i];
-        sum_measure_data[i][8] = end_postprocess[i];
-        sum_measure_data[i][9] = execution_time[i];
-        sum_measure_data[i][10] = 0.0;
-        sum_measure_data[i][11] = 0.0;
-    }
-
-    int startIdx = 30; // Delete some ROWs
-    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
-    int newIndex = 0;
-    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
-        for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
-            new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
-        }
-        newIndex++;
-    }
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "start_preprocess",     "e_preprocess",     "end_preprocess", 
-            "start_infer",          "e_infer",          "end_infer", 
-            "start_postprocess",    "e_postprocess",    "end_postprocess", 
-            "execution_time", "cycle_time", "frame_rate");
-
-    double frame_rate = 0.0;
-    double cycle_time = 0.0;
-
-    for(i = 0; i < num_exp - startIdx; i++)
-    {
-        if (i == 0) cycle_time = NAN;
-        else cycle_time = new_sum_measure_data[i][0] - new_sum_measure_data[i-1][0];
-
-        if (i == 0) frame_rate = NAN;
-        else frame_rate = 1000/cycle_time;
-
-        new_sum_measure_data[i][10] = cycle_time;
-        new_sum_measure_data[i][11] = frame_rate;
-
-        fprintf(fp, "%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], new_sum_measure_data[i][3], 
-                new_sum_measure_data[i][4], new_sum_measure_data[i][5], new_sum_measure_data[i][6], new_sum_measure_data[i][7], 
-                new_sum_measure_data[i][8], new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11]);
-    }
-    
-    return 1;
-}
-#endif
 
 void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
@@ -200,54 +88,21 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 
     if (filename) strncpy(input, filename, 256);
     else printf("Error! File is not exist.");
+    printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
 
     for (i = 0; i < num_exp; i++) {
-
-#ifdef NVTX
-        char task[100];
-        sprintf(task, "Task (cpu: %d)", core_id);
-        nvtxRangeId_t nvtx_task;
-        nvtx_task = nvtxRangeStartA(task);
-#endif
-
-#ifndef MEASURE
-        printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
-#endif
-
         time = get_time_in_ms();
-        // __Preprocess__
-#ifdef MEASURE
-        start_preprocess[i] = get_time_in_ms();
-#endif
 
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-#ifdef MEASURE
-        end_preprocess[i] = get_time_in_ms();
-        e_preprocess[i] = end_preprocess[i] - start_preprocess[i];
-#endif
-        
         // __Inference__
-#ifdef MEASURE
-        start_infer[i] = get_time_in_ms();
-#endif
-
         if (device) predictions = network_predict(net, X);
         else predictions = network_predict_cpu(net, X);
 
-#ifdef MEASURE
-        end_infer[i] = get_time_in_ms();
-        e_infer[i] = end_infer[i] - start_infer[i];
-#endif
-
         // __Postprecess__
-#ifdef MEASURE
-        start_postprocess[i] = get_time_in_ms();
-#endif
-
         // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, letter_box);
@@ -263,10 +118,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
-
+                // else printf("%s: %f\n",names[index], predictions[index]);
             }
         } // classifier model
 
@@ -276,52 +128,14 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         //     wait_key_cv(1);
         // }
 
-#ifdef MEASURE
-        end_postprocess[i] = get_time_in_ms();
-        e_postprocess[i] = end_postprocess[i] - start_postprocess[i];
-        execution_time[i] = end_postprocess[i] - start_preprocess[i];
-        frame_rate[i] = 1000.0 / execution_time[i];
-        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[i]);
-#else
         execution_time[i] = get_time_in_ms() - time;
-        frame_rate[i] = 1000.0 / (execution_time[i] / 1); // 1 single thread
-        printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
-#endif
+        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, execution_time[i]);
+
         // free memory
         free_image(im);
         free_image(resized);
         free_image(cropped);
-
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task);
-#endif
     }
-
-#ifdef MEASURE
-    char file_path[256] = "measure/";
-
-    char* model_name = malloc(strlen(cfgfile) + 1);
-    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
-    model_name[strlen(cfgfile)-10] = '\0';
-
-    char core_idx[10];
-    sprintf(core_idx, "%02dcore", core_id);
-
-    strcat(file_path, "sequential/");
-    strcat(file_path, model_name);
-    strcat(file_path, "/");
-
-    if (device == 0) strcat(file_path, "sequential_cpu_");
-    else strcat(file_path, "sequential_gpu_");
-
-    strcat(file_path, core_idx);
-
-    strcat(file_path, ".csv");
-    if(write_result(file_path) == -1) {
-        /* return error */
-        exit(0);
-    }
-#endif
 
     // free memory
 //     free_detections(dets, nboxes);
