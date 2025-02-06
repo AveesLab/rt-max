@@ -60,7 +60,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
     image **alphabet = load_alphabet();
 
     float nms = .45;    // 0.4F
-    double time;
+    double time = 0.0;
 
     int top = 5;
     int nboxes, index, i, j, k = 0;
@@ -129,7 +129,7 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
         // }
 
         execution_time[i] = get_time_in_ms() - time;
-        printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, execution_time[i]);
+        printf("\n[%d] %s: Predicted in %0.3f milli-seconds.\n", i, input, execution_time[i]/1000);
 
         // free memory
         free_image(im);

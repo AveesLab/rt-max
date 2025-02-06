@@ -14,16 +14,15 @@
 #include "nvToolsExt.h"
 #endif
 
-#ifdef MEASURE
 #ifdef WIN32
 #include <time.h>
 #include "gettimeofday.h"
 #else
 #include <sys/time.h>
 #endif
-#endif
 
-#ifdef MEASURE
+#define START_INDEX 30
+
 static double max_time;
 static double min_time;
 
@@ -46,7 +45,6 @@ static double e_postprocess[1000];
 static double end_postprocess_array[1000];
 
 static double e_stall[1000];
-#endif
 
 static double execution_time[1000];
 static double frame_rate[1000];
@@ -110,7 +108,6 @@ static detection *dets;
 static int barrier_signal = 0;
 pthread_barrier_t barrier;
 
-#ifdef MEASURE
 static int write_result(char *file_path) 
 {
     static int exist=0;
@@ -165,7 +162,7 @@ static int write_result(char *file_path)
         sum_measure_data[i][12] = 0.0;
     }
 
-    int startIdx = 30; // Delete some ROWs
+    int startIdx = START_INDEX; // Delete some ROWs
     double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
     int newIndex = 0;
     for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
@@ -202,30 +199,29 @@ static int write_result(char *file_path)
     
     return 1;
 }
-#endif
-
 
 static void push_data(int i)
 {
-    start_preprocess_array[i] = start_preprocess[preprocess_index];
-    e_preprocess[i] = end_preprocess[preprocess_index] - start_preprocess[preprocess_index];
-    end_preprocess_array[i] = end_preprocess[preprocess_index];
+    start_preprocess_array[i+2] = start_preprocess[preprocess_index];
+    e_preprocess[i+2] = end_preprocess[preprocess_index] - start_preprocess[preprocess_index];
+    end_preprocess_array[i+2] = end_preprocess[preprocess_index];
 
 
-    start_infer_array[i] = start_infer[inference_index];
-    e_infer[i] = end_infer[inference_index] - start_infer[inference_index];
-    end_infer_array[i] = end_infer[inference_index];
+    start_infer_array[i+1] = start_infer[inference_index];
+    e_infer[i+1] = end_infer[inference_index] - start_infer[inference_index];
+    end_infer_array[i+1] = end_infer[inference_index];
 
     start_postprocess_array[i] = start_postprocess[postprocess_index];
     e_postprocess[i] = end_postprocess[postprocess_index] - start_postprocess[postprocess_index];
-    end_postprocess_array[i] = start_preprocess[postprocess_index];
+    end_postprocess_array[i] = end_postprocess[postprocess_index];
 
-    max_time = MAX(end_preprocess[preprocess_index], MAX(end_infer[inference_index], end_postprocess[postprocess_index]));
-    min_time = MIN(end_preprocess[preprocess_index], MIN(end_infer[inference_index], end_postprocess[postprocess_index]));
+    max_time = MAX(e_preprocess[i], MAX(e_infer[i], e_postprocess[i]));
+    
+    execution_time[i] = end_postprocess_array[i] - start_preprocess_array[i];
+    e_stall[i] = execution_time[i] - (e_preprocess[i]+e_infer[i]+e_postprocess[i]);
+    
 
-    e_stall[i] = max_time - min_time;
-    execution_time[i] = max_time - start_infer[postprocess_index];
-    frame_rate[i] = 1000 / (max_time - start_preprocess[preprocess_index]);
+    frame_rate[i] = 1000 / (max_time);
 
     return;
 }
@@ -236,15 +232,13 @@ static void *preprocess(void *ptr)
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(1, &cpuset);
+    CPU_SET(2, &cpuset);
 
     pthread_t current_thread = pthread_self();
     pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset); 
     
     if(barrier_signal) pthread_barrier_wait(&barrier);
-#ifdef MEASURE
     start_preprocess[preprocess_index] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
     nvtxRangeId_t nvtx_preprocess;
@@ -260,9 +254,7 @@ static void *preprocess(void *ptr)
     nvtxRangeEnd(nvtx_preprocess);
 #endif
 
-#ifdef MEASURE
     end_preprocess[preprocess_index] = get_time_in_ms();
-#endif
 
 }
 
@@ -271,16 +263,14 @@ static void *inference(void *ptr)
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(5, &cpuset);
+    CPU_SET(3, &cpuset);
 
     pthread_t current_thread = pthread_self();
     pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset); 
 
     if(barrier_signal) pthread_barrier_wait(&barrier);
 
-#ifdef MEASURE
     start_infer[inference_index] = get_time_in_ms();
-#endif
 
 #ifdef NVTX
         nvtxRangeId_t nvtx_inference;
@@ -294,10 +284,8 @@ static void *inference(void *ptr)
         nvtxRangeEnd(nvtx_inference);
 #endif
 
-#ifdef MEASURE
     end_infer[inference_index] = get_time_in_ms();
-    // printf("e_infer : %0.2f \n", end_infer[inference_index] - start_infer[inference_index]);
-#endif
+
 }
 
 static void *postprocess(void *ptr)
@@ -305,63 +293,56 @@ static void *postprocess(void *ptr)
 
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(9, &cpuset);
+    CPU_SET(4, &cpuset);
 
     pthread_t current_thread = pthread_self();
     pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset); 
 
     if(barrier_signal) pthread_barrier_wait(&barrier);
 
-#ifdef MEASURE
-        start_postprocess[postprocess_index] = get_time_in_ms();
-#endif
+    start_postprocess[postprocess_index] = get_time_in_ms();
 
 #ifdef NVTX
         nvtxRangeId_t nvtx_postprocess;
         nvtx_postprocess = nvtxRangeStartA("Postprocess");
 #endif
         // __NMS & TOP acccuracy__
-        if (object_detection) {
-            dets = get_network_boxes(&net, im.w, im.h, demo_thresh, demo_hier_thresh, 0, 1, &nboxes, demo_letterbox);
-            if (nms) {
-                if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
-                else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
-            }
-            draw_detections_v3(im, dets, nboxes, demo_thresh, names, alphabet, l.classes, demo_ext_output);
-        } // yolo model
-        else {
-            if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
-            top_k(predictions, net.outputs, top, indexes);
-            for(int j = 0; j < top; ++j){
-                int index = indexes[j];
-                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
+	if (object_detection) {
+        dets = get_network_boxes(&net, im.w, im.h, demo_thresh, demo_hier_thresh, 0, 1, &nboxes, demo_letterbox);
+        if (nms) {
+            if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+            else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+        }
+        draw_detections_v3(im, dets, nboxes, demo_thresh, names, alphabet, l.classes, demo_ext_output);
+    } // yolo model
+    else {
+        if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+        top_k(predictions, net.outputs, top, indexes);
+        for(int j = 0; j < top; ++j){
+            int index = indexes[j];
+            if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+        }
+    } // classifier model
 
-            }
-        } // classifier model
-
-        // __Display__
-        // if (!dont_show) {
-        //     show_image(im, "predictions");
-        //     wait_key_cv(1);
-        // }
+    // __Display__
+    // if (!dont_show) {
+    //     show_image(im, "predictions");
+    //     wait_key_cv(1);
+    // }
 
 #ifdef NVTX
-        nvtxRangeEnd(nvtx_postprocess);
+    nvtxRangeEnd(nvtx_postprocess);
 #endif
     // usleep(15 * 1000);
 
-#ifdef MEASURE
-        end_postprocess[postprocess_index] = get_time_in_ms();
-#endif
+    end_postprocess[postprocess_index] = get_time_in_ms();
+    
+
 }
 
 void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-
     device = isGPU; // Choose CPU or GPU
 
     if (device == 0) printf("\n\nPipeline Architectiure with \"CPU\"\n");
@@ -438,8 +419,8 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
     for (int i = 0; i < num_exp; i++) {
 
         preprocess_index = thread_index;
-        inference_index = (thread_index + 2) % 3;
-        postprocess_index = (thread_index + 1) % 3;
+        inference_index = (thread_index + 1) % 3;
+        postprocess_index = (thread_index + 2) % 3;
 
 #ifdef NVTX
         char task[100];
@@ -447,11 +428,6 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
         nvtxRangeId_t nvtx_task;
         nvtx_task = nvtxRangeStartA(task);
 #endif
-
-#ifndef MEASURE
-        printf("\nThread %d is set to CPU core %d\n", core_id, sched_getcpu());
-#endif
-
 	    pthread_barrier_init(&barrier, NULL, 3);
 
         // __Preprocess__
@@ -486,7 +462,6 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
 #endif
     }
 
-#ifdef MEASURE
     char file_path[256] = "measure/";
 
     char* model_name = malloc(strlen(cfgfile) + 1);
@@ -505,13 +480,12 @@ void pipeline(char *datacfg, char *cfgfile, char *weightfile, char *filename, fl
         /* return error */
         exit(0);
     }
-#endif
 
     // free memory
-//     free_detections(dets, nboxes);
-//     free_ptrs((void**)names, net.layers[net.n - 1].classes);
-//     free_list_contents_kvp(options);
-//     free_list(options);
-//     free_alphabet(alphabet);
+    free_detections(dets, nboxes);
+    free_ptrs((void**)names, net.layers[net.n - 1].classes);
+    free_list_contents_kvp(options);
+    free_list(options);
+    free_alphabet(alphabet);
     // free_network(net); // Error occur
 }
