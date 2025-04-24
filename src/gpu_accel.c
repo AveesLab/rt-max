@@ -240,22 +240,25 @@ void* gpu_dedicated_thread(void* arg) {
             }
             l.forward_gpu(l, state);
             
-            // 필요한 중간 레이어 결과 가져오기
-            for(int k = 0; k < current_task.net.n; k++) {
-                for(int m = 0; m < 10; m++) {
-                    if(skip_layers[k][m] == j && skip_layers[k][m] != 0) {
-                        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-                        break;
-                    }
-                }
-            }
-            
+            // 중간 레이어 결과는 가져오지 않고 마지막에 한 번에 처리
             state.input = l.output_gpu;
         }
         
-        // 최종 레이어 결과 가져오기
-        layer l = current_task.net.layers[gLayer-1];
-        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        // 최종 레이어 결과만 가져오기 - 필요한 모든 중간 결과도 함께 처리
+        layer final_layer = current_task.net.layers[gLayer-1];
+        cuda_pull_array(final_layer.output_gpu, final_layer.output, final_layer.outputs * final_layer.batch);
+        
+        // skipped_layers 처리 (필요한 경우에만)
+        for(int i = gLayer; i < current_task.net.n; i++) {
+            for(int j = 0; j < 10; j++) {
+                if((skip_layers[i][j] < gLayer) && (skip_layers[i][j] != 0)) {
+                    int layer_idx = skip_layers[i][j];
+                    layer skip_layer = current_task.net.layers[layer_idx];
+                    cuda_pull_array(skip_layer.output_gpu, skip_layer.output, skip_layer.outputs * skip_layer.batch);
+                }
+            }
+        }
+        
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
         // GPU 작업 종료 시간 기록
