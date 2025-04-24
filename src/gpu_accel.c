@@ -318,12 +318,11 @@ void* gpu_dedicated_thread(void* arg) {
         }
         
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-        
-        // D2H 복사 종료 시간 기록
-        current_task.pull_end_time = current_time_in_ms();
-        
         // GPU 작업 로그 저장
         save_gpu_log(current_task);
+
+        // D2H 복사 종료 시간 기록
+        current_task.pull_end_time = current_time_in_ms();
         
         // 작업 완료 표시 및 워커 스레드에 알림
         pthread_mutex_lock(&result_mutex[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
