@@ -23,6 +23,10 @@
 #endif
 #endif
 
+// GPU 레이어 범위 지정을 위한 전역 변수
+int Gstart = 0;    // GPU 작업 시작 레이어 인덱스
+int Gend = 200;    // GPU 작업 종료 레이어 인덱스
+
 // 시간 측정 함수
 double current_time_in_ms() {
     struct timespec ts;
@@ -270,7 +274,7 @@ void* gpu_dedicated_thread(void* arg) {
         state.train = 0;
         state.delta = 0;
         
-        // 입력 데이터를 GPU로 복사
+        // 입력 데이터를 GPU로 복사 (Gstart 레이어 입력)
         cuda_push_array(state.input, current_task.input, current_task.size);
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
@@ -283,8 +287,8 @@ void* gpu_dedicated_thread(void* arg) {
         // GPU 작업 시작
         state.workspace = current_task.net.workspace;
         
-        // gLayer까지의 레이어 실행
-        for(int j = 0; j < gLayer; ++j){
+        // Gstart부터 Gend까지의 레이어 실행
+        for(int j = Gstart; j < Gend; ++j){
             state.index = j;
             layer l = current_task.net.layers[j];
             if(l.delta_gpu && state.train){
@@ -303,13 +307,13 @@ void* gpu_dedicated_thread(void* arg) {
         current_task.pull_start_time = current_time_in_ms();
         
         // 최종 레이어 결과만 가져오기
-        layer final_layer = current_task.net.layers[gLayer-1];
+        layer final_layer = current_task.net.layers[Gend-1];
         cuda_pull_array(final_layer.output_gpu, final_layer.output, final_layer.outputs * final_layer.batch);
         
         // skipped_layers 처리 (필요한 경우에만)
-        for(int i = gLayer; i < current_task.net.n; i++) {
+        for(int i = Gend; i < current_task.net.n; i++) {
             for(int j = 0; j < 10; j++) {
-                if((skip_layers[i][j] < gLayer) && (skip_layers[i][j] != 0)) {
+                if((skip_layers[i][j] >= Gstart) && (skip_layers[i][j] < Gend) && (skip_layers[i][j] != 0)) {
                     int layer_idx = skip_layers[i][j];
                     layer skip_layer = current_task.net.layers[layer_idx];
                     cuda_pull_array(skip_layer.output_gpu, skip_layer.output, skip_layer.outputs * skip_layer.batch);
@@ -318,11 +322,12 @@ void* gpu_dedicated_thread(void* arg) {
         }
         
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-        // GPU 작업 로그 저장
-        save_gpu_log(current_task);
-
+        
         // D2H 복사 종료 시간 기록
         current_task.pull_end_time = current_time_in_ms();
+        
+        // GPU 작업 로그 저장
+        save_gpu_log(current_task);
         
         // 작업 완료 표시 및 워커 스레드에 알림
         pthread_mutex_lock(&result_mutex[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
@@ -372,9 +377,9 @@ static void threadFunc(thread_data_t data)
     calculate_binary_weights(net);
     extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
-    for(i = gLayer; i < net.n; i++) {
+    for(i = Gend; i < net.n; i++) {
         for(j = 0; j < 10; j++) {
-            if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
+            if((skip_layers[i][j] >= Gstart) && (skip_layers[i][j] < Gend) && (skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
             }
         }
@@ -397,10 +402,35 @@ static void threadFunc(thread_data_t data)
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
+        
+        // 0부터 Gstart까지 CPU에서 처리 (Gstart가 0이 아닌 경우)
+        float *cpu_input = X;
+        network_state pre_state;
+        pre_state.index = 0;
+        pre_state.net = net;
+        pre_state.input = cpu_input;
+        pre_state.truth = 0;
+        pre_state.train = 0;
+        pre_state.delta = 0;
+        pre_state.workspace = net.workspace_cpu;
+        
+        if (Gstart > 0) {
+            for(j = 0; j < Gstart; ++j){
+                pre_state.index = j;
+                l = net.layers[j];
+                if(l.delta && pre_state.train && l.train){
+                    scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+                }
+                l.forward(l, pre_state);
+                pre_state.input = l.output;
+            }
+            // Gstart 레이어의 입력이 될 데이터로 교체
+            X = pre_state.input;
+        }
 
         // GPU 작업 요청 준비
         int task_id;
-        int size = get_network_input_size(net) * net.batch;
+        int size = net.layers[Gstart].inputs * net.batch;  // Gstart 레이어 입력 크기
         
         // GPU 작업 요청 시간 기록
         double worker_request_time = current_time_in_ms();
@@ -449,25 +479,25 @@ static void threadFunc(thread_data_t data)
         
         printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
         
-        // CPU Inference (Post-GPU 1) - GPU 작업 이후의 처리
-        network_state state;
-        state.index = 0;
-        state.net = net;
-        state.input = net.layers[gLayer-1].output;  // GPU에서 계산한 출력을 입력으로 사용
-        state.workspace = net.workspace_cpu;
+        // CPU Inference (Post-GPU) - Gend부터 끝까지 CPU에서 처리
+        network_state post_state;
+        post_state.index = 0;
+        post_state.net = net;
+        post_state.input = net.layers[Gend-1].output;  // GPU에서 계산한 출력을 입력으로 사용
+        post_state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
         
-        for(j = gLayer; j < net.n; ++j){
-            state.index = j;
+        for(j = Gend; j < net.n; ++j){
+            post_state.index = j;
             l = net.layers[j];
-            if(l.delta && state.train && l.train){
+            if(l.delta && post_state.train && l.train){
                 scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
             }
-            l.forward(l, state);
-            state.input = l.output;
+            l.forward(l, post_state);
+            post_state.input = l.output;
         }
         
-        if (gLayer == net.n) predictions = get_network_output_gpu(net);
+        if (Gend == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
 
