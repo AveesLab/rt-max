@@ -1,162 +1,89 @@
 mkdir measure
-cd measure
+
+get_model_info() {
+    case "$1" in
+        "densenet201")
+            data_file="imagenet1k"
+            layer_num=306
+            ;;
+        "resnet152")
+            data_file="imagenet1k"
+            layer_num=206
+            ;;
+        "enetb0")
+            data_file="imagenet1k"
+            layer_num=136
+            ;;
+        "csmobilenet-v2")
+            data_file="imagenet1k"
+            layer_num=81
+            ;;
+        "squeezenet")
+            data_file="imagenet1k"
+            layer_num=50
+            ;;
+        "yolov7")
+            data_file="coco"
+            layer_num=143
+            ;;
+        "yolov7-tiny")
+            data_file="coco"
+            layer_num=99
+            ;;
+        "yolov4")
+            data_file="coco"
+            layer_num=162
+            ;;
+        "yolov4-tiny")
+            data_file="coco"
+            layer_num=38
+            ;;
+        *)
+            echo "Unknown model: $1"
+            exit 1
+            ;;
+    esac
+}
 
 ## Layer time
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p layer_time/$model/
+	mkdir -p measure/layer_time/$model/
 done
 
 ## Sequential
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p sequential/$model/
+	mkdir -p measure/sequential/$model/
 done
 
 ## Sequential-multiblas
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p sequential-multiblas/$model/
+	mkdir -p measure/sequential-multiblas/$model/
 done
 
 ## Pipeline
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p pipeline/$model/
+	mkdir -p measure/pipeline/$model/
 done
 
 
 ## Data-Parallel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p data-parallel/$model/
-done
-
-
-## Data-Parallel-MP
-for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
-do
-	mkdir -p data-parallel-mp/$model/
+	mkdir -p measure/data-parallel/$model/
 done
 
 ## GPU-Accel
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p gpu-accel/$model/
+    get_model_info "$model"  # 모델에 맞는 layer_num 설정
+    mkdir -p gpu-accel/$model/
+    for ((Gstart=0; Gstart<=layer_num; Gstart++))
+    do
+        mkdir -p measure/gpu-accel/$model/gpu_task_log/G$Gstart/
+		mkdir -p measure/gpu-accel/$model/worker_task_log/G$Gstart/
+    done
 done
-
-## GPU-Accel
-for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
-do
-	mkdir -p gpu-accel_gpu/$model/
-done
-
-## GPU-Accel
-for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
-do
-	mkdir -p gpu-accel_jitter/$model/
-done
-
-## GPU-Accel_1thread
-for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
-do
-	mkdir -p gpu-accel_1thread/$model/
-done
-
-## GPU-Accel-MP
-for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
-do
-	mkdir -p gpu-accel-mp/$model/
-done
-
-## CPU-Reclaiming
-for var in {1..305}
-	do
-	mkdir -p cpu-reclaiming/densenet201/${var}glayer/
-	done
-
-for var in {1..37}
-	do
-	mkdir -p cpu-reclaiming/yolov4-tiny/${var}glayer/
-	done
-
-for var in {1..162}
-	do
-	mkdir -p cpu-reclaiming/yolov4/${var}glayer/
-	done
-
-for var in {1..100}
-	do
-	mkdir -p cpu-reclaiming/yolov7-tiny/${var}glayer/
-	done
-
-for var in {1..144}
-	do
-	mkdir -p cpu-reclaiming/yolov7/${var}glayer/
-	done
-
-for var in {1..207}
-	do
-	mkdir -p cpu-reclaiming/resnet152/${var}glayer/
-	done
-
-for var in {1..81}
-	do
-	mkdir -p cpu-reclaiming/csmobilenet/${var}glayer/
-	done
-
-for var in {1..51}
-	do
-	mkdir -p cpu-reclaiming/squeezenet/${var}glayer/
-	done
-
-for var in {1..138}
-	do
-	mkdir -p cpu-reclaiming/enetb0/${var}glayer/
-	done
-
-## CPU-Reclaiming-mp
-for var in {1..305}
-	do
-	mkdir -p cpu-reclaiming-mp/densenet201/${var}glayer/
-	done
-
-for var in {1..37}
-	do
-	mkdir -p cpu-reclaiming-mp/yolov4-tiny/${var}glayer/
-	done
-
-for var in {1..162}
-	do
-	mkdir -p cpu-reclaiming-mp/yolov4/${var}glayer/
-	done
-
-for var in {1..100}
-	do
-	mkdir -p cpu-reclaiming-mp/yolov7-tiny/${var}glayer/
-	done
-
-for var in {1..144}
-	do
-	mkdir -p cpu-reclaiming-mp/yolov7/${var}glayer/
-	done
-
-for var in {1..207}
-	do
-	mkdir -p cpu-reclaiming-mp/resnet152/${var}glayer/
-	done
-
-for var in {1..81}
-	do
-	mkdir -p cpu-reclaiming-mp/csmobilenet/${var}glayer/
-	done
-
-for var in {1..51}
-	do
-	mkdir -p cpu-reclaiming-mp/squeezenet/${var}glayer/
-	done
-
-for var in {1..138}
-	do
-	mkdir -p cpu-reclaiming-mp/enetb0/${var}glayer/
-	done

@@ -23,6 +23,9 @@
 #endif
 #endif
 
+#define START_IDX 5
+#define VISUAL 0
+
 // 시간 측정 함수
 double current_time_in_ms() {
     struct timespec ts;
@@ -166,10 +169,18 @@ int compare_worker_logs(const void *a, const void *b) {
 }
 
 // 로그 파일 작성 함수
-void write_logs_to_files() {
+void write_logs_to_files(char *model_name) {
     // GPU 로그 정렬 및 파일 작성
     qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
-    fp_gpu = fopen("gpu_task_log.csv", "w");
+
+    char gpu_path[256];
+    sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/G%d/gpu_task_log_G%d_%d.csv", model_name, Gstart, Gstart, Gend);
+    fp_gpu = fopen(gpu_path, "w");
+    if (!fp_gpu) {
+        perror("파일 열기 실패");
+        exit(1);
+    }
+
     fprintf(fp_gpu, "thread_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,push_delay,compute_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
         double push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
@@ -197,7 +208,15 @@ void write_logs_to_files() {
     
     // 워커 로그 정렬 및 파일 작성
     qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
-    fp_worker = fopen("worker_task_log.csv", "w");
+
+    char worker_path[256];
+    sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/G%d/worker_task_log_G%d_%d.csv", model_name, Gstart, Gstart, Gend);
+    fp_worker = fopen(worker_path, "w");
+    if (!fp_worker) {
+        perror("파일 열기 실패");
+        exit(1);
+    }
+
     fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_request_time,worker_receive_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
     for (int i = 0; i < worker_log_count; i++) {
         double preprocessing_time = worker_logs[i].worker_request_time - worker_logs[i].worker_start_time;
@@ -249,7 +268,7 @@ typedef struct thread_data_t{
 // GPU 전용 스레드 함수
 void* gpu_dedicated_thread(void* arg) {
     int core_id = sched_getcpu();
-    printf("GPU-dedicated thread bound to core %d\n", core_id);
+    if (VISUAL) printf("GPU-dedicated thread bound to core %d\n", core_id);
     
     // GPU 초기화 - 한 번만 실행
     if(gpu_index >= 0){
@@ -270,7 +289,7 @@ void* gpu_dedicated_thread(void* arg) {
         gpu_task_head++;
         pthread_mutex_unlock(&gpu_queue_mutex);
         
-        printf("GPU Thread: Processing task for worker %d (layers %d-%d)\n", 
+        if (VISUAL) printf("GPU Thread: Processing task for worker %d (layers %d-%d)\n", 
                current_task.thread_id, current_task.Gstart, current_task.Gend);
         
         // H2D 복사 시작 시간 기록
@@ -411,15 +430,15 @@ static void threadFunc(thread_data_t data)
 
     // __Chekc-worker-thread-initialization__
     if (Gstart == Gend) {
-        printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", 
-               data.thread_id, sched_getcpu());
+        if (VISUAL) printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", data.thread_id, sched_getcpu());
     } else {
-        printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", 
-               data.thread_id, sched_getcpu(), Gstart, Gend);
+        if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", data.thread_id, sched_getcpu(), Gstart, Gend);
     }
     pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
+        if (i == START_IDX) pthread_barrier_wait(&barrier);
+
         // 워커 작업 시작 시간 기록
         double worker_start_time = current_time_in_ms();
         
@@ -485,8 +504,10 @@ static void threadFunc(thread_data_t data)
                 top_k(predictions, net.outputs, top, indexes);
                 for(j = 0; j < top; ++j){
                     index = indexes[j];
-                    if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                    else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                    if (VISUAL) {
+                        if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                        else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                    }
                 }
             }
             
@@ -558,8 +579,7 @@ static void threadFunc(thread_data_t data)
             pthread_cond_signal(&gpu_queue_cond);
             pthread_mutex_unlock(&gpu_queue_mutex);
             
-            printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", 
-                   data.thread_id, task_id, Gstart, Gend);
+            if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
             
             // GPU 작업이 완료될 때까지 대기
             pthread_mutex_lock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
@@ -578,7 +598,7 @@ static void threadFunc(thread_data_t data)
             
             pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
             
-            printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
+            if (VISUAL) printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
             
             // CPU Inference (Post-GPU) - Gend부터 끝까지 CPU에서 처리
             network_state post_state;
@@ -616,8 +636,10 @@ static void threadFunc(thread_data_t data)
                 top_k(predictions, net.outputs, top, indexes);
                 for(j = 0; j < top; ++j){
                     index = indexes[j];
-                    if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                    else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                    if (VISUAL) {
+                        if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                        else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                    }
                 }
             }
 
@@ -740,9 +762,13 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     // GPU 스레드 종료
     pthread_cancel(gpu_thread);
     pthread_join(gpu_thread, NULL);
-    
+
+    char* model_name = malloc(strlen(cfgfile) + 1);
+    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
+    model_name[strlen(cfgfile)-10] = '\0';
+
     // 로그 파일 작성
-    write_logs_to_files();
+    write_logs_to_files(model_name);
     
     printf("Logs written to files\n");
 
