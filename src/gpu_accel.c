@@ -23,6 +23,7 @@
 #endif
 #endif
 
+// 기존 동기화 객체
 pthread_barrier_t barrier;
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 
@@ -31,6 +32,29 @@ static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static int current_thread = 1;
 
+// GPU 작업 큐 관련 구조체 및 변수
+#define MAX_GPU_QUEUE_SIZE 128
+
+typedef struct gpu_task_t {
+    float *input;              // 입력 데이터
+    int size;                  // 입력 데이터 크기
+    network net;               // 네트워크 정보
+    int task_id;               // 작업 ID
+    int thread_id;             // 요청한 스레드 ID
+    int completed;             // 완료 여부 플래그
+    float *output;             // 출력 데이터가 저장될 위치
+} gpu_task_t;
+
+gpu_task_t gpu_task_queue[MAX_GPU_QUEUE_SIZE];
+int gpu_task_head = 0, gpu_task_tail = 0;
+pthread_mutex_t gpu_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t gpu_queue_cond = PTHREAD_COND_INITIALIZER;
+
+// 결과 동기화를 위한 뮤텍스와 조건 변수
+pthread_mutex_t result_mutex[MAX_GPU_QUEUE_SIZE];
+pthread_cond_t result_cond[MAX_GPU_QUEUE_SIZE];
+
+// 스레드 데이터 구조체
 typedef struct thread_data_t{
     char *datacfg;
     char *cfgfile;
@@ -49,23 +73,100 @@ typedef struct thread_data_t{
     bool isTest;
 } thread_data_t;
 
-static void threadFunc(thread_data_t data)
-{
-    // __Worker-thread-initialization__
-    pthread_mutex_lock(&mutex_init);
-    // GPU SETUP
+// GPU 전용 스레드 함수
+void* gpu_dedicated_thread(void* arg) {
+    int core_id = sched_getcpu();
+    printf("GPU-dedicated thread bound to core %d\n", core_id);
+    
+    // GPU 초기화 - 한 번만 실행
     if(gpu_index >= 0){
         cuda_set_device(gpu_index);
         CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
     }
+    
+    gpu_task_t current_task;
+    
+    while (1) {
+        // 작업 큐에서 작업 가져오기
+        pthread_mutex_lock(&gpu_queue_mutex);
+        while (gpu_task_head == gpu_task_tail) {
+            pthread_cond_wait(&gpu_queue_cond, &gpu_queue_mutex);
+        }
+        
+        current_task = gpu_task_queue[gpu_task_head % MAX_GPU_QUEUE_SIZE];
+        gpu_task_head++;
+        pthread_mutex_unlock(&gpu_queue_mutex);
+        
+        printf("GPU Thread: Processing task for worker %d\n", current_task.thread_id);
+        
+        // 실제 GPU 작업 수행
+        if (current_task.net.gpu_index != cuda_get_device())
+            cuda_set_device(current_task.net.gpu_index);
+        
+        network_state state;
+        state.index = 0;
+        state.net = current_task.net;
+        state.input = current_task.net.input_state_gpu;
+        state.truth = 0;
+        state.train = 0;
+        state.delta = 0;
+        
+        // 입력 데이터를 GPU로 복사
+        cuda_push_array(state.input, current_task.input, current_task.size);
+        state.workspace = current_task.net.workspace;
+        
+        // gLayer까지의 레이어 실행
+        for(int j = 0; j < gLayer; ++j){
+            state.index = j;
+            layer l = current_task.net.layers[j];
+            if(l.delta_gpu && state.train){
+                fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
+            }
+            l.forward_gpu(l, state);
+            
+            // 필요한 중간 레이어 결과 가져오기
+            for(int k = 0; k < current_task.net.n; k++) {
+                for(int m = 0; m < 10; m++) {
+                    if(skip_layers[k][m] == j && skip_layers[k][m] != 0) {
+                        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+                        break;
+                    }
+                }
+            }
+            
+            state.input = l.output_gpu;
+        }
+        
+        // 최종 레이어 결과 가져오기
+        layer l = current_task.net.layers[gLayer-1];
+        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        
+        // 작업 완료 표시 및 워커 스레드에 알림
+        pthread_mutex_lock(&result_mutex[current_task.task_id]);
+        current_task.completed = 1;
+        gpu_task_queue[current_task.task_id % MAX_GPU_QUEUE_SIZE] = current_task;
+        pthread_cond_signal(&result_cond[current_task.task_id]);
+        pthread_mutex_unlock(&result_mutex[current_task.task_id]);
+    }
+    
+    return NULL;
+}
+
+// 워커 스레드 함수 수정
+static void threadFunc(thread_data_t data)
+{
+    // __Worker-thread-initialization__
+    pthread_mutex_lock(&mutex_init);
+    // GPU SETUP - 초기화만 수행, 실제 GPU 작업은 GPU 스레드가 담당
     list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
     int names_size = 0;
-    char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
+    char **names = get_labels_custom(name_list, &names_size);
     char buff[256];
     char *input = buff;
     image **alphabet = load_alphabet();
-    float nms = .45;    // 0.4F
+    float nms = .45;
     double time;
     int top = 5;
     int index, i, j, k = 0;
@@ -78,7 +179,7 @@ static void threadFunc(thread_data_t data)
     int object_detection = strstr(data.cfgfile, target_model);
     int device = 1;
     extern gpu_yolo;
-    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
+    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device);
     layer l = net.layers[net.n - 1];
     if (data.weightfile) {
         load_weights(&net, data.weightfile);
@@ -93,7 +194,6 @@ static void threadFunc(thread_data_t data)
         for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
-                // printf("skip layer[%d][%d] : %d,  \n", i, j, skip_layers[i][j]);
             }
         }
     }
@@ -107,60 +207,53 @@ static void threadFunc(thread_data_t data)
     pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
-
         // __Preprocess__ (Pre-GPU 1)
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-        // __GPU-Inference__ (GPU)
-        pthread_mutex_lock(&mutex_gpu);
-        while(data.thread_id != current_thread) {
-            pthread_cond_wait(&cond, &mutex_gpu); // thread_id 순서대로
-        }
-        if (net.gpu_index != cuda_get_device())
-            cuda_set_device(net.gpu_index);
+        // GPU 작업 요청 준비
+        int task_id;
         int size = get_network_input_size(net) * net.batch;
+        
+        // GPU 작업 큐에 작업 추가
+        pthread_mutex_lock(&gpu_queue_mutex);
+        task_id = gpu_task_tail;
+        
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = X;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].net = net;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
+        
+        // 메모리 복사 (CPU -> GPU 스레드가 사용할 메모리)
+        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
+        
+        gpu_task_tail++;
+        pthread_cond_signal(&gpu_queue_cond);
+        pthread_mutex_unlock(&gpu_queue_mutex);
+        
+        printf("Worker %d: Requested GPU task %d\n", data.thread_id, task_id);
+        
+        // GPU 작업이 완료될 때까지 대기
+        pthread_mutex_lock(&result_mutex[task_id]);
+        while (!gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed) {
+            pthread_cond_wait(&result_cond[task_id], &result_mutex[task_id]);
+        }
+        pthread_mutex_unlock(&result_mutex[task_id]);
+        
+        printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
+        
+        // CPU Inference (Post-GPU 1) - GPU 작업 이후의 처리
         network_state state;
         state.index = 0;
         state.net = net;
-        // state.input = X;
-        state.input = net.input_state_gpu;
-        memcpy(net.input_pinned_cpu, X, size * sizeof(float));
-        state.truth = 0;
-        state.train = 0;
-        state.delta = 0;
-        cuda_push_array(state.input, net.input_pinned_cpu, size);
-        state.workspace = net.workspace;
-        for(j = 0; j < gLayer; ++j){
-            state.index = j;
-            l = net.layers[j];
-            if(l.delta_gpu && state.train){
-                fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
-            }
-            l.forward_gpu(l, state);
-            if (skipped_layers[j] == 1){
-                // printf("skip layer : %d,  \n", j);
-                cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-            }
-            state.input = l.output_gpu;
-        }
-        cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
-        state.input = l.output;
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-        if (data.thread_id == data.num_thread) {
-            current_thread = 1;
-        } else {
-            current_thread++; // thread_id 순서대로
-        }
-        pthread_cond_broadcast(&cond);
-        pthread_mutex_unlock(&mutex_gpu);
-
-
-        // CPU Inference (Post-GPU 1)
+        state.input = net.layers[gLayer-1].output;  // GPU에서 계산한 출력을 입력으로 사용
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
+        
         for(j = gLayer; j < net.n; ++j){
             state.index = j;
             l = net.layers[j];
@@ -170,11 +263,10 @@ static void threadFunc(thread_data_t data)
             l.forward(l, state);
             state.input = l.output;
         }
+        
         if (gLayer == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
-        //cuda_free(state.input);   // will be freed in the free_network()
-
 
         // __Postprecess__ (Post-GPU 2)
         if (object_detection) {
@@ -207,23 +299,47 @@ static void threadFunc(thread_data_t data)
     free_list_contents_kvp(options);
     free_list(options);
     free_alphabet(alphabet);
-    // free_network(net); // Error occur
     pthread_exit(NULL);
-
 }
 
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-
     int rc;
     int i;
+    pthread_t gpu_thread;
     pthread_t threads[num_thread];
     thread_data_t data[num_thread];
 
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
 
+    // 결과 동기화 객체 초기화
+    for (i = 0; i < MAX_GPU_QUEUE_SIZE; i++) {
+        pthread_mutex_init(&result_mutex[i], NULL);
+        pthread_cond_init(&result_cond[i], NULL);
+    }
+
+    // GPU 전용 스레드 생성
+    rc = pthread_create(&gpu_thread, NULL, gpu_dedicated_thread, NULL);
+    if (rc) {
+        printf("Error: Unable to create GPU thread, %d\n", rc);
+        exit(-1);
+    }
+
+    // GPU 스레드를 코어 0에 고정
+    cpu_set_t gpu_cpuset;
+    CPU_ZERO(&gpu_cpuset);
+    CPU_SET(0, &gpu_cpuset);
+    rc = pthread_setaffinity_np(gpu_thread, sizeof(gpu_cpuset), &gpu_cpuset);
+    if (rc != 0) {
+        fprintf(stderr, "GPU thread: pthread_setaffinity_np() failed\n");
+        exit(0);
+    }
+    
+    // 워커 스레드 배리어 초기화
     pthread_barrier_init(&barrier, NULL, num_thread);
+    
+    // 워커 스레드 생성
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -257,14 +373,23 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         } 
     }
 
+    // 워커 스레드 종료 대기
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
 
-    // pthread_mutex_destroy(&mutex);
-    // pthread_cond_destroy(&cond);
+    // GPU 스레드 종료
+    pthread_cancel(gpu_thread);
+    pthread_join(gpu_thread, NULL);
+
+    // 동기화 객체 정리
+    for (i = 0; i < MAX_GPU_QUEUE_SIZE; i++) {
+        pthread_mutex_destroy(&result_mutex[i]);
+        pthread_cond_destroy(&result_cond[i]);
+    }
+    pthread_mutex_destroy(&gpu_queue_mutex);
+    pthread_cond_destroy(&gpu_queue_cond);
     pthread_barrier_destroy(&barrier);
 
     return 0;
-
 }
