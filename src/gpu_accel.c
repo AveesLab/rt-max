@@ -51,64 +51,35 @@ typedef struct thread_data_t{
 
 static void threadFunc(thread_data_t data)
 {
-    // __CPU AFFINITY SETTING__
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(data.thread_id, &cpuset); // cpu core index
-
-    int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-    if (ret != 0) {
-        fprintf(stderr, "pthread_setaffinity_np() failed \n");
-        exit(0);
-    } 
-
-    // __GPU SETUP__
-#ifdef GPU   // GPU
+    // __Worker-thread-initialization__
+    pthread_mutex_lock(&mutex_init);
+    // GPU SETUP
     if(gpu_index >= 0){
         cuda_set_device(gpu_index);
         CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
     }
-#ifdef CUDNN_HALF
-    printf(" CUDNN_HALF=1 \n");
-#endif  // CUDNN_HALF
-#else
-    gpu_index = -1;
-    printf(" GPU isn't used \n");
-    init_cpu();
-#endif  // GPU
-
     list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
     int names_size = 0;
     char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
-
     char buff[256];
     char *input = buff;
-
     image **alphabet = load_alphabet();
-
     float nms = .45;    // 0.4F
     double time;
-
     int top = 5;
     int index, i, j, k = 0;
     int* indexes = (int*)xcalloc(top, sizeof(int));
-
     int nboxes;
     detection *dets;
-
     image im, resized, cropped;
     float *X, *predictions;
-
     char *target_model = "yolo";
     int object_detection = strstr(data.cfgfile, target_model);
-
-    int device = 1; // Choose CPU or GPU
+    int device = 1;
     extern gpu_yolo;
-    pthread_mutex_lock(&mutex_init);
     network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
     layer l = net.layers[net.n - 1];
-
     if (data.weightfile) {
         load_weights(&net, data.weightfile);
     }
@@ -116,10 +87,8 @@ static void threadFunc(thread_data_t data)
     net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
-
     extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
-
     for(i = gLayer; i < net.n; i++) {
         for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] < gLayer)&&(skip_layers[i][j] != 0)) {
@@ -128,33 +97,28 @@ static void threadFunc(thread_data_t data)
             }
         }
     }
-    pthread_mutex_unlock(&mutex_init);
     srand(2222222);
-
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
-    printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
+    pthread_mutex_unlock(&mutex_init);
 
+    // __Chekc-worker-thread-initialization__
+    printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
     pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
 
-        // __Preprocess__
+        // __Preprocess__ (Pre-GPU 1)
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
 
-        // __Inference__
-        // if (device) predictions = network_predict(net, X);
-        // else predictions = network_predict_cpu(net, X);
-
+        // __GPU-Inference__ (GPU)
         pthread_mutex_lock(&mutex_gpu);
-
         while(data.thread_id != current_thread) {
-            pthread_cond_wait(&cond, &mutex_gpu);
+            pthread_cond_wait(&cond, &mutex_gpu); // thread_id 순서대로
         }
-
         if (net.gpu_index != cuda_get_device())
             cuda_set_device(net.gpu_index);
         int size = get_network_input_size(net) * net.batch;
@@ -167,8 +131,6 @@ static void threadFunc(thread_data_t data)
         state.truth = 0;
         state.train = 0;
         state.delta = 0;
-
-        // GPU Inference
         cuda_push_array(state.input, net.input_pinned_cpu, size);
         state.workspace = net.workspace;
         for(j = 0; j < gLayer; ++j){
@@ -177,33 +139,26 @@ static void threadFunc(thread_data_t data)
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
-
             l.forward_gpu(l, state);
-
             if (skipped_layers[j] == 1){
                 // printf("skip layer : %d,  \n", j);
                 cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
             }
-
             state.input = l.output_gpu;
-
         }
-
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         state.input = l.output;
-
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-
         if (data.thread_id == data.num_thread) {
             current_thread = 1;
         } else {
-            current_thread++;
+            current_thread++; // thread_id 순서대로
         }
-
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex_gpu);
 
-        // CPU Inference
+
+        // CPU Inference (Post-GPU 1)
         state.workspace = net.workspace_cpu;
         gpu_yolo = 0;
         for(j = gLayer; j < net.n; ++j){
@@ -215,13 +170,13 @@ static void threadFunc(thread_data_t data)
             l.forward(l, state);
             state.input = l.output;
         }
-
         if (gLayer == net.n) predictions = get_network_output_gpu(net);
         else predictions = get_network_output(net, 0);
         reset_wait_stream_events();
         //cuda_free(state.input);   // will be freed in the free_network()
 
-        // __Postprecess__
+
+        // __Postprecess__ (Post-GPU 2)
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
             if (nms) {
@@ -261,11 +216,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
-    pthread_t threads[MAXCORES - 1];
     int rc;
     int i;
-
-    thread_data_t data[MAXCORES - 1];
+    pthread_t threads[num_thread];
+    thread_data_t data[num_thread];
 
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
 
@@ -290,6 +244,17 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
             printf("Error: Unable to create thread, %d\n", rc);
             exit(-1);
         }
+
+        // __CPU AFFINITY SETTING__
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(i + 1, &cpuset); // 코어 할당 (1부터 시작, 0은 GPU 스레드용)
+        
+        int ret = pthread_setaffinity_np(threads[i], sizeof(cpuset), &cpuset);
+        if (ret != 0) {
+            fprintf(stderr, "Worker thread: pthread_setaffinity_np() failed\n");
+            exit(0);
+        } 
     }
 
     for (i = 0; i < num_thread; i++) {
