@@ -54,10 +54,12 @@ else
     exit 1
 fi
 
+./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $layer_num -num_exp 2
+
 # GPU-accelerated with optimal_core
-for var in $(seq 1 $layer_num)
-do
-    sleep 3s
-    ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $var -num_exp 20
-    sleep 3s
-done
+# for var in $(seq 1 $layer_num)
+# do
+#     sleep 3s
+#     ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -glayer $var -num_exp 1
+#     sleep 3s
+# done
