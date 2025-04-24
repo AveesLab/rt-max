@@ -23,7 +23,7 @@
 #endif
 #endif
 
-// pthread_barrier_t barrier;
+pthread_barrier_t barrier;
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 
 int skip_layers[1000][10] = {0};
@@ -133,11 +133,11 @@ static void threadFunc(thread_data_t data)
 
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
+    printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 
-    // pthread_barrier_wait(&barrier);
+    pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
-        printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
 
         // __Preprocess__
         im = load_image(input, 0, 0, net.c);
@@ -236,7 +236,7 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < top; ++j){
                 index = indexes[j];
                 if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                // else printf("%d thread %s: %f\n",data.thread_id, names[index], predictions[index]);
+                else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
             }
         }
 
@@ -268,6 +268,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     thread_data_t data[MAXCORES - 1];
 
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+
+    pthread_barrier_init(&barrier, NULL, num_thread);
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
@@ -296,6 +298,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
 
     // pthread_mutex_destroy(&mutex);
     // pthread_cond_destroy(&cond);
+    pthread_barrier_destroy(&barrier);
 
     return 0;
 
