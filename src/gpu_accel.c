@@ -23,10 +23,6 @@
 #endif
 #endif
 
-// GPU 레이어 범위 지정을 위한 전역 변수
-int Gstart = 0;    // GPU 작업 시작 레이어 인덱스
-int Gend = 200;    // GPU 작업 종료 레이어 인덱스
-
 // 시간 측정 함수
 double current_time_in_ms() {
     struct timespec ts;
@@ -60,6 +56,10 @@ typedef struct gpu_task_t {
     int completed;             // 완료 여부 플래그
     float *output;             // 출력 데이터가 저장될 위치
     
+    // GPU 작업 범위 설정
+    int Gstart;                // GPU 작업 시작 레이어 인덱스
+    int Gend;                  // GPU 작업 종료 레이어 인덱스
+    
     // 시간 측정을 위한 필드
     double request_time;       // 요청 시간
     double worker_start_time;  // 워커 작업 시작 시간
@@ -79,6 +79,8 @@ typedef struct gpu_task_t {
 // 로그 저장용 구조체
 typedef struct gpu_log_t {
     int thread_id;
+    int Gstart;                // GPU 시작 레이어
+    int Gend;                  // GPU 종료 레이어
     double request_time;
     double push_start_time;
     double push_end_time;
@@ -90,6 +92,8 @@ typedef struct gpu_log_t {
 
 typedef struct worker_log_t {
     int thread_id;
+    int Gstart;                // GPU 시작 레이어
+    int Gend;                  // GPU 종료 레이어
     double worker_start_time;
     double worker_request_time;
     double worker_receive_time;
@@ -121,6 +125,8 @@ void save_gpu_log(gpu_task_t task) {
     pthread_mutex_lock(&log_mutex);
     if (gpu_log_count < MAX_TASKS) {
         gpu_logs[gpu_log_count].thread_id = task.thread_id;
+        gpu_logs[gpu_log_count].Gstart = task.Gstart;
+        gpu_logs[gpu_log_count].Gend = task.Gend;
         gpu_logs[gpu_log_count].request_time = task.request_time;
         gpu_logs[gpu_log_count].push_start_time = task.push_start_time;
         gpu_logs[gpu_log_count].push_end_time = task.push_end_time;
@@ -164,15 +170,17 @@ void write_logs_to_files() {
     // GPU 로그 정렬 및 파일 작성
     qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
     fp_gpu = fopen("gpu_task_log.csv", "w");
-    fprintf(fp_gpu, "thread_id,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,push_delay,compute_delay,pull_delay,total_delay\n");
+    fprintf(fp_gpu, "thread_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,push_delay,compute_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
         double push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
         double compute_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
         double pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
         double total_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
         
-        fprintf(fp_gpu, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
-                gpu_logs[i].thread_id, 
+        fprintf(fp_gpu, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+                gpu_logs[i].thread_id,
+                gpu_logs[i].Gstart,
+                gpu_logs[i].Gend,
                 gpu_logs[i].request_time, 
                 gpu_logs[i].push_start_time, 
                 gpu_logs[i].push_end_time,
@@ -190,15 +198,17 @@ void write_logs_to_files() {
     // 워커 로그 정렬 및 파일 작성
     qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
     fp_worker = fopen("worker_task_log.csv", "w");
-    fprintf(fp_worker, "thread_id,worker_start_time,worker_request_time,worker_receive_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
+    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_request_time,worker_receive_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
     for (int i = 0; i < worker_log_count; i++) {
         double preprocessing_time = worker_logs[i].worker_request_time - worker_logs[i].worker_start_time;
         double postprocessing_time = worker_logs[i].worker_end_time - worker_logs[i].worker_receive_time;
         double total_time = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
         double total_gpu_time = worker_logs[i].push_time + worker_logs[i].compute_time + worker_logs[i].pull_time;
         
-        fprintf(fp_worker, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
-                worker_logs[i].thread_id, 
+        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+                worker_logs[i].thread_id,
+                worker_logs[i].Gstart,
+                worker_logs[i].Gend,
                 worker_logs[i].worker_start_time, 
                 worker_logs[i].worker_request_time, 
                 worker_logs[i].worker_receive_time, 
@@ -257,7 +267,8 @@ void* gpu_dedicated_thread(void* arg) {
         gpu_task_head++;
         pthread_mutex_unlock(&gpu_queue_mutex);
         
-        printf("GPU Thread: Processing task for worker %d\n", current_task.thread_id);
+        printf("GPU Thread: Processing task for worker %d (layers %d-%d)\n", 
+               current_task.thread_id, current_task.Gstart, current_task.Gend);
         
         // H2D 복사 시작 시간 기록
         current_task.push_start_time = current_time_in_ms();
@@ -288,7 +299,7 @@ void* gpu_dedicated_thread(void* arg) {
         state.workspace = current_task.net.workspace;
         
         // Gstart부터 Gend까지의 레이어 실행
-        for(int j = Gstart; j < Gend; ++j){
+        for(int j = current_task.Gstart; j < current_task.Gend; ++j){
             state.index = j;
             layer l = current_task.net.layers[j];
             if(l.delta_gpu && state.train){
@@ -307,13 +318,15 @@ void* gpu_dedicated_thread(void* arg) {
         current_task.pull_start_time = current_time_in_ms();
         
         // 최종 레이어 결과만 가져오기
-        layer final_layer = current_task.net.layers[Gend-1];
+        layer final_layer = current_task.net.layers[current_task.Gend-1];
         cuda_pull_array(final_layer.output_gpu, final_layer.output, final_layer.outputs * final_layer.batch);
         
         // skipped_layers 처리 (필요한 경우에만)
-        for(int i = Gend; i < current_task.net.n; i++) {
+        for(int i = current_task.Gend; i < current_task.net.n; i++) {
             for(int j = 0; j < 10; j++) {
-                if((skip_layers[i][j] >= Gstart) && (skip_layers[i][j] < Gend) && (skip_layers[i][j] != 0)) {
+                if((skip_layers[i][j] >= current_task.Gstart) && 
+                   (skip_layers[i][j] < current_task.Gend) && 
+                   (skip_layers[i][j] != 0)) {
                     int layer_idx = skip_layers[i][j];
                     layer skip_layer = current_task.net.layers[layer_idx];
                     cuda_pull_array(skip_layer.output_gpu, skip_layer.output, skip_layer.outputs * skip_layer.batch);
@@ -343,6 +356,10 @@ void* gpu_dedicated_thread(void* arg) {
 // 워커 스레드 함수 수정
 static void threadFunc(thread_data_t data)
 {
+    // 각 워커별 GPU 사용 범위 설정
+    int Gstart = 0;    // GPU 작업 시작 레이어 인덱스
+    int Gend = 306;    // GPU 작업 종료 레이어 인덱스
+    
     // __Worker-thread-initialization__
     pthread_mutex_lock(&mutex_init);
     // GPU SETUP - 초기화만 수행, 실제 GPU 작업은 GPU 스레드가 담당
@@ -390,7 +407,8 @@ static void threadFunc(thread_data_t data)
     pthread_mutex_unlock(&mutex_init);
 
     // __Chekc-worker-thread-initialization__
-    printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
+    printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", 
+           data.thread_id, sched_getcpu(), Gstart, Gend);
     pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
@@ -446,6 +464,10 @@ static void threadFunc(thread_data_t data)
         gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
         gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
         
+        // GPU 작업 범위 설정
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gstart = Gstart;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gend = Gend;
+        
         // 시간 정보 설정
         gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
         gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
@@ -458,7 +480,8 @@ static void threadFunc(thread_data_t data)
         pthread_cond_signal(&gpu_queue_cond);
         pthread_mutex_unlock(&gpu_queue_mutex);
         
-        printf("Worker %d: Requested GPU task %d\n", data.thread_id, task_id);
+        printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", 
+               data.thread_id, task_id, Gstart, Gend);
         
         // GPU 작업이 완료될 때까지 대기
         pthread_mutex_lock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
@@ -526,6 +549,8 @@ static void threadFunc(thread_data_t data)
         // 워커 로그 직접 저장 (로컬 변수 사용)
         worker_log_t worker_log;
         worker_log.thread_id = data.thread_id;
+        worker_log.Gstart = Gstart;
+        worker_log.Gend = Gend;
         worker_log.worker_start_time = worker_start_time;
         worker_log.worker_request_time = worker_request_time;
         worker_log.worker_receive_time = worker_receive_time;
@@ -541,6 +566,7 @@ static void threadFunc(thread_data_t data)
         free_image(resized);
         free_image(cropped);
     }
+
 
     // free memory
     free_detections(dets, nboxes);
