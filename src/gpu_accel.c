@@ -58,20 +58,30 @@ typedef struct gpu_task_t {
     
     // 시간 측정을 위한 필드
     double request_time;       // 요청 시간
-    double gpu_start_time;     // GPU 작업 시작 시간
-    double gpu_end_time;       // GPU 작업 종료 시간
     double worker_start_time;  // 워커 작업 시작 시간
     double worker_request_time;// 워커가 GPU에 요청한 시간
     double worker_receive_time;// 워커가 GPU 결과를 받은 시간
     double worker_end_time;    // 워커 작업 종료 시간
+    
+    // 추가 시간 측정을 위한 필드
+    double push_start_time;    // GPU 메모리로 복사 시작 시간
+    double push_end_time;      // GPU 메모리로 복사 완료 시간
+    double gpu_start_time;     // GPU 작업 시작 시간
+    double gpu_end_time;       // GPU 작업 종료 시간
+    double pull_start_time;    // GPU 메모리에서 복사 시작 시간
+    double pull_end_time;      // GPU 메모리에서 복사 완료 시간
 } gpu_task_t;
 
 // 로그 저장용 구조체
 typedef struct gpu_log_t {
     int thread_id;
     double request_time;
+    double push_start_time;
+    double push_end_time;
     double gpu_start_time;
     double gpu_end_time;
+    double pull_start_time;
+    double pull_end_time;
 } gpu_log_t;
 
 typedef struct worker_log_t {
@@ -80,6 +90,10 @@ typedef struct worker_log_t {
     double worker_request_time;
     double worker_receive_time;
     double worker_end_time;
+    // 추가된 전송 시간 (워커 로그에도 GPU 작업 관련 시간 추가)
+    double push_time;          // GPU 메모리로 전송 시간
+    double compute_time;       // GPU 계산 시간
+    double pull_time;          // GPU 메모리에서 전송 시간
 } worker_log_t;
 
 // 로그 저장용 배열
@@ -104,8 +118,12 @@ void save_gpu_log(gpu_task_t task) {
     if (gpu_log_count < MAX_TASKS) {
         gpu_logs[gpu_log_count].thread_id = task.thread_id;
         gpu_logs[gpu_log_count].request_time = task.request_time;
+        gpu_logs[gpu_log_count].push_start_time = task.push_start_time;
+        gpu_logs[gpu_log_count].push_end_time = task.push_end_time;
         gpu_logs[gpu_log_count].gpu_start_time = task.gpu_start_time;
         gpu_logs[gpu_log_count].gpu_end_time = task.gpu_end_time;
+        gpu_logs[gpu_log_count].pull_start_time = task.pull_start_time;
+        gpu_logs[gpu_log_count].pull_end_time = task.pull_end_time;
         gpu_log_count++;
     }
     pthread_mutex_unlock(&log_mutex);
@@ -142,27 +160,52 @@ void write_logs_to_files() {
     // GPU 로그 정렬 및 파일 작성
     qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
     fp_gpu = fopen("gpu_task_log.csv", "w");
-    fprintf(fp_gpu, "thread_id,request_time,gpu_start_time,gpu_end_time\n");
+    fprintf(fp_gpu, "thread_id,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,push_delay,compute_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
-        fprintf(fp_gpu, "%d,%.2f,%.2f,%.2f\n", 
+        double push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
+        double compute_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
+        double pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
+        double total_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
+        
+        fprintf(fp_gpu, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 gpu_logs[i].thread_id, 
                 gpu_logs[i].request_time, 
+                gpu_logs[i].push_start_time, 
+                gpu_logs[i].push_end_time,
                 gpu_logs[i].gpu_start_time, 
-                gpu_logs[i].gpu_end_time);
+                gpu_logs[i].gpu_end_time,
+                gpu_logs[i].pull_start_time,
+                gpu_logs[i].pull_end_time,
+                push_delay,
+                compute_delay,
+                pull_delay,
+                total_delay);
     }
     fclose(fp_gpu);
     
     // 워커 로그 정렬 및 파일 작성
     qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
     fp_worker = fopen("worker_task_log.csv", "w");
-    fprintf(fp_worker, "thread_id,worker_start_time,worker_request_time,worker_receive_time,worker_end_time\n");
+    fprintf(fp_worker, "thread_id,worker_start_time,worker_request_time,worker_receive_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
     for (int i = 0; i < worker_log_count; i++) {
-        fprintf(fp_worker, "%d,%.2f,%.2f,%.2f,%.2f\n", 
+        double preprocessing_time = worker_logs[i].worker_request_time - worker_logs[i].worker_start_time;
+        double postprocessing_time = worker_logs[i].worker_end_time - worker_logs[i].worker_receive_time;
+        double total_time = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
+        double total_gpu_time = worker_logs[i].push_time + worker_logs[i].compute_time + worker_logs[i].pull_time;
+        
+        fprintf(fp_worker, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id, 
                 worker_logs[i].worker_start_time, 
                 worker_logs[i].worker_request_time, 
                 worker_logs[i].worker_receive_time, 
-                worker_logs[i].worker_end_time);
+                worker_logs[i].worker_end_time,
+                worker_logs[i].push_time,
+                worker_logs[i].compute_time,
+                worker_logs[i].pull_time,
+                total_gpu_time,
+                preprocessing_time,
+                postprocessing_time,
+                total_time);
     }
     fclose(fp_worker);
 }
@@ -212,10 +255,10 @@ void* gpu_dedicated_thread(void* arg) {
         
         printf("GPU Thread: Processing task for worker %d\n", current_task.thread_id);
         
-        // GPU 작업 시작 시간 기록
-        current_task.gpu_start_time = current_time_in_ms();
+        // H2D 복사 시작 시간 기록
+        current_task.push_start_time = current_time_in_ms();
         
-        // 실제 GPU 작업 수행
+        // 실제 GPU 작업 수행 준비
         if (current_task.net.gpu_index != cuda_get_device())
             cuda_set_device(current_task.net.gpu_index);
         
@@ -229,6 +272,15 @@ void* gpu_dedicated_thread(void* arg) {
         
         // 입력 데이터를 GPU로 복사
         cuda_push_array(state.input, current_task.input, current_task.size);
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        
+        // H2D 복사 종료 시간 기록
+        current_task.push_end_time = current_time_in_ms();
+        
+        // GPU 작업 시작 시간 기록
+        current_task.gpu_start_time = current_time_in_ms();
+        
+        // GPU 작업 시작
         state.workspace = current_task.net.workspace;
         
         // gLayer까지의 레이어 실행
@@ -239,12 +291,18 @@ void* gpu_dedicated_thread(void* arg) {
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
             l.forward_gpu(l, state);
-            
-            // 중간 레이어 결과는 가져오지 않고 마지막에 한 번에 처리
             state.input = l.output_gpu;
         }
         
-        // 최종 레이어 결과만 가져오기 - 필요한 모든 중간 결과도 함께 처리
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        
+        // GPU 작업 종료 시간 기록
+        current_task.gpu_end_time = current_time_in_ms();
+        
+        // D2H 복사 시작 시간 기록
+        current_task.pull_start_time = current_time_in_ms();
+        
+        // 최종 레이어 결과만 가져오기
         layer final_layer = current_task.net.layers[gLayer-1];
         cuda_pull_array(final_layer.output_gpu, final_layer.output, final_layer.outputs * final_layer.batch);
         
@@ -261,8 +319,8 @@ void* gpu_dedicated_thread(void* arg) {
         
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
-        // GPU 작업 종료 시간 기록
-        current_task.gpu_end_time = current_time_in_ms();
+        // D2H 복사 종료 시간 기록
+        current_task.pull_end_time = current_time_in_ms();
         
         // GPU 작업 로그 저장
         save_gpu_log(current_task);
@@ -382,6 +440,12 @@ static void threadFunc(thread_data_t data)
         // GPU 결과 수신 시간 기록
         double worker_receive_time = current_time_in_ms();
         
+        // GPU 작업 시간 정보 가져오기
+        gpu_task_t completed_task = gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE];
+        double push_time = completed_task.push_end_time - completed_task.push_start_time;
+        double compute_time = completed_task.gpu_end_time - completed_task.gpu_start_time;
+        double pull_time = completed_task.pull_end_time - completed_task.pull_start_time;
+        
         pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
         
         printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
@@ -437,6 +501,9 @@ static void threadFunc(thread_data_t data)
         worker_log.worker_request_time = worker_request_time;
         worker_log.worker_receive_time = worker_receive_time;
         worker_log.worker_end_time = worker_end_time;
+        worker_log.push_time = push_time;
+        worker_log.compute_time = compute_time;
+        worker_log.pull_time = pull_time;
         
         save_worker_log(worker_log);
 
