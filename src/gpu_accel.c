@@ -241,6 +241,9 @@ typedef struct thread_data_t{
     int thread_id;
     int num_thread;
     bool isTest;
+    // GPU 작업 범위 설정
+    int Gstart;                // GPU 작업 시작 레이어 인덱스
+    int Gend;                  // GPU 작업 종료 레이어 인덱스
 } thread_data_t;
 
 // GPU 전용 스레드 함수
@@ -357,8 +360,8 @@ void* gpu_dedicated_thread(void* arg) {
 static void threadFunc(thread_data_t data)
 {
     // 각 워커별 GPU 사용 범위 설정
-    int Gstart = 0;    // GPU 작업 시작 레이어 인덱스
-    int Gend = 306;    // GPU 작업 종료 레이어 인덱스
+    int Gstart = data.Gstart;    // GPU 작업 시작 레이어 인덱스
+    int Gend = data.Gend;    // GPU 작업 종료 레이어 인덱스
     
     // __Worker-thread-initialization__
     pthread_mutex_lock(&mutex_init);
@@ -586,7 +589,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     pthread_t threads[num_thread];
     thread_data_t data[num_thread];
 
-    printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+    printf("\n\nGPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
 
     // 로그 카운터 초기화
     gpu_log_count = 0;
@@ -634,6 +637,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
+        data[i].Gstart = Gstart;
+        data[i].Gend = Gend;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);

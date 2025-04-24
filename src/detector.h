@@ -40,6 +40,8 @@ extern int num_thread;
 extern int num_process;
 extern int gLayer;
 extern int rLayer;
+extern int Gstart;
+extern int Gend;
 extern int skip_layers[1000][10];
 
 #ifdef __cplusplus
