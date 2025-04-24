@@ -23,6 +23,18 @@
 #endif
 #endif
 
+// 시간 측정 함수
+double current_time_in_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+}
+
+// 로그 파일 핸들
+FILE *fp_gpu;
+FILE *fp_worker;
+pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 // 기존 동기화 객체
 pthread_barrier_t barrier;
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
@@ -43,6 +55,15 @@ typedef struct gpu_task_t {
     int thread_id;             // 요청한 스레드 ID
     int completed;             // 완료 여부 플래그
     float *output;             // 출력 데이터가 저장될 위치
+    
+    // 시간 측정을 위한 필드
+    double request_time;       // 요청 시간
+    double gpu_start_time;     // GPU 작업 시작 시간
+    double gpu_end_time;       // GPU 작업 종료 시간
+    double worker_start_time;  // 워커 작업 시작 시간
+    double worker_request_time;// 워커가 GPU에 요청한 시간
+    double worker_receive_time;// 워커가 GPU 결과를 받은 시간
+    double worker_end_time;    // 워커 작업 종료 시간
 } gpu_task_t;
 
 gpu_task_t gpu_task_queue[MAX_GPU_QUEUE_SIZE];
@@ -53,6 +74,28 @@ pthread_cond_t gpu_queue_cond = PTHREAD_COND_INITIALIZER;
 // 결과 동기화를 위한 뮤텍스와 조건 변수
 pthread_mutex_t result_mutex[MAX_GPU_QUEUE_SIZE];
 pthread_cond_t result_cond[MAX_GPU_QUEUE_SIZE];
+
+// 로그 함수
+void log_gpu_task(gpu_task_t task) {
+    pthread_mutex_lock(&file_mutex);
+    fprintf(fp_gpu, "%d,%.2f,%.2f,%.2f\n", 
+            task.thread_id, 
+            task.request_time, 
+            task.gpu_start_time, 
+            task.gpu_end_time);
+    pthread_mutex_unlock(&file_mutex);
+}
+
+void log_worker_task(gpu_task_t task) {
+    pthread_mutex_lock(&file_mutex);
+    fprintf(fp_worker, "%d,%.2f,%.2f,%.2f,%.2f\n", 
+            task.thread_id, 
+            task.worker_start_time, 
+            task.worker_request_time, 
+            task.worker_receive_time, 
+            task.worker_end_time);
+    pthread_mutex_unlock(&file_mutex);
+}
 
 // 스레드 데이터 구조체
 typedef struct thread_data_t{
@@ -99,6 +142,9 @@ void* gpu_dedicated_thread(void* arg) {
         
         printf("GPU Thread: Processing task for worker %d\n", current_task.thread_id);
         
+        // GPU 작업 시작 시간 기록
+        current_task.gpu_start_time = current_time_in_ms();
+        
         // 실제 GPU 작업 수행
         if (current_task.net.gpu_index != cuda_get_device())
             cuda_set_device(current_task.net.gpu_index);
@@ -142,12 +188,18 @@ void* gpu_dedicated_thread(void* arg) {
         cuda_pull_array(l.output_gpu, l.output, l.outputs * l.batch);
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
+        // GPU 작업 종료 시간 기록
+        current_task.gpu_end_time = current_time_in_ms();
+        
+        // GPU 작업 로그 기록
+        log_gpu_task(current_task);
+        
         // 작업 완료 표시 및 워커 스레드에 알림
-        pthread_mutex_lock(&result_mutex[current_task.task_id]);
+        pthread_mutex_lock(&result_mutex[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
         current_task.completed = 1;
         gpu_task_queue[current_task.task_id % MAX_GPU_QUEUE_SIZE] = current_task;
-        pthread_cond_signal(&result_cond[current_task.task_id]);
-        pthread_mutex_unlock(&result_mutex[current_task.task_id]);
+        pthread_cond_signal(&result_cond[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
+        pthread_mutex_unlock(&result_mutex[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
     }
     
     return NULL;
@@ -207,6 +259,9 @@ static void threadFunc(thread_data_t data)
     pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
+        // 워커 작업 시작 시간 기록
+        double worker_start_time = current_time_in_ms();
+        
         // __Preprocess__ (Pre-GPU 1)
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
@@ -216,6 +271,9 @@ static void threadFunc(thread_data_t data)
         // GPU 작업 요청 준비
         int task_id;
         int size = get_network_input_size(net) * net.batch;
+        
+        // GPU 작업 요청 시간 기록
+        double worker_request_time = current_time_in_ms();
         
         // GPU 작업 큐에 작업 추가
         pthread_mutex_lock(&gpu_queue_mutex);
@@ -228,6 +286,11 @@ static void threadFunc(thread_data_t data)
         gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
         gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
         
+        // 시간 정보 설정
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
+        
         // 메모리 복사 (CPU -> GPU 스레드가 사용할 메모리)
         memcpy(net.input_pinned_cpu, X, size * sizeof(float));
         
@@ -238,11 +301,16 @@ static void threadFunc(thread_data_t data)
         printf("Worker %d: Requested GPU task %d\n", data.thread_id, task_id);
         
         // GPU 작업이 완료될 때까지 대기
-        pthread_mutex_lock(&result_mutex[task_id]);
+        pthread_mutex_lock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
         while (!gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed) {
-            pthread_cond_wait(&result_cond[task_id], &result_mutex[task_id]);
+            pthread_cond_wait(&result_cond[task_id % MAX_GPU_QUEUE_SIZE], &result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
         }
-        pthread_mutex_unlock(&result_mutex[task_id]);
+        
+        // GPU 결과 수신 시간 기록
+        double worker_receive_time = current_time_in_ms();
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_receive_time = worker_receive_time;
+        
+        pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
         
         printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
         
@@ -287,6 +355,13 @@ static void threadFunc(thread_data_t data)
             }
         }
 
+        // 워커 작업 종료 시간 기록
+        double worker_end_time = current_time_in_ms();
+        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_end_time = worker_end_time;
+        
+        // 워커 작업 로그 기록
+        log_worker_task(gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE]);
+
         // free memory
         free_image(im);
         free_image(resized);
@@ -312,6 +387,13 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     thread_data_t data[num_thread];
 
     printf("\n\nGPU-Accel with %d threads with %d gpu-layer\n", num_thread, gLayer);
+
+    // 로그 파일 초기화
+    fp_gpu = fopen("gpu_task_log.csv", "w");
+    fprintf(fp_gpu, "thread_id,request_time,gpu_start_time,gpu_end_time\n");
+
+    fp_worker = fopen("worker_task_log.csv", "w");
+    fprintf(fp_worker, "thread_id,worker_start_time,worker_request_time,worker_receive_time,worker_end_time\n");
 
     // 결과 동기화 객체 초기화
     for (i = 0; i < MAX_GPU_QUEUE_SIZE; i++) {
@@ -381,6 +463,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     // GPU 스레드 종료
     pthread_cancel(gpu_thread);
     pthread_join(gpu_thread, NULL);
+
+    // 로그 파일 닫기
+    fclose(fp_gpu);
+    fclose(fp_worker);
 
     // 동기화 객체 정리
     for (i = 0; i < MAX_GPU_QUEUE_SIZE; i++) {
