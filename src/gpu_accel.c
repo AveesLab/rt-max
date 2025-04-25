@@ -174,7 +174,7 @@ void write_logs_to_files(char *model_name) {
     qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
 
     char gpu_path[256];
-    sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/G%d/gpu_task_log_G%d_%d.csv", model_name, Gstart, Gstart, Gend);
+    sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, Gstart, Gstart, Gend);
     fp_gpu = fopen(gpu_path, "w");
     if (!fp_gpu) {
         perror("파일 열기 실패");
@@ -686,7 +686,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     pthread_t threads[num_thread];
     thread_data_t data[num_thread];
 
-    printf("\n\nGPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
+    printf("GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
 
     // 로그 카운터 초기화
     gpu_log_count = 0;
@@ -770,7 +770,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     // 로그 파일 작성
     write_logs_to_files(model_name);
     
-    printf("Logs written to files\n");
+    if (VISUAL) printf("Logs written to files\n");
 
     // 동기화 객체 정리
     for (i = 0; i < MAX_GPU_QUEUE_SIZE; i++) {

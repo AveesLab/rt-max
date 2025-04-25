@@ -69,15 +69,15 @@ else
     exit 1
 fi
 
-./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $layer_num -num_exp 20
+# ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $layer_num -num_exp 20
 
 # GPU-accelerated with optimal_core
-# for ((Gstart=0; Gstart<=layer_num; Gstart++))
-# do
-#     for ((Gend=Gstart+1; Gend<=layer_num; Gend++))
-#     do
-#         sleep 3s
-#         ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $Gend -num_exp 1
-#         sleep 3s
-#     done
-# done
+for ((Gstart=0; Gstart<=layer_num; Gstart++))
+do
+    for ((Gend=Gstart+1; Gend<=layer_num; Gend++))
+    do
+        sleep 3s
+        ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $Gend -num_exp 20
+        sleep 3s
+    done
+done

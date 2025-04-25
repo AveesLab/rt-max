@@ -476,7 +476,7 @@ int main(int argc, char **argv)
         CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
     }
 
-    show_cuda_cudnn_info();
+    // show_cuda_cudnn_info();
     cuda_debug_sync = find_arg(argc, argv, "-cuda_debug_sync");
 
 #ifdef CUDNN_HALF

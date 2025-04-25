@@ -81,9 +81,13 @@ for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet
 do
     get_model_info "$model"  # 모델에 맞는 layer_num 설정
     mkdir -p gpu-accel/$model/
-    for ((Gstart=0; Gstart<=layer_num; Gstart++))
+    
+    for ((num_worker=1; num_worker<=11; num_worker++))
     do
-        mkdir -p measure/gpu-accel/$model/gpu_task_log/G$Gstart/
-		mkdir -p measure/gpu-accel/$model/worker_task_log/G$Gstart/
+        for ((Gstart=0; Gstart<=layer_num; Gstart++))
+        do
+            mkdir -p measure/gpu-accel/$model/gpu_task_log/worker$num_worker/G$Gstart/
+            mkdir -p measure/gpu-accel/$model/worker_task_log/worker$num_worker/G$Gstart/
+        done
     done
 done
