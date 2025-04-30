@@ -24,7 +24,7 @@
 #endif
 
 #define START_IDX 5
-#define VISUAL 0
+#define VISUAL 1
 
 // 시간 측정 함수
 double current_time_in_ms() {
@@ -435,9 +435,10 @@ static void threadFunc(thread_data_t data)
         if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", data.thread_id, sched_getcpu(), Gstart, Gend);
     }
     pthread_barrier_wait(&barrier);
-
+    printf("1~ %d \n", data.thread_id);
     for (i = 0; i < num_exp; i++) {
         if (i == START_IDX) pthread_barrier_wait(&barrier);
+        printf("2~ %d \n", data.thread_id);
 
         // 워커 작업 시작 시간 기록
         double worker_start_time = current_time_in_ms();
@@ -447,6 +448,7 @@ static void threadFunc(thread_data_t data)
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
+        printf("3~ %d \n", data.thread_id);
         
         // GPU를 사용하는 경우와 사용하지 않는 경우를 구분
         if (Gstart == Gend) {
@@ -519,7 +521,7 @@ static void threadFunc(thread_data_t data)
             
         } else {
             // GPU를 사용하는 경우 (기존 로직)
-            
+            printf("4~ %d \n", data.thread_id);
             // 0부터 Gstart까지 CPU에서 처리 (Gstart가 0이 아닌 경우)
             float *cpu_input = X;
             network_state pre_state;
@@ -530,7 +532,7 @@ static void threadFunc(thread_data_t data)
             pre_state.train = 0;
             pre_state.delta = 0;
             pre_state.workspace = net.workspace_cpu;
-            
+            printf("5~ %d \n", data.thread_id);
             if (Gstart > 0) {
                 for(j = 0; j < Gstart; ++j){
                     pre_state.index = j;
@@ -538,23 +540,25 @@ static void threadFunc(thread_data_t data)
                     if(l.delta && pre_state.train && l.train){
                         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
+                    printf("6~ %d \n", data.thread_id);
                     l.forward(l, pre_state);
                     pre_state.input = l.output;
                 }
                 // Gstart 레이어의 입력이 될 데이터로 교체
                 X = pre_state.input;
-            }
+            }printf("7~ %d \n", data.thread_id);
 
             // GPU 작업 요청 준비
             int task_id;
             int size = net.layers[Gstart].inputs * net.batch;  // Gstart 레이어 입력 크기
-            
+            printf("8~ %d \n", data.thread_id);
             // GPU 작업 요청 시간 기록
             double worker_request_time = current_time_in_ms();
             
             // GPU 작업 큐에 작업 추가
             pthread_mutex_lock(&gpu_queue_mutex);
             task_id = gpu_task_tail;
+            printf("9~ %d \n", data.thread_id);
             
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = X;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
@@ -571,13 +575,17 @@ static void threadFunc(thread_data_t data)
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
+            printf("10~ %d \n", data.thread_id);
             
             // 메모리 복사 (CPU -> GPU 스레드가 사용할 메모리)
             memcpy(net.input_pinned_cpu, X, size * sizeof(float));
-            
+            printf("11~ %d \n", data.thread_id);
             gpu_task_tail++;
             pthread_cond_signal(&gpu_queue_cond);
+            printf("12~ %d \n", data.thread_id);
             pthread_mutex_unlock(&gpu_queue_mutex);
+            printf("13~ %d \n", data.thread_id);
+            
             
             if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
             
