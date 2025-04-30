@@ -181,12 +181,10 @@ int compare_worker_logs(const void *a, const void *b) {
 }
 
 // 로그 파일 작성 함수
-void write_logs_to_files(char *model_name) {
+void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
     // GPU 로그 정렬 및 파일 작성
     qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
 
-    char gpu_path[256];
-    sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
     fp_gpu = fopen(gpu_path, "w");
     if (!fp_gpu) {
         perror("파일 열기 실패");
@@ -221,8 +219,6 @@ void write_logs_to_files(char *model_name) {
     // 워커 로그 정렬 및 파일 작성
     qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
 
-    char worker_path[256];
-    sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
     fp_worker = fopen(worker_path, "w");
     if (!fp_worker) {
         perror("파일 열기 실패");
@@ -850,8 +846,14 @@ static void threadFunc(thread_data_t data)
             strncpy(model_name, data.cfgfile + 6, (strlen(data.cfgfile)-10));
             model_name[strlen(data.cfgfile)-10] = '\0';
 
+            char gpu_path[256];
+            sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+
+            char worker_path[256];
+            sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+
             // 로그 파일 작성
-            write_logs_to_files(model_name);
+            write_logs_to_files(model_name, gpu_path, worker_path);
             
             // 메모리 해제
             free(model_name);
@@ -859,6 +861,7 @@ static void threadFunc(thread_data_t data)
         }
         pthread_mutex_unlock(&log_write_mutex);
     }
+    
     // free memory
     free_detections(dets, nboxes);
     free_ptrs((void**)names, net.layers[net.n - 1].classes);
