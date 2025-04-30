@@ -821,9 +821,6 @@ static void threadFunc(thread_data_t data)
                         }
                     }
 
-                    // 워커 작업 종료 시간 기록
-                    double worker_end_time = current_time_in_ms();
-                    
                     // 워커 로그 직접 저장 (로컬 변수 사용)
                     worker_log_t worker_log;
                     worker_log.thread_id = data.thread_id;
@@ -832,11 +829,14 @@ static void threadFunc(thread_data_t data)
                     worker_log.worker_start_time = worker_start_time;
                     worker_log.worker_request_time = worker_request_time;
                     worker_log.worker_receive_time = worker_receive_time;
-                    worker_log.worker_end_time = worker_end_time;
                     worker_log.push_time = push_time;
                     worker_log.compute_time = compute_time;
                     worker_log.pull_time = pull_time;
                     
+                    // 워커 작업 종료 시간 기록
+                    double worker_end_time = current_time_in_ms();
+                    worker_log.worker_end_time = worker_end_time;
+
                     save_worker_log(worker_log);
                 }
 
