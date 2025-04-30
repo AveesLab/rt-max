@@ -78,11 +78,11 @@ typedef struct gpu_task_t {
     double pull_start_time;    // GPU 메모리에서 복사 시작 시간
     double pull_end_time;      // GPU 메모리에서 복사 완료 시간
 
-    // 스킵 커넥션을 위한 필드 추가
-    int skip_count;                  // 스킵 커넥션 레이어 개수
-    int skip_indices[10];            // 스킵 커넥션 레이어 인덱스
-    float *skip_data[10];            // 스킵 커넥션 데이터 주소
-
+    // Skip connection을 위한 추가 필드
+    int skip_count;                 // skip connection 개수
+    int skip_layers_idx[10];        // skip connection 레이어 인덱스
+    float *skip_layers_data[10];    // 각 skip connection 레이어의 데이터 포인터
+    int skip_layers_size[10];       // 각 skip connection 레이어의 데이터 크기
 } gpu_task_t;
 
 // 로그 저장용 구조체
@@ -274,6 +274,7 @@ typedef struct thread_data_t{
 // GPU 전용 스레드 함수
 void* gpu_dedicated_thread(void* arg) {
     int core_id = sched_getcpu();
+    int print_count = 0;
     if (VISUAL) printf("GPU-dedicated thread bound to core %d\n", core_id);
     
     // GPU 초기화 - 한 번만 실행
@@ -368,9 +369,32 @@ void* gpu_dedicated_thread(void* arg) {
         }
              CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
+        // Skip connection 데이터도 함께 GPU로 복사
+        if (current_task.Gstart > 0) {
+            for (int i = 0; i < current_task.skip_count; i++) {
+                int layer_idx = current_task.skip_layers_idx[i];
+                layer skip_layer = current_task.net.layers[layer_idx];
+                
+                // CPU 데이터를 GPU로 복사
+                if (current_task.skip_layers_size[i] * sizeof(float) <= MAX_BUFFER_SIZE * sizeof(float)) {
+                    memcpy(pinned_buffer, current_task.skip_layers_data[i], 
+                        current_task.skip_layers_size[i] * sizeof(float));
+                    
+                    // Pinned 메모리에서 GPU로 복사
+                    cuda_push_array(skip_layer.output_gpu, pinned_buffer, current_task.skip_layers_size[i]);
+                    
+                    if (VISUAL) printf("GPU Thread: Copied skip connection data for layer %d\n", layer_idx);
+                } else {
+                    printf("ERROR: Buffer too small for skip connection data at layer %d\n", layer_idx);
+                }
+            }
+        }
+
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+
         // H2D 복사 종료 시간 기록
         current_task.push_end_time = current_time_in_ms();
-        
+                
         // GPU 작업 시작 시간 기록
         current_task.gpu_start_time = current_time_in_ms();
         
@@ -381,12 +405,66 @@ void* gpu_dedicated_thread(void* arg) {
         for(int j = current_task.Gstart; j < current_task.Gend; ++j){
             state.index = j;
             layer l = current_task.net.layers[j];
+    
+            if (j< 10){
+                // GPU 레이어 입력값 10개 출력을 위해 임시 버퍼 사용
+                float temp_input[10];
+                print_count = (l.inputs < 10) ? l.inputs : 10;
+                cuda_pull_array_async(state.input, temp_input, print_count);
+                cudaStreamSynchronize(get_cuda_stream());
+                
+                printf("Layer %d (GPU) input (first 10 values): ", j);
+                for(int k = 0; k < print_count; k++) {
+                    printf("%.6f ", temp_input[k]);
+                }
+                printf("\n");
+                // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
+                if (l.weights_gpu != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
+                    float temp_weights[10];
+                    print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
+                    cuda_pull_array_async(l.weights_gpu, temp_weights, print_count);
+                    cudaStreamSynchronize(get_cuda_stream());
+                    
+                    printf("Layer %d (GPU) weights (first 10 values): ", j);
+                    for(int k = 0; k < print_count; k++) {
+                        printf("%.6f ", temp_weights[k]);
+                    }
+                    printf("\n");
+                }
+                
+                if (l.biases_gpu != NULL && l.n > 0) {
+                    float temp_biases[10];
+                    print_count = (l.n < 10) ? l.n : 10;
+                    cuda_pull_array_async(l.biases_gpu, temp_biases, print_count);
+                    cudaStreamSynchronize(get_cuda_stream());
+                    
+                    printf("Layer %d (GPU) biases (first 10 values): ", j);
+                    for(int k = 0; k < print_count; k++) {
+                        printf("%.6f ", temp_biases[k]);
+                    }
+                    printf("\n");
+                }
+            }
+    
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
             l.forward_gpu(l, state);
-            printf("layer %d", j);
+            if (j< 10){
+                // GPU 레이어 출력값 10개 출력을 위해 임시 버퍼 사용
+                float temp_output[10];
+                print_count = (l.outputs < 10) ? l.outputs : 10;
+                cuda_pull_array_async(l.output_gpu, temp_output, print_count);
+                cudaStreamSynchronize(get_cuda_stream());
+                
+                printf("Layer %d (GPU) output (first 10 values): ", j);
+                for(int k = 0; k < print_count; k++) {
+                    printf("%.6f ", temp_output[k]);
+                }
+                printf("\n");
+            }
             state.input = l.output_gpu;
+
         }
         
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
@@ -407,9 +485,7 @@ void* gpu_dedicated_thread(void* arg) {
                 if((skip_layers[i][j] >= current_task.Gstart) && 
                    (skip_layers[i][j] < current_task.Gend) && 
                    (skip_layers[i][j] != 0)) {
-                    
                     int layer_idx = skip_layers[i][j];
-                    printf("skip_count: %d \n", layer_idx);
                     layer skip_layer = current_task.net.layers[layer_idx];
                     cuda_pull_array(skip_layer.output_gpu, skip_layer.output, skip_layer.outputs * skip_layer.batch);
                 }
@@ -442,7 +518,7 @@ static void threadFunc(thread_data_t data)
     // 각 워커별 GPU 사용 범위 설정
     int Gstart = data.Gstart;    // GPU 작업 시작 레이어 인덱스
     int Gend = data.Gend;    // GPU 작업 종료 레이어 인덱스
-    
+    int print_count = 0;
     // __Worker-thread-initialization__
     pthread_mutex_lock(&mutex_init);
     // GPU SETUP - 초기화만 수행, 실제 GPU 작업은 GPU 스레드가 담당
@@ -481,7 +557,6 @@ static void threadFunc(thread_data_t data)
         for(j = 0; j < 10; j++) {
             if((skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
-                if (data.thread_id == 1 )printf("skip_count: %d layer needs %d layer \n", i, skip_layers[i][j]);
             }
         }
     }
@@ -527,11 +602,46 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < net.n; ++j){
                 state.index = j;
                 l = net.layers[j];
+                if (j< 10) {
+                    // 각 레이어 입력값 10개 출력
+                    printf("Layer %d (CPU) input (first 10 values): ", j);
+                    print_count = (l.inputs < 10) ? l.inputs : 10;  // 10개 또는 입력 개수 중 작은 값
+                    for(int k = 0; k < print_count; k++) {
+                        printf("%.6f ", state.input[k]);
+                    }
+                    printf("\n");
+                    // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
+                    if (l.weights != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
+                        printf("Layer %d (CPU) weights (first 10 values): ", j);
+                        print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
+                        for(int k = 0; k < print_count; k++) {
+                            printf("%.6f ", l.weights[k]);
+                        }
+                        printf("\n");
+                    }
+                    
+                    if (l.biases != NULL && l.n > 0) {
+                        printf("Layer %d (CPU) biases (first 10 values): ", j);
+                        print_count = (l.n < 10) ? l.n : 10;
+                        for(int k = 0; k < print_count; k++) {
+                            printf("%.6f ", l.biases[k]);
+                        }
+                        printf("\n");
+                    }
+                }
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
                 l.forward(l, state);
-                printf("layer %d", j);
+                if (j< 10){
+                    // 각 레이어 출력값 10개 출력
+                    printf("Layer %d (CPU) output (first 10 values): ", j);
+                    print_count = (l.outputs < 10) ? l.outputs : 10;  // 10개 또는 출력 개수 중 작은 값
+                    for(int k = 0; k < print_count; k++) {
+                        printf("%.6f ", l.output[k]);
+                    }
+                    printf("\n");
+                }
                 state.input = l.output;
             }
             
@@ -612,11 +722,45 @@ static void threadFunc(thread_data_t data)
                 for(j = 0; j < Gstart; ++j){
                     pre_state.index = j;
                     l = net.layers[j];
+                    if (j< 10){
+                        printf("Layer %d (Pre-GPU) input (first 10 values): ", j);
+                        print_count = (l.inputs < 10) ? l.inputs : 10;
+                        for(int k = 0; k < print_count; k++) {
+                            printf("%.6f ", pre_state.input[k]);
+                        }
+                        printf("\n");
+                        // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
+                        if (l.weights != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
+                            printf("Layer %d (CPU) weights (first 10 values): ", j);
+                            print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
+                            for(int k = 0; k < print_count; k++) {
+                                printf("%.6f ", l.weights[k]);
+                            }
+                            printf("\n");
+                        }
+                        
+                        if (l.biases != NULL && l.n > 0) {
+                            printf("Layer %d (CPU) biases (first 10 values): ", j);
+                            print_count = (l.n < 10) ? l.n : 10;
+                            for(int k = 0; k < print_count; k++) {
+                                printf("%.6f ", l.biases[k]);
+                            }
+                            printf("\n");
+                        }
+                    }
                     if(l.delta && pre_state.train && l.train){
                         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
                     l.forward(l, pre_state);
-                    printf("layer %d", j);
+                    if (j< 10){
+                        // 각 레이어 출력값 10개 출력
+                        printf("Layer %d (Pre-GPU) output (first 10 values): ", j);
+                        print_count = (l.outputs < 10) ? l.outputs : 10;
+                        for(int k = 0; k < print_count; k++) {
+                            printf("%.6f ", l.output[k]);
+                        }
+                        printf("\n");
+                    }
                     pre_state.input = l.output;
                 }
                 
@@ -633,14 +777,64 @@ static void threadFunc(thread_data_t data)
 
             // GPU 작업 요청 준비
             int task_id;
+if (Gstart > 0) {
+    // CPU에서 Gstart까지 처리한 후 skip connection 검사
+    int skip_count = 0;
+    
+    // Gstart부터 Gend까지의 레이어들이 참조하는 모든 skip connection 확인
+    for(int i = Gstart; i < Gend; i++) {
+        // 각 레이어의 skip connection 배열 검사
+        for(int j = 0; j < 10; j++) {
+            int skip_layer_idx = skip_layers[i][j];
             
+            // 유효한 skip connection이고 Gstart 이전 레이어인 경우만 처리
+            if(skip_layer_idx > 0 && skip_layer_idx < Gstart) {
+                // 이미 추가된 skip connection인지 확인 (중복 방지)
+                bool already_added = false;
+                for(int k = 0; k < skip_count; k++) {
+                    if(gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[k] == skip_layer_idx) {
+                        already_added = true;
+                        break;
+                    }
+                }
+                
+                // 아직 추가되지 않은 skip connection이면 추가
+                if(!already_added && skip_count < 10) {
+                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[skip_count] = skip_layer_idx;
+                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_data[skip_count] = 
+                        net.layers[skip_layer_idx].output;
+                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_size[skip_count] = 
+                        net.layers[skip_layer_idx].outputs * net.layers[skip_layer_idx].batch;
+                    
+                    printf("Skip Connection Debug - Layer %d는 이전 레이어 %d의 출력을 참조합니다.\n", 
+                           i, skip_layer_idx);
+                    printf("Skip Connection Data 첫 5개 값: ");
+                    for(int l = 0; l < 5 && l < net.layers[skip_layer_idx].outputs; l++) {
+                        printf("%f ", net.layers[skip_layer_idx].output[l]);
+                    }
+                    printf("\n");
+                    
+                    skip_count++;
+                }
+            }
+        }
+    }
+    
+    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
+    if (VISUAL || skip_count > 0) 
+        printf("Worker %d: Added %d skip connections to GPU task\n", data.thread_id, skip_count);
+}
             // GPU 작업 요청 시간 기록
             double worker_request_time = current_time_in_ms();
             
-            // GPU 작업 요청 준비 부분에서
+            // GPU 작업 큐에 작업 추가
             pthread_mutex_lock(&gpu_queue_mutex);
             task_id = gpu_task_tail;
 
+            // GPU 메모리 할당 상태 확인
+    printf("Debug - Worker %d: GPU memory state - net.input_state_gpu=%p\n", 
+        data.thread_id, net.input_state_gpu);
+            
             // GPU 작업 정보 설정
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = gpu_input;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
@@ -648,41 +842,21 @@ static void threadFunc(thread_data_t data)
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
-
+            
             // GPU 작업 범위 설정
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gstart = Gstart;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gend = Gend;
-
+            
             // 시간 정보 설정
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
-
-            // 스킵 커넥션 정보 설정
-            int skip_count = 0;
-            printf("skip_count: %d \n", skip_count);
-            // Gstart가 0보다 크고 Gstart != Gend인 경우에만 스킵 커넥션 처리
-            if (Gstart > 0 && Gstart != Gend) {
-                for (int i = 0; i < 306; i++) { // CPU 이후 GPU 부분에서서
-                    for (int j = 0; j < 10; j++) {
-                        if (skip_layers[i][j] > 0 && skip_layers[i][j] < Gstart) { // CPU 처리한 부분 중에!!
-                            
-                            int layer_idx = skip_layers[i][j];
-                            printf("skip_count: %d layer needs %d layer \n", i, layer_idx);
-                            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_indices[skip_count] = layer_idx;
-                            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_data[skip_count] = net.layers[layer_idx].output;
-                            skip_count++;
-                        }
-                    }
-                }
-            }
-            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
-
-
+            
+            // 입력 데이터는 GPU 스레드에서 직접 복사하도록 설정 (memcpy 제거)
             gpu_task_tail++;
             pthread_cond_signal(&gpu_queue_cond);
             pthread_mutex_unlock(&gpu_queue_mutex);
-
+            
             if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
             
             
@@ -722,11 +896,46 @@ static void threadFunc(thread_data_t data)
             for(j = Gend; j < net.n; ++j){
                 post_state.index = j;
                 l = net.layers[j];
+                if (j< 10){
+                    // 각 레이어 입력값 10개 출력
+                    printf("Layer %d (Post-GPU) input (first 10 values): ", j);
+                    print_count = (l.inputs < 10) ? l.inputs : 10;
+                    for(int k = 0; k < print_count; k++) {
+                        printf("%.6f ", post_state.input[k]);
+                    }
+                    printf("\n");
+                    // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
+                    if (l.weights != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
+                        printf("Layer %d (CPU) weights (first 10 values): ", j);
+                        print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
+                        for(int k = 0; k < print_count; k++) {
+                            printf("%.6f ", l.weights[k]);
+                        }
+                        printf("\n");
+                    }
+                    
+                    if (l.biases != NULL && l.n > 0) {
+                        printf("Layer %d (CPU) biases (first 10 values): ", j);
+                        print_count = (l.n < 10) ? l.n : 10;
+                        for(int k = 0; k < print_count; k++) {
+                            printf("%.6f ", l.biases[k]);
+                        }
+                        printf("\n");
+                    }
+                }
                 if(l.delta && post_state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
-                printf("layer %d", j);
                 l.forward(l, post_state);
+                if (j< 10){
+                    // 각 레이어 출력값 10개 출력
+                    printf("Layer %d (Post-GPU) output (first 10 values): ", j);
+                    print_count = (l.outputs < 10) ? l.outputs : 10;
+                    for(int k = 0; k < print_count; k++) {
+                        printf("%.6f ", l.output[k]);
+                    }
+                    printf("\n");
+                }
                 post_state.input = l.output;
             }
             
