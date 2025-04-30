@@ -77,6 +77,12 @@ typedef struct gpu_task_t {
     double gpu_end_time;       // GPU 작업 종료 시간
     double pull_start_time;    // GPU 메모리에서 복사 시작 시간
     double pull_end_time;      // GPU 메모리에서 복사 완료 시간
+
+    // 스킵 커넥션을 위한 필드 추가
+    int skip_count;                  // 스킵 커넥션 레이어 개수
+    int skip_indices[10];            // 스킵 커넥션 레이어 인덱스
+    float *skip_data[10];            // 스킵 커넥션 데이터 주소
+
 } gpu_task_t;
 
 // 로그 저장용 구조체
@@ -379,6 +385,7 @@ void* gpu_dedicated_thread(void* arg) {
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
             l.forward_gpu(l, state);
+            printf("layer %d", j);
             state.input = l.output_gpu;
         }
         
@@ -521,6 +528,7 @@ static void threadFunc(thread_data_t data)
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
                 l.forward(l, state);
+                printf("layer %d", j);
                 state.input = l.output;
             }
             
@@ -605,6 +613,7 @@ static void threadFunc(thread_data_t data)
                         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
                     l.forward(l, pre_state);
+                    printf("layer %d", j);
                     pre_state.input = l.output;
                 }
                 
@@ -625,14 +634,10 @@ static void threadFunc(thread_data_t data)
             // GPU 작업 요청 시간 기록
             double worker_request_time = current_time_in_ms();
             
-            // GPU 작업 큐에 작업 추가
+            // GPU 작업 요청 준비 부분에서
             pthread_mutex_lock(&gpu_queue_mutex);
             task_id = gpu_task_tail;
 
-            // GPU 메모리 할당 상태 확인
-    printf("Debug - Worker %d: GPU memory state - net.input_state_gpu=%p\n", 
-        data.thread_id, net.input_state_gpu);
-            
             // GPU 작업 정보 설정
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = gpu_input;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
@@ -640,21 +645,47 @@ static void threadFunc(thread_data_t data)
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
-            
+
             // GPU 작업 범위 설정
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gstart = Gstart;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gend = Gend;
-            
+
             // 시간 정보 설정
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
-            
-            // 입력 데이터는 GPU 스레드에서 직접 복사하도록 설정 (memcpy 제거)
+
+            // 스킵 커넥션 정보 설정
+            int skip_count = 0;
+            // Gstart가 0보다 크고 Gstart != Gend인 경우에만 스킵 커넥션 처리
+            if (Gstart > 0 && Gstart != Gend) {
+                for (int i = Gstart; i < Gend; i++) {
+                    for (int j = 0; j < 10; j++) {
+                        if (skip_layers[i][j] > 0 && skip_layers[i][j] < Gstart) {
+                            int layer_idx = skip_layers[i][j];
+                            // 중복 방지를 위한 체크
+                            bool already_added = false;
+                            for (int k = 0; k < skip_count; k++) {
+                                if (gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_indices[k] == layer_idx) {
+                                    already_added = true;
+                                    break;
+                                }
+                            }
+                            if (!already_added && skip_count < 10) {
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_indices[skip_count] = layer_idx;
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_data[skip_count] = net.layers[layer_idx].output;
+                                skip_count++;
+                            }
+                        }
+                    }
+                }
+            }
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
+
             gpu_task_tail++;
             pthread_cond_signal(&gpu_queue_cond);
             pthread_mutex_unlock(&gpu_queue_mutex);
-            
+
             if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
             
             
@@ -697,6 +728,7 @@ static void threadFunc(thread_data_t data)
                 if(l.delta && post_state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
+                printf("layer %d", j);
                 l.forward(l, post_state);
                 post_state.input = l.output;
             }
