@@ -26,6 +26,12 @@
 #define START_IDX 5
 #define VISUAL 0
 #define MAX_BUFFER_SIZE 2097152
+
+// 로그 쓰기를 위한 barrier와 뮤텍스
+pthread_barrier_t log_barrier;
+pthread_mutex_t log_write_mutex = PTHREAD_MUTEX_INITIALIZER;
+int log_written = 0;  // 로그가 이미 작성되었는지 확인하는 플래그
+
 // 시간 측정 함수
 double current_time_in_ms() {
     struct timespec ts;
@@ -830,7 +836,29 @@ static void threadFunc(thread_data_t data)
         free_image(resized);
         free_image(cropped);
     }
+    if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                        else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+    // 스레드 작업 완료 후 barrier에서 대기
+    pthread_barrier_wait(&log_barrier);
 
+
+    // thread_id가 1인 스레드만 로그 작성
+    if (data.thread_id == 1) {
+        pthread_mutex_lock(&log_write_mutex);
+        if (!log_written) {
+            char* model_name = malloc(strlen(data.cfgfile) + 1);
+            strncpy(model_name, data.cfgfile + 6, (strlen(data.cfgfile)-10));
+            model_name[strlen(data.cfgfile)-10] = '\0';
+
+            // 로그 파일 작성
+            write_logs_to_files(model_name);
+            
+            // 메모리 해제
+            free(model_name);
+            log_written = 1;
+        }
+        pthread_mutex_unlock(&log_write_mutex);
+    }
     // free memory
     free_detections(dets, nboxes);
     free_ptrs((void**)names, net.layers[net.n - 1].classes);
@@ -868,10 +896,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         exit(-1);
     }
 
-    // GPU 스레드를 코어 0에 고정
+    // GPU 스레드를 코어 1에 고정
     cpu_set_t gpu_cpuset;
     CPU_ZERO(&gpu_cpuset);
-    CPU_SET(0, &gpu_cpuset);
+    CPU_SET(1, &gpu_cpuset);
     rc = pthread_setaffinity_np(gpu_thread, sizeof(gpu_cpuset), &gpu_cpuset);
     if (rc != 0) {
         fprintf(stderr, "GPU thread: pthread_setaffinity_np() failed\n");
@@ -880,6 +908,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     
     // 워커 스레드 배리어 초기화
     pthread_barrier_init(&barrier, NULL, num_thread);
+    pthread_barrier_init(&log_barrier, NULL, num_thread);
     
     // 워커 스레드 생성
     for (i = 0; i < num_thread; i++) {
@@ -908,7 +937,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         // __CPU AFFINITY SETTING__
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(i + 1, &cpuset); // 코어 할당 (1부터 시작, 0은 GPU 스레드용)
+        CPU_SET(i + 2, &cpuset); // 코어 할당 (1부터 시작, 1은 GPU 스레드용, 0은 OS 작업용)
         
         int ret = pthread_setaffinity_np(threads[i], sizeof(cpuset), &cpuset);
         if (ret != 0) {
@@ -925,13 +954,6 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     // GPU 스레드 종료
     pthread_cancel(gpu_thread);
     pthread_join(gpu_thread, NULL);
-
-    char* model_name = malloc(strlen(cfgfile) + 1);
-    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
-    model_name[strlen(cfgfile)-10] = '\0';
-
-    // 로그 파일 작성
-    write_logs_to_files(model_name);
     
     if (VISUAL) printf("Logs written to files\n");
 
@@ -944,6 +966,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
     pthread_cond_destroy(&gpu_queue_cond);
     pthread_mutex_destroy(&log_mutex);
     pthread_barrier_destroy(&barrier);
+    pthread_barrier_destroy(&log_barrier);
 
     return 0;
 }

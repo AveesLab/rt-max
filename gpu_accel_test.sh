@@ -2,7 +2,7 @@
 
 # 기본값 설정 (필요한 경우)
 model=""
-num_worker=11
+num_worker=10
 Gstart=0
 Gend=0
 
