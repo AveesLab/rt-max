@@ -174,7 +174,7 @@ void write_logs_to_files(char *model_name) {
     qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
 
     char gpu_path[256];
-    sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, Gstart, Gstart, Gend);
+    sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
     fp_gpu = fopen(gpu_path, "w");
     if (!fp_gpu) {
         perror("파일 열기 실패");
@@ -210,7 +210,7 @@ void write_logs_to_files(char *model_name) {
     qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
 
     char worker_path[256];
-    sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/G%d/worker_task_log_G%d_%d.csv", model_name, Gstart, Gstart, Gend);
+    sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
     fp_worker = fopen(worker_path, "w");
     if (!fp_worker) {
         perror("파일 열기 실패");
