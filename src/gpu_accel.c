@@ -407,7 +407,9 @@ void* gpu_dedicated_thread(void* arg) {
                 if((skip_layers[i][j] >= current_task.Gstart) && 
                    (skip_layers[i][j] < current_task.Gend) && 
                    (skip_layers[i][j] != 0)) {
+                    
                     int layer_idx = skip_layers[i][j];
+                    printf("skip_count: %d \n", layer_idx);
                     layer skip_layer = current_task.net.layers[layer_idx];
                     cuda_pull_array(skip_layer.output_gpu, skip_layer.output, skip_layer.outputs * skip_layer.batch);
                 }
@@ -475,10 +477,11 @@ static void threadFunc(thread_data_t data)
     calculate_binary_weights(net);
     extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
-    for(i = Gend; i < net.n; i++) {
+    for(i = 0; i < net.n; i++) {
         for(j = 0; j < 10; j++) {
-            if((skip_layers[i][j] >= Gstart) && (skip_layers[i][j] < Gend) && (skip_layers[i][j] != 0)) {
+            if((skip_layers[i][j] != 0)) {
                 skipped_layers[skip_layers[i][j]] = 1;
+                if (data.thread_id == 1 )printf("skip_count: %d layer needs %d layer \n", i, skip_layers[i][j]);
             }
         }
     }
@@ -657,30 +660,24 @@ static void threadFunc(thread_data_t data)
 
             // 스킵 커넥션 정보 설정
             int skip_count = 0;
+            printf("skip_count: %d \n", skip_count);
             // Gstart가 0보다 크고 Gstart != Gend인 경우에만 스킵 커넥션 처리
             if (Gstart > 0 && Gstart != Gend) {
-                for (int i = Gstart; i < Gend; i++) {
+                for (int i = 0; i < 306; i++) { // CPU 이후 GPU 부분에서서
                     for (int j = 0; j < 10; j++) {
-                        if (skip_layers[i][j] > 0 && skip_layers[i][j] < Gstart) {
+                        if (skip_layers[i][j] > 0 && skip_layers[i][j] < Gstart) { // CPU 처리한 부분 중에!!
+                            
                             int layer_idx = skip_layers[i][j];
-                            // 중복 방지를 위한 체크
-                            bool already_added = false;
-                            for (int k = 0; k < skip_count; k++) {
-                                if (gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_indices[k] == layer_idx) {
-                                    already_added = true;
-                                    break;
-                                }
-                            }
-                            if (!already_added && skip_count < 10) {
-                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_indices[skip_count] = layer_idx;
-                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_data[skip_count] = net.layers[layer_idx].output;
-                                skip_count++;
-                            }
+                            printf("skip_count: %d layer needs %d layer \n", i, layer_idx);
+                            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_indices[skip_count] = layer_idx;
+                            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_data[skip_count] = net.layers[layer_idx].output;
+                            skip_count++;
                         }
                     }
                 }
             }
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
+
 
             gpu_task_tail++;
             pthread_cond_signal(&gpu_queue_cond);
