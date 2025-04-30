@@ -2681,19 +2681,70 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
 #ifdef GPU
 
 #include <math.h>
-
 void gemm_ongpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A_gpu, int lda,
         float *B_gpu, int ldb,
         float BETA,
         float *C_gpu, int ldc)
 {
+    // 디버깅 출력 추가 - GEMM 파라미터 출력
+    printf("GEMM Debug: TA=%d, TB=%d, M=%d, N=%d, K=%d, ALPHA=%.6f, BETA=%.6f\n", 
+           TA, TB, M, N, K, ALPHA, BETA);
+    
+    // 입력 행렬 A의 마지막 10개 값
+    int A_size = K * M;  // 행렬 A의 크기
+    float A_last10[10];
+    if(A_size >= 10) {
+        cudaMemcpy(A_last10, A_gpu + (A_size - 10), sizeof(float) * 10, cudaMemcpyDeviceToHost);
+        printf("GEMM A 마지막 10개 값: ");
+        for (int i = 0; i < 10; i++) {
+            printf("%.6f ", A_last10[i]);
+        }
+        printf("\n");
+    }
+    
+    // 입력 행렬 B의 마지막 10개 값
+    int B_size = K * N; // 행렬 B의 크기
+    float B_last10[10];
+    if(B_size >= 10) {
+        cudaMemcpy(B_last10, B_gpu + (B_size - 10), sizeof(float) * 10, cudaMemcpyDeviceToHost);
+        printf("GEMM B 마지막 10개 값: ");
+        for (int i = 0; i < 10; i++) {
+            printf("%.6f ", B_last10[i]);
+        }
+        printf("\n");
+    }
+    
+    // 결과 행렬 C의 초기 마지막 10개 값
+    int C_size = M * N; // 행렬 C의 크기
+    float C_before_last10[10];
+    if(C_size >= 10) {
+        cudaMemcpy(C_before_last10, C_gpu + (C_size - 10), sizeof(float) * 10, cudaMemcpyDeviceToHost);
+        printf("GEMM C 초기값(마지막 10개): ");
+        for (int i = 0; i < 10; i++) {
+            printf("%.6f ", C_before_last10[i]);
+        }
+        printf("\n");
+    }
+    
+    // 원래 GEMM 호출
     cublasHandle_t handle = blas_handle();
     cudaError_t stream_status = (cudaError_t)cublasSetStream(handle, get_cuda_stream());
     CHECK_CUDA(stream_status);
     cudaError_t status = (cudaError_t)cublasSgemm(handle, (TB ? CUBLAS_OP_T : CUBLAS_OP_N),
             (TA ? CUBLAS_OP_T : CUBLAS_OP_N), N, M, K, &ALPHA, B_gpu, ldb, A_gpu, lda, &BETA, C_gpu, ldc);
     CHECK_CUDA(status);
+    
+    // 결과 행렬 C의 최종 마지막 10개 값
+    float C_after_last10[10];
+    if(C_size >= 10) {
+        cudaMemcpy(C_after_last10, C_gpu + (C_size - 10), sizeof(float) * 10, cudaMemcpyDeviceToHost);
+        printf("GEMM C 결과값(마지막 10개): ");
+        for (int i = 0; i < 10; i++) {
+            printf("%.6f ", C_after_last10[i]);
+        }
+        printf("\n");
+    }
 }
 
 void gemm_gpu(int TA, int TB, int M, int N, int K, float ALPHA,

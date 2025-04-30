@@ -162,9 +162,24 @@ half *cuda_make_f16_from_f32_array(float *src, size_t n)
     if (!dst16) error("Cuda malloc failed", DARKNET_LOC);
     return dst16;
 }
-
 void forward_convolutional_layer_gpu(convolutional_layer l, network_state state)
 {
+    // 레이어 정보 출력
+    printf("Conv Layer %d: size=%d, stride=%d, pad=%d, filters=%d\n", 
+           state.index, l.size, l.stride, l.pad, l.n);
+    
+    // 입력 데이터의 마지막 10개 값 출력
+    float input_last10[10];
+    if(l.inputs * l.batch >= 10) {
+        int offset = l.inputs * l.batch - 10;
+        cudaMemcpy(input_last10, state.input + offset, sizeof(float) * 10, cudaMemcpyDeviceToHost);
+        printf("Layer %d 입력(마지막 10개): ", state.index);
+        for (int i = 0; i < 10; i++) {
+            printf("%.6f ", input_last10[i]);
+        }
+        printf("\n");
+    }
+    if (state.index > 5) while(1);
     if (l.train == 0) state.train = 0;
 
     if (l.stream >= 0) {
@@ -596,6 +611,8 @@ void forward_convolutional_layer_gpu(convolutional_layer l, network_state state)
 
             }
             //gemm_ongpu(0, 0, m, n, k, 1., a, k, b, n, 1., c + i*m*n, n);
+            printf("Conv Layer %d GEMM 호출 전: 입력 크기=%d, 출력 크기=%d\n", 
+                state.index, l.inputs, l.outputs);
             gemm_ongpu(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
         }
     }
@@ -642,6 +659,16 @@ void forward_convolutional_layer_gpu(convolutional_layer l, network_state state)
 
     if (l.coordconv) {
         coord_conv_gpu(l.output_gpu, l.outputs*l.batch, l.out_w, l.out_h, l.out_c, l.batch, 0);
+    }
+    float output_last10[10];
+    if(l.outputs * l.batch >= 10) {
+        int offset = l.outputs * l.batch - 10;
+        cudaMemcpy(output_last10, l.output_gpu + offset, sizeof(float) * 10, cudaMemcpyDeviceToHost);
+        printf("Layer %d 출력(마지막 10개): ", state.index);
+        for (int i = 0; i < 10; i++) {
+            printf("%.6f ", output_last10[i]);
+        }
+        printf("\n");
     }
 }
 

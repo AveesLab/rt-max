@@ -401,70 +401,44 @@ void* gpu_dedicated_thread(void* arg) {
         // GPU 작업 시작
         state.workspace = current_task.net.workspace;
         
-        // Gstart부터 Gend까지의 레이어 실행
+        // GPU 실행 부분 (Gstart부터 Gend까지의 레이어 실행)
         for(int j = current_task.Gstart; j < current_task.Gend; ++j){
             state.index = j;
             layer l = current_task.net.layers[j];
-    
+
             if (j< 10){
-                // GPU 레이어 입력값 10개 출력을 위해 임시 버퍼 사용
+                // GPU 레이어 입력값 뒤에서 10개 출력을 위해 임시 버퍼 사용
                 float temp_input[10];
                 print_count = (l.inputs < 10) ? l.inputs : 10;
-                cuda_pull_array_async(state.input, temp_input, print_count);
+                cuda_pull_array_async(state.input + (l.inputs - print_count), temp_input, print_count);
                 cudaStreamSynchronize(get_cuda_stream());
-                
-                printf("Layer %d (GPU) input (first 10 values): ", j);
+
+                printf("Layer %d (GPU) input (last 10 values): ", j);
                 for(int k = 0; k < print_count; k++) {
                     printf("%.6f ", temp_input[k]);
                 }
                 printf("\n");
-                // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
-                if (l.weights_gpu != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
-                    float temp_weights[10];
-                    print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
-                    cuda_pull_array_async(l.weights_gpu, temp_weights, print_count);
-                    cudaStreamSynchronize(get_cuda_stream());
-                    
-                    printf("Layer %d (GPU) weights (first 10 values): ", j);
-                    for(int k = 0; k < print_count; k++) {
-                        printf("%.6f ", temp_weights[k]);
-                    }
-                    printf("\n");
-                }
-                
-                if (l.biases_gpu != NULL && l.n > 0) {
-                    float temp_biases[10];
-                    print_count = (l.n < 10) ? l.n : 10;
-                    cuda_pull_array_async(l.biases_gpu, temp_biases, print_count);
-                    cudaStreamSynchronize(get_cuda_stream());
-                    
-                    printf("Layer %d (GPU) biases (first 10 values): ", j);
-                    for(int k = 0; k < print_count; k++) {
-                        printf("%.6f ", temp_biases[k]);
-                    }
-                    printf("\n");
-                }
             }
-    
+
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
             l.forward_gpu(l, state);
+
             if (j< 10){
-                // GPU 레이어 출력값 10개 출력을 위해 임시 버퍼 사용
+                // GPU 레이어 출력값 뒤에서 10개 출력을 위해 임시 버퍼 사용
                 float temp_output[10];
                 print_count = (l.outputs < 10) ? l.outputs : 10;
-                cuda_pull_array_async(l.output_gpu, temp_output, print_count);
+                cuda_pull_array_async(l.output_gpu + (l.outputs - print_count), temp_output, print_count);
                 cudaStreamSynchronize(get_cuda_stream());
-                
-                printf("Layer %d (GPU) output (first 10 values): ", j);
+
+                printf("Layer %d (GPU) output (last 10 values): ", j);
                 for(int k = 0; k < print_count; k++) {
                     printf("%.6f ", temp_output[k]);
                 }
                 printf("\n");
             }
             state.input = l.output_gpu;
-
         }
         
         CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
@@ -603,47 +577,30 @@ static void threadFunc(thread_data_t data)
                 state.index = j;
                 l = net.layers[j];
                 if (j< 10) {
-                    // 각 레이어 입력값 10개 출력
-                    printf("Layer %d (CPU) input (first 10 values): ", j);
-                    print_count = (l.inputs < 10) ? l.inputs : 10;  // 10개 또는 입력 개수 중 작은 값
-                    for(int k = 0; k < print_count; k++) {
+                    // 각 레이어 입력값 뒤에서 10개 출력
+                    printf("Layer %d (CPU) input (last 10 values): ", j);
+                    print_count = (l.inputs < 10) ? l.inputs : 10;
+                    for(int k = l.inputs - print_count; k < l.inputs; k++) {
                         printf("%.6f ", state.input[k]);
                     }
                     printf("\n");
-                    // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
-                    if (l.weights != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
-                        printf("Layer %d (CPU) weights (first 10 values): ", j);
-                        print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
-                        for(int k = 0; k < print_count; k++) {
-                            printf("%.6f ", l.weights[k]);
-                        }
-                        printf("\n");
-                    }
-                    
-                    if (l.biases != NULL && l.n > 0) {
-                        printf("Layer %d (CPU) biases (first 10 values): ", j);
-                        print_count = (l.n < 10) ? l.n : 10;
-                        for(int k = 0; k < print_count; k++) {
-                            printf("%.6f ", l.biases[k]);
-                        }
-                        printf("\n");
-                    }
                 }
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
                 l.forward(l, state);
                 if (j< 10){
-                    // 각 레이어 출력값 10개 출력
-                    printf("Layer %d (CPU) output (first 10 values): ", j);
-                    print_count = (l.outputs < 10) ? l.outputs : 10;  // 10개 또는 출력 개수 중 작은 값
-                    for(int k = 0; k < print_count; k++) {
+                    // 각 레이어 출력값 뒤에서 10개 출력
+                    printf("Layer %d (CPU) output (last 10 values): ", j);
+                    print_count = (l.outputs < 10) ? l.outputs : 10;
+                    for(int k = l.outputs - print_count; k < l.outputs; k++) {
                         printf("%.6f ", l.output[k]);
                     }
                     printf("\n");
                 }
                 state.input = l.output;
             }
+            
             
             double worker_receive_time = worker_request_time;
             
@@ -722,45 +679,33 @@ static void threadFunc(thread_data_t data)
                 for(j = 0; j < Gstart; ++j){
                     pre_state.index = j;
                     l = net.layers[j];
-                    if (j< 10){
-                        printf("Layer %d (Pre-GPU) input (first 10 values): ", j);
+                
+                    // Input의 뒤에서 10개 출력
+                    if (j < 10){
+                        printf("Layer %d (Pre-GPU) input (last 10 values): ", j);
                         print_count = (l.inputs < 10) ? l.inputs : 10;
-                        for(int k = 0; k < print_count; k++) {
+                        for(int k = l.inputs - print_count; k < l.inputs; k++) {
                             printf("%.6f ", pre_state.input[k]);
                         }
                         printf("\n");
-                        // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
-                        if (l.weights != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
-                            printf("Layer %d (CPU) weights (first 10 values): ", j);
-                            print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
-                            for(int k = 0; k < print_count; k++) {
-                                printf("%.6f ", l.weights[k]);
-                            }
-                            printf("\n");
-                        }
-                        
-                        if (l.biases != NULL && l.n > 0) {
-                            printf("Layer %d (CPU) biases (first 10 values): ", j);
-                            print_count = (l.n < 10) ? l.n : 10;
-                            for(int k = 0; k < print_count; k++) {
-                                printf("%.6f ", l.biases[k]);
-                            }
-                            printf("\n");
-                        }
                     }
+                
                     if(l.delta && pre_state.train && l.train){
                         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
+                
                     l.forward(l, pre_state);
-                    if (j< 10){
-                        // 각 레이어 출력값 10개 출력
-                        printf("Layer %d (Pre-GPU) output (first 10 values): ", j);
+                
+                    // Output의 뒤에서 10개 출력
+                    if (j < 10){
+                        printf("Layer %d (Pre-GPU) output (last 10 values): ", j);
                         print_count = (l.outputs < 10) ? l.outputs : 10;
-                        for(int k = 0; k < print_count; k++) {
+                        for(int k = l.outputs - print_count; k < l.outputs; k++) {
                             printf("%.6f ", l.output[k]);
                         }
                         printf("\n");
                     }
+                
                     pre_state.input = l.output;
                 }
                 
@@ -897,47 +842,30 @@ if (Gstart > 0) {
                 post_state.index = j;
                 l = net.layers[j];
                 if (j< 10){
-                    // 각 레이어 입력값 10개 출력
-                    printf("Layer %d (Post-GPU) input (first 10 values): ", j);
+                    // 각 레이어 입력값 뒤에서 10개 출력
+                    printf("Layer %d (Post-GPU) input (last 10 values): ", j);
                     print_count = (l.inputs < 10) ? l.inputs : 10;
-                    for(int k = 0; k < print_count; k++) {
+                    for(int k = l.inputs - print_count; k < l.inputs; k++) {
                         printf("%.6f ", post_state.input[k]);
                     }
                     printf("\n");
-                    // 각 레이어의 가중치와 바이어스 출력 (존재하는 경우)
-                    if (l.weights != NULL && l.n > 0 && l.c > 0 && l.h > 0) {
-                        printf("Layer %d (CPU) weights (first 10 values): ", j);
-                        print_count = (l.n * l.c * l.h * l.w < 10) ? l.n * l.c * l.h * l.w : 10;
-                        for(int k = 0; k < print_count; k++) {
-                            printf("%.6f ", l.weights[k]);
-                        }
-                        printf("\n");
-                    }
-                    
-                    if (l.biases != NULL && l.n > 0) {
-                        printf("Layer %d (CPU) biases (first 10 values): ", j);
-                        print_count = (l.n < 10) ? l.n : 10;
-                        for(int k = 0; k < print_count; k++) {
-                            printf("%.6f ", l.biases[k]);
-                        }
-                        printf("\n");
-                    }
                 }
                 if(l.delta && post_state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
                 l.forward(l, post_state);
                 if (j< 10){
-                    // 각 레이어 출력값 10개 출력
-                    printf("Layer %d (Post-GPU) output (first 10 values): ", j);
+                    // 각 레이어 출력값 뒤에서 10개 출력
+                    printf("Layer %d (Post-GPU) output (last 10 values): ", j);
                     print_count = (l.outputs < 10) ? l.outputs : 10;
-                    for(int k = 0; k < print_count; k++) {
+                    for(int k = l.outputs - print_count; k < l.outputs; k++) {
                         printf("%.6f ", l.output[k]);
                     }
                     printf("\n");
                 }
                 post_state.input = l.output;
             }
+            
             
             if (Gend == net.n) predictions = get_network_output_gpu(net);
             else predictions = get_network_output(net, 0);
