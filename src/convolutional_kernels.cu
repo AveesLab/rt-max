@@ -179,7 +179,7 @@ void forward_convolutional_layer_gpu(convolutional_layer l, network_state state)
         }
         printf("\n");
     }
-    if (state.index > 5) while(1);
+    // if (state.index > 5) while(1);
     if (l.train == 0) state.train = 0;
 
     if (l.stream >= 0) {
