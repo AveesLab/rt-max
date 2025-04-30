@@ -12,3 +12,4 @@ sudo apt install -y libgfortran5
 cd ~/rt-max
 make clean
 make -j $(nproc)
+./mkdir.sh
