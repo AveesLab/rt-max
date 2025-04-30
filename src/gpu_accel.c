@@ -27,6 +27,28 @@
 #define VISUAL 0
 #define MAX_BUFFER_SIZE 2097152
 
+int layer_indexes[500];
+int num_layer = 0;
+
+void print_layer_info(network net)
+{
+    int i;
+    for(i = 0; i < net.n; ++i){
+        layer l = net.layers[i];
+        if(l.type == CONVOLUTIONAL){
+            // printf("Convolutional Layer %d: filters=%d, size=%d\n", i, l.n, l.size);
+            layer_indexes[num_layer] = i;
+            num_layer++;
+        } else if(l.type == CONNECTED){
+            // printf("Connected Layer %d: outputs=%d\n", i, l.outputs);
+            layer_indexes[num_layer] = i;
+            num_layer++;
+        }
+    }
+    layer_indexes[num_layer] = net.n;
+    num_layer++;
+}
+
 // 로그 쓰기를 위한 barrier와 뮤텍스
 pthread_barrier_t log_barrier;
 pthread_mutex_t log_write_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -512,15 +534,20 @@ static void threadFunc(thread_data_t data)
     srand(2222222);
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
+
+    if (data.thread_id == 1){
+        print_layer_info(net);
+        printf("num_layer: %d\n", num_layer);
+    }
     pthread_mutex_unlock(&mutex_init);
 
 
-    for (int s = 0; s < net.n; s++){
-        for (int e = s + 1; s < net.n; e++){
+    for (int s = 0; s < num_layer; s++){
+        for (int e = s + 1; s < num_layer; e++){
             pthread_barrier_wait(&barrier);
             // 각 워커별 GPU 사용 범위 설정
-            int Gstart = s;    // GPU 작업 시작 레이어 인덱스
-            int Gend = e;    // GPU 작업 종료 레이어 인덱스
+            int Gstart = layer_indexes[s];    // GPU 작업 시작 레이어 인덱스
+            int Gend = layer_indexes[e];    // GPU 작업 종료 레이어 인덱스
 
             if (data.thread_id == 1) {
                 // 로그 카운터 초기화
