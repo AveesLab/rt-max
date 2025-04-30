@@ -24,7 +24,7 @@
 #endif
 
 #define START_IDX 5
-#define VISUAL 1
+#define VISUAL 0
 #define MAX_BUFFER_SIZE 2097152
 // 시간 측정 함수
 double current_time_in_ms() {
@@ -291,7 +291,7 @@ void* gpu_dedicated_thread(void* arg) {
         if (status != cudaSuccess) {
             printf("CUDA initialization error: %s\n", cudaGetErrorString(status));
         } else {
-            printf("CUDA initialized successfully on device %d\n", gpu_index);
+            if (VISUAL) printf("CUDA initialized successfully on device %d\n", gpu_index);
         }
     }
 
@@ -351,67 +351,29 @@ void* gpu_dedicated_thread(void* arg) {
         state.delta = 0;
         
         // 입력 데이터를 GPU로 복사 (Gstart 레이어 입력)
-        // pinned_cpu 메모리를 사용하지 않고 직접 복사
     
         // 디버깅 출력 추가
-        printf("Debug - GPU Thread: input=%p, state.input=%p, size=%d\n", 
-            current_task.input, state.input, current_task.size);
+        if (VISUAL) printf("Debug - GPU Thread: input=%p, state.input=%p, size=%d\n", current_task.input, state.input, current_task.size);
      
         // 입력 데이터를 pinned 메모리로 복사
-// 입력 데이터를 pinned 메모리로 복사
-if (current_task.size * sizeof(float) <= MAX_BUFFER_SIZE * sizeof(float)) {
-    memcpy(pinned_buffer, current_task.input, current_task.size * sizeof(float));
-    // pinned_buffer와 current_task.input 마지막 10개 출력
-int pinned_print_count = (current_task.size < 10) ? current_task.size : 10;
-printf("Pinned buffer (last 10 values): ");
-for(int k = current_task.size - pinned_print_count; k < current_task.size; k++) {
-    printf("%.6f ", pinned_buffer[k]);
-}
-printf("\n");
+        if (current_task.size * sizeof(float) <= MAX_BUFFER_SIZE * sizeof(float)) {
+            memcpy(pinned_buffer, current_task.input, current_task.size * sizeof(float));
 
-printf("Current task input (last 10 values): ");
-for(int k = current_task.size - pinned_print_count; k < current_task.size; k++) {
-    printf("%.6f ", current_task.input[k]);
-}
-printf("\n");
-
-    // **수정된 부분: GPU 메모리로 정확한 위치에 복사**
-    // Gstart > 0일 때, 입력 레이어의 input_gpu가 아니라 output_gpu를 입력으로 사용해야 합니다.
-    if (current_task.Gstart == 0) {
-        cuda_push_array(state.input, pinned_buffer, current_task.size);
-    } else {
-        // 이전 레이어의 output_gpu를 입력으로 사용
-        int prev_layer_idx = current_task.Gstart - 1;
-        layer prev_layer = current_task.net.layers[prev_layer_idx];
-
-        cuda_push_array(prev_layer.output_gpu, pinned_buffer, current_task.size);
-
-        // prev_layer.output_gpu의 마지막 10개 값을 출력
-        float temp_output_gpu[10];
-        int gpu_print_count = (current_task.size < 10) ? current_task.size : 10;
-        cuda_pull_array_async(prev_layer.output_gpu + (current_task.size - gpu_print_count), temp_output_gpu, gpu_print_count);
-        cudaStreamSynchronize(get_cuda_stream());
-        printf("prev_layer.output_gpu (last 10 values): ");
-        for(int k = 0; k < gpu_print_count; k++) {
-            printf("%.6f ", temp_output_gpu[k]);
+            // **수정된 부분: GPU 메모리로 정확한 위치에 복사**
+            // Gstart > 0일 때, 입력 레이어의 input_gpu가 아니라 output_gpu를 입력으로 사용해야 합니다.
+            if (current_task.Gstart == 0) {
+                cuda_push_array(state.input, pinned_buffer, current_task.size);
+            } else {
+                // 이전 레이어의 output_gpu를 입력으로 사용
+                int prev_layer_idx = current_task.Gstart - 1;
+                layer prev_layer = current_task.net.layers[prev_layer_idx];
+                cuda_push_array(prev_layer.output_gpu, pinned_buffer, current_task.size);
+                state.input = prev_layer.output_gpu;  // 이 부분이 매우 중요!
+            }
+        } else {
+            printf("ERROR: Buffer too small for data\n");
         }
-        printf("\n");
-        state.input = prev_layer.output_gpu;  // 이 부분이 매우 중요!
-        // state.input의 마지막 10개 출력
-float temp_state_input[10];
-cuda_pull_array_async(state.input + (current_task.size - gpu_print_count), temp_state_input, gpu_print_count);
-cudaStreamSynchronize(get_cuda_stream());
-printf("state.input (last 10 values): ");
-for(int k = 0; k < gpu_print_count; k++) {
-    printf("%.6f ", temp_state_input[k]);
-}
-printf("\n");
-    }
-
-} else {
-    printf("ERROR: Buffer too small for data\n");
-}
-             CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
         // Skip connection 데이터도 함께 GPU로 복사
         if (current_task.Gstart > 0) {
@@ -450,39 +412,10 @@ printf("\n");
             state.index = j;
             layer l = current_task.net.layers[j];
 
-            if (j< 10){
-                // GPU 레이어 입력값 뒤에서 10개 출력을 위해 임시 버퍼 사용
-                float temp_input[10];
-                printf("current_task.size: %d, l.inputs: %d\n\n\n", current_task.size, l.inputs);
-                print_count = (l.inputs < 10) ? l.inputs : 10;
-                cuda_pull_array_async(state.input + (l.inputs - print_count), temp_input, print_count);
-                cudaStreamSynchronize(get_cuda_stream());
-
-                printf("Layer %d (GPU) input (last 10 values): ", j);
-                for(int k = 0; k < print_count; k++) {
-                    printf("%.6f ", temp_input[k]);
-                }
-                printf("\n");
-            }
-
             if(l.delta_gpu && state.train){
                 fill_ongpu(l.outputs * l.batch, 0, l.delta_gpu, 1);
             }
             l.forward_gpu(l, state);
-
-            if (j< 10){
-                // GPU 레이어 출력값 뒤에서 10개 출력을 위해 임시 버퍼 사용
-                float temp_output[10];
-                print_count = (l.outputs < 10) ? l.outputs : 10;
-                cuda_pull_array_async(l.output_gpu + (l.outputs - print_count), temp_output, print_count);
-                cudaStreamSynchronize(get_cuda_stream());
-
-                printf("Layer %d (GPU) output (last 10 values): ", j);
-                for(int k = 0; k < print_count; k++) {
-                    printf("%.6f ", temp_output[k]);
-                }
-                printf("\n");
-            }
             state.input = l.output_gpu;
         }
         
@@ -621,28 +554,12 @@ static void threadFunc(thread_data_t data)
             for(j = 0; j < net.n; ++j){
                 state.index = j;
                 l = net.layers[j];
-                if (j< 10) {
-                    // 각 레이어 입력값 뒤에서 10개 출력
-                    printf("Layer %d (CPU) input (last 10 values): ", j);
-                    print_count = (l.inputs < 10) ? l.inputs : 10;
-                    for(int k = l.inputs - print_count; k < l.inputs; k++) {
-                        printf("%.6f ", state.input[k]);
-                    }
-                    printf("\n");
-                }
+               
                 if(l.delta && state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
                 l.forward(l, state);
-                if (j< 10){
-                    // 각 레이어 출력값 뒤에서 10개 출력
-                    printf("Layer %d (CPU) output (last 10 values): ", j);
-                    print_count = (l.outputs < 10) ? l.outputs : 10;
-                    for(int k = l.outputs - print_count; k < l.outputs; k++) {
-                        printf("%.6f ", l.output[k]);
-                    }
-                    printf("\n");
-                }
+    
                 state.input = l.output;
             }
             
@@ -713,7 +630,6 @@ static void threadFunc(thread_data_t data)
                 gpu_input = (float*)malloc(size * sizeof(float));
                 if (gpu_input) {
                     memcpy(gpu_input, X, size * sizeof(float));
-                    printf("Debug - Worker %d: Created aligned copy of input data\n", data.thread_id);
                 } else {
                     printf("ERROR: Failed to allocate memory for aligned copy\n");
                 }
@@ -725,132 +641,78 @@ static void threadFunc(thread_data_t data)
                     pre_state.index = j;
                     l = net.layers[j];
                 
-                    // Input의 뒤에서 10개 출력
-                    if (j < 10){
-                        printf("Layer %d (Pre-GPU) input (last 10 values): ", j);
-                        print_count = (l.inputs < 10) ? l.inputs : 10;
-                        for(int k = l.inputs - print_count; k < l.inputs; k++) {
-                            printf("%.6f ", pre_state.input[k]);
-                        }
-                        printf("\n");
-                    }
-                
                     if(l.delta && pre_state.train && l.train){
                         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
                 
                     l.forward(l, pre_state);
                 
-                    // Output의 뒤에서 10개 출력
-                    if (j < 10){
-                        printf("Layer %d (Pre-GPU) output (last 10 values): ", j);
-                        print_count = (l.outputs < 10) ? l.outputs : 10;
-                        for(int k = l.outputs - print_count; k < l.outputs; k++) {
-                            printf("%.6f ", l.output[k]);
-                        }
-                        printf("\n");
-                    }
-                
                     pre_state.input = l.output;
                 }
                 
                 // 처리된 데이터 복사본 생성
                 size = net.layers[Gstart - 1].outputs * net.batch;
-                printf("1size = %d \n", size);
                 gpu_input = (float*)malloc(size * sizeof(float));
                 if (gpu_input) {
                     memcpy(gpu_input, pre_state.input, size * sizeof(float));
-                    printf("Debug - Worker %d: Created aligned copy of processed data\n", data.thread_id);
-                
-                    // 복사된 데이터의 마지막 10개 출력
-                    int print_count = (size < 10) ? size : 10;
-                    printf("Copied data (last 10 values): ");
-                    for(int k = size - print_count; k < size; k++) {
-                        printf("%.6f ", gpu_input[k]);
-                    }
-                    printf("\n");
                 } else {
                     printf("ERROR: Failed to allocate memory for aligned copy\n");
                 }
-                printf("2size = %d \n", size);
                 
             }
-            printf("1size = %d \n", size);
+
             // GPU 작업 요청 준비
             int task_id;
-if (Gstart > 0) {
-    // CPU에서 Gstart까지 처리한 후 skip connection 검사
-    int skip_count = 0;
-    printf("3size = %d \n", size);
-    
-    // Gstart부터 Gend까지의 레이어들이 참조하는 모든 skip connection 확인
-    for(int i = Gstart; i < Gend; i++) {
-        // 각 레이어의 skip connection 배열 검사
-        for(int j = 0; j < 10; j++) {
-            int skip_layer_idx = skip_layers[i][j];
-            // printf("4size = %d \n", size);
-            
-            // 유효한 skip connection이고 Gstart 이전 레이어인 경우만 처리
-            if(skip_layer_idx > 0 && skip_layer_idx < Gstart) {
-                // 이미 추가된 skip connection인지 확인 (중복 방지)
-                bool already_added = false;
-                for(int k = 0; k < skip_count; k++) {
-                    if(gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[k] == skip_layer_idx) {
-                        already_added = true;
-                        break;
-                    }
-                }
-                // printf("5size = %d \n", size);
+            if (Gstart > 0) {
+                // CPU에서 Gstart까지 처리한 후 skip connection 검사
+                int skip_count = 0;
+
                 
-                // 아직 추가되지 않은 skip connection이면 추가
-                if(!already_added && skip_count < 10) {
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[skip_count] = skip_layer_idx;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_data[skip_count] = 
-                        net.layers[skip_layer_idx].output;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_size[skip_count] = 
-                        net.layers[skip_layer_idx].outputs * net.layers[skip_layer_idx].batch;
-                    
-                    printf("Skip Connection Debug - Layer %d는 이전 레이어 %d의 출력을 참조합니다.\n", 
-                           i, skip_layer_idx);
-                    printf("Skip Connection Data 첫 5개 값: ");
-                    for(int l = 0; l < 5 && l < net.layers[skip_layer_idx].outputs; l++) {
-                        printf("%f ", net.layers[skip_layer_idx].output[l]);
+                // Gstart부터 Gend까지의 레이어들이 참조하는 모든 skip connection 확인
+                for(int i = Gstart; i < Gend; i++) {
+                    // 각 레이어의 skip connection 배열 검사
+                    for(int j = 0; j < 10; j++) {
+                        int skip_layer_idx = skip_layers[i][j];
+                        
+                        // 유효한 skip connection이고 Gstart 이전 레이어인 경우만 처리
+                        if(skip_layer_idx > 0 && skip_layer_idx < Gstart) {
+                            // 이미 추가된 skip connection인지 확인 (중복 방지)
+                            bool already_added = false;
+                            for(int k = 0; k < skip_count; k++) {
+                                if(gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[k] == skip_layer_idx) {
+                                    already_added = true;
+                                    break;
+                                }
+                            }
+                            
+                            // 아직 추가되지 않은 skip connection이면 추가
+                            if(!already_added && skip_count < 10) {
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[skip_count] = skip_layer_idx;
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_data[skip_count] = 
+                                    net.layers[skip_layer_idx].output;
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_size[skip_count] = 
+                                    net.layers[skip_layer_idx].outputs * net.layers[skip_layer_idx].batch;
+                                
+                                skip_count++;
+                            }
+                        }
                     }
-                    printf("\n");
-                    
-                    skip_count++;
                 }
+
+                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
+                if (VISUAL || skip_count > 0) 
+                    printf("Worker %d: Added %d skip connections to GPU task\n", data.thread_id, skip_count);
             }
-        }
-    }
-    printf("6size = %d \n", size);
-    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
-    if (VISUAL || skip_count > 0) 
-        printf("Worker %d: Added %d skip connections to GPU task\n", data.thread_id, skip_count);
-}printf("s7ize = %d \n", size);
             // GPU 작업 요청 시간 기록
             double worker_request_time = current_time_in_ms();
             
             // GPU 작업 큐에 작업 추가
             pthread_mutex_lock(&gpu_queue_mutex);
             task_id = gpu_task_tail;
-            printf("8size = %d \n", size);
-            // GPU 메모리 할당 상태 확인
-    printf("Debug - Worker %d: GPU memory state - net.input_state_gpu=%p\n", 
-        data.thread_id, net.input_state_gpu);
-        printf("9size = %d \n", size);
             
             // GPU 작업 정보 설정
-             size = net.layers[Gstart - 1].outputs * net.batch;
-             printf("10size = %d \n", size);
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = gpu_input;
-            // gpu_task_queue 입력 데이터의 마지막 10개 출력
-    printf("GPU task queue input (last 10 values): ");
-    for(int k = size - print_count; k < size; k++) {
-        printf("%.6f ", gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input[k]);
-    }
-    printf("\n");
-    printf("11size = %d \n", size);
+
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].net = net;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
@@ -889,13 +751,12 @@ if (Gstart > 0) {
             double compute_time = completed_task.gpu_end_time - completed_task.gpu_start_time;
             double pull_time = completed_task.pull_end_time - completed_task.pull_start_time;
             
-        // 메모리 해제 추가
-        if (gpu_input) {
-            free(gpu_input);
-            printf("Debug - Worker %d: Freed aligned copy\n", data.thread_id);
-        }
-        
-        pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
+            // 메모리 해제 추가
+            if (gpu_input) {
+                free(gpu_input);
+            }
+            
+            pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
             
             if (VISUAL) printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
             
@@ -910,28 +771,12 @@ if (Gstart > 0) {
             for(j = Gend; j < net.n; ++j){
                 post_state.index = j;
                 l = net.layers[j];
-                if (j< 10){
-                    // 각 레이어 입력값 뒤에서 10개 출력
-                    printf("Layer %d (Post-GPU) input (last 10 values): ", j);
-                    print_count = (l.inputs < 10) ? l.inputs : 10;
-                    for(int k = l.inputs - print_count; k < l.inputs; k++) {
-                        printf("%.6f ", post_state.input[k]);
-                    }
-                    printf("\n");
-                }
+
                 if(l.delta && post_state.train && l.train){
                     scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                 }
                 l.forward(l, post_state);
-                if (j< 10){
-                    // 각 레이어 출력값 뒤에서 10개 출력
-                    printf("Layer %d (Post-GPU) output (last 10 values): ", j);
-                    print_count = (l.outputs < 10) ? l.outputs : 10;
-                    for(int k = l.outputs - print_count; k < l.outputs; k++) {
-                        printf("%.6f ", l.output[k]);
-                    }
-                    printf("\n");
-                }
+
                 post_state.input = l.output;
             }
             
