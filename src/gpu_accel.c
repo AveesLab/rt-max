@@ -25,7 +25,7 @@
 
 #define START_IDX 5
 #define VISUAL 1
-
+#define MAX_BUFFER_SIZE 2097152
 // 시간 측정 함수
 double current_time_in_ms() {
     struct timespec ts;
@@ -275,6 +275,26 @@ void* gpu_dedicated_thread(void* arg) {
         cuda_set_device(gpu_index);
         CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
     }
+    if(gpu_index >= 0){
+        cuda_set_device(gpu_index);
+        CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+        
+        // CUDA 초기화 상태 확인
+        cudaError_t status = cudaGetLastError();
+        if (status != cudaSuccess) {
+            printf("CUDA initialization error: %s\n", cudaGetErrorString(status));
+        } else {
+            printf("CUDA initialized successfully on device %d\n", gpu_index);
+        }
+    }
+
+    // Pinned 메모리 할당 (초기화 시 한 번만)
+    float* pinned_buffer = NULL;
+    cudaError_t status = cudaMallocHost((void**)&pinned_buffer, MAX_BUFFER_SIZE * sizeof(float));
+    if (status != cudaSuccess) {
+        printf("Failed to allocate pinned memory: %s\n", cudaGetErrorString(status));
+        // 오류 처리
+    }
     
     gpu_task_t current_task;
     
@@ -282,6 +302,8 @@ void* gpu_dedicated_thread(void* arg) {
         // 작업 큐에서 작업 가져오기
         pthread_mutex_lock(&gpu_queue_mutex);
         while (gpu_task_head == gpu_task_tail) {
+            if (VISUAL) printf("GPU Thread: Check gpu_task_head == gpu_task_tail for worker %d (layers %d-%d)\n", 
+               current_task.thread_id, current_task.Gstart, current_task.Gend);
             pthread_cond_wait(&gpu_queue_cond, &gpu_queue_mutex);
         }
         
@@ -299,6 +321,20 @@ void* gpu_dedicated_thread(void* arg) {
         if (current_task.net.gpu_index != cuda_get_device())
             cuda_set_device(current_task.net.gpu_index);
         
+        // GPU 메모리 확인 및 준비
+        if (current_task.net.input_state_gpu == NULL) {
+            printf("ERROR: GPU memory not allocated. Trying to allocate...\n");
+            
+            // GPU 메모리 할당 시도
+            size_t size_bytes = current_task.size * sizeof(float);
+            cudaError_t status = cudaMalloc((void**)&current_task.net.input_state_gpu, size_bytes);
+            if (status != cudaSuccess) {
+                printf("Failed to allocate GPU memory: %s\n", cudaGetErrorString(status));
+                // 오류 처리
+                continue;
+            }
+        }
+        
         network_state state;
         state.index = 0;
         state.net = current_task.net;
@@ -308,8 +344,23 @@ void* gpu_dedicated_thread(void* arg) {
         state.delta = 0;
         
         // 입력 데이터를 GPU로 복사 (Gstart 레이어 입력)
-        cuda_push_array(state.input, current_task.input, current_task.size);
-        CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
+        // pinned_cpu 메모리를 사용하지 않고 직접 복사
+    
+        // 디버깅 출력 추가
+        printf("Debug - GPU Thread: input=%p, state.input=%p, size=%d\n", 
+            current_task.input, state.input, current_task.size);
+     
+        // 입력 데이터를 pinned 메모리로 복사
+        if (current_task.size * sizeof(float) <= MAX_BUFFER_SIZE * sizeof(float)) {
+            memcpy(pinned_buffer, current_task.input, current_task.size * sizeof(float));
+            
+            // Pinned 메모리에서 GPU로 복사
+            cuda_push_array(state.input, pinned_buffer, current_task.size);
+        } else {
+            printf("ERROR: Buffer too small for data\n");
+            // 오류 처리
+        }
+             CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
         
         // H2D 복사 종료 시간 기록
         current_task.push_end_time = current_time_in_ms();
@@ -371,7 +422,8 @@ void* gpu_dedicated_thread(void* arg) {
         pthread_cond_signal(&result_cond[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
         pthread_mutex_unlock(&result_mutex[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
     }
-    
+    // 종료 시 해제
+    if (pinned_buffer) cudaFreeHost(pinned_buffer);
     return NULL;
 }
 
@@ -435,20 +487,17 @@ static void threadFunc(thread_data_t data)
         if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", data.thread_id, sched_getcpu(), Gstart, Gend);
     }
     pthread_barrier_wait(&barrier);
-    printf("1~ %d \n", data.thread_id);
+
     for (i = 0; i < num_exp; i++) {
         if (i == START_IDX) pthread_barrier_wait(&barrier);
-        printf("2~ %d \n", data.thread_id);
 
         // 워커 작업 시작 시간 기록
         double worker_start_time = current_time_in_ms();
-        
         // __Preprocess__ (Pre-GPU 1)
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
-        printf("3~ %d \n", data.thread_id);
         
         // GPU를 사용하는 경우와 사용하지 않는 경우를 구분
         if (Gstart == Gend) {
@@ -520,47 +569,72 @@ static void threadFunc(thread_data_t data)
             save_worker_log(worker_log);
             
         } else {
-            // GPU를 사용하는 경우 (기존 로직)
-            printf("4~ %d \n", data.thread_id);
-            // 0부터 Gstart까지 CPU에서 처리 (Gstart가 0이 아닌 경우)
-            float *cpu_input = X;
+            // GPU를 사용하는 경우 (수정된 부분)
+            
+            // 네트워크 상태 초기화
+            int size = get_network_input_size(net) * net.batch;
             network_state pre_state;
             pre_state.index = 0;
             pre_state.net = net;
-            pre_state.input = cpu_input;
-            pre_state.truth = 0;
-            pre_state.train = 0;
-            pre_state.delta = 0;
             pre_state.workspace = net.workspace_cpu;
-            printf("5~ %d \n", data.thread_id);
-            if (Gstart > 0) {
+            
+            // Gstart가 0인 경우와 0이 아닌 경우 구분
+            float *gpu_input = NULL;
+            
+        
+            if (Gstart == 0) {
+                // Gstart가 0인 경우: 원본 입력 데이터 사용
+                
+                // 입력 데이터 복사본 생성 (메모리 정렬 보장)
+                int size = get_network_input_size(net) * net.batch;
+                gpu_input = (float*)malloc(size * sizeof(float));
+                if (gpu_input) {
+                    memcpy(gpu_input, X, size * sizeof(float));
+                    printf("Debug - Worker %d: Created aligned copy of input data\n", data.thread_id);
+                } else {
+                    printf("ERROR: Failed to allocate memory for aligned copy\n");
+                }
+            } else {
+                // Gstart가 0이 아닌 경우 - CPU에서 Gstart까지 처리
+                pre_state.input = X;
+                
                 for(j = 0; j < Gstart; ++j){
                     pre_state.index = j;
                     l = net.layers[j];
                     if(l.delta && pre_state.train && l.train){
                         scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
-                    printf("6~ %d \n", data.thread_id);
                     l.forward(l, pre_state);
                     pre_state.input = l.output;
                 }
-                // Gstart 레이어의 입력이 될 데이터로 교체
-                X = pre_state.input;
-            }printf("7~ %d \n", data.thread_id);
+                
+                // 처리된 데이터 복사본 생성
+                int size = net.layers[Gstart].inputs * net.batch;
+                gpu_input = (float*)malloc(size * sizeof(float));
+                if (gpu_input) {
+                    memcpy(gpu_input, pre_state.input, size * sizeof(float));
+                    printf("Debug - Worker %d: Created aligned copy of processed data\n", data.thread_id);
+                } else {
+                    printf("ERROR: Failed to allocate memory for aligned copy\n");
+                }
+            }
 
             // GPU 작업 요청 준비
             int task_id;
-            int size = net.layers[Gstart].inputs * net.batch;  // Gstart 레이어 입력 크기
-            printf("8~ %d \n", data.thread_id);
+            
             // GPU 작업 요청 시간 기록
             double worker_request_time = current_time_in_ms();
             
             // GPU 작업 큐에 작업 추가
             pthread_mutex_lock(&gpu_queue_mutex);
             task_id = gpu_task_tail;
-            printf("9~ %d \n", data.thread_id);
+
+            // GPU 메모리 할당 상태 확인
+    printf("Debug - Worker %d: GPU memory state - net.input_state_gpu=%p\n", 
+        data.thread_id, net.input_state_gpu);
             
-            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = X;
+            // GPU 작업 정보 설정
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = gpu_input;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].net = net;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
@@ -575,19 +649,14 @@ static void threadFunc(thread_data_t data)
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
-            printf("10~ %d \n", data.thread_id);
             
-            // 메모리 복사 (CPU -> GPU 스레드가 사용할 메모리)
-            memcpy(net.input_pinned_cpu, X, size * sizeof(float));
-            printf("11~ %d \n", data.thread_id);
+            // 입력 데이터는 GPU 스레드에서 직접 복사하도록 설정 (memcpy 제거)
             gpu_task_tail++;
             pthread_cond_signal(&gpu_queue_cond);
-            printf("12~ %d \n", data.thread_id);
             pthread_mutex_unlock(&gpu_queue_mutex);
-            printf("13~ %d \n", data.thread_id);
-            
             
             if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
+            
             
             // GPU 작업이 완료될 때까지 대기
             pthread_mutex_lock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
@@ -604,7 +673,13 @@ static void threadFunc(thread_data_t data)
             double compute_time = completed_task.gpu_end_time - completed_task.gpu_start_time;
             double pull_time = completed_task.pull_end_time - completed_task.pull_start_time;
             
-            pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
+        // 메모리 해제 추가
+        if (gpu_input) {
+            free(gpu_input);
+            printf("Debug - Worker %d: Freed aligned copy\n", data.thread_id);
+        }
+        
+        pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
             
             if (VISUAL) printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
             
