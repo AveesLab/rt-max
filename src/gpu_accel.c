@@ -35,12 +35,9 @@ void print_layer_info(network net)
     int i;
     for(i = 0; i < net.n; ++i){
         layer l = net.layers[i];
-        if(l.type == CONVOLUTIONAL){
-            // printf("Convolutional Layer %d: filters=%d, size=%d\n", i, l.n, l.size);
-            layer_indexes[num_layer] = i;
-            num_layer++;
-        } else if(l.type == CONNECTED){
-            // printf("Connected Layer %d: outputs=%d\n", i, l.outputs);
+        if(l.type == CONVOLUTIONAL || l.type == CONNECTED){
+            // printf("ConV/FC Layer %d: num_layer=%d, layer_indexes[num_layer]=%d\n", i, num_layer, layer_indexes[num_layer]);
+
             layer_indexes[num_layer] = i;
             num_layer++;
         }
@@ -541,9 +538,8 @@ static void threadFunc(thread_data_t data)
     }
     pthread_mutex_unlock(&mutex_init);
 
-
-    for (int s = 0; s < num_layer; s++){
-        for (int e = s + 1; s < num_layer; e++){
+    for (int s = 0; s < num_layer; s+=100){
+        for (int e = s + 1; e < num_layer; e+=100){
             pthread_barrier_wait(&barrier);
             // 각 워커별 GPU 사용 범위 설정
             int Gstart = layer_indexes[s];    // GPU 작업 시작 레이어 인덱스
