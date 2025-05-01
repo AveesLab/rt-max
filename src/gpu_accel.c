@@ -129,8 +129,10 @@ typedef struct worker_log_t {
     int Gstart;                // GPU 시작 레이어
     int Gend;                  // GPU 종료 레이어
     double worker_start_time;
+    double worker_inference_time;
     double worker_request_time;
     double worker_receive_time;
+    double worker_postprocess_time;
     double worker_end_time;
     // 추가된 전송 시간 (워커 로그에도 GPU 작업 관련 시간 추가)
     double push_time;          // GPU 메모리로 전송 시간
@@ -244,20 +246,22 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_request_time,worker_receive_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
+    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time, worker_inference_time, worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
     for (int i = 0; i < worker_log_count; i++) {
         double preprocessing_time = worker_logs[i].worker_request_time - worker_logs[i].worker_start_time;
         double postprocessing_time = worker_logs[i].worker_end_time - worker_logs[i].worker_receive_time;
         double total_time = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
         double total_gpu_time = worker_logs[i].push_time + worker_logs[i].compute_time + worker_logs[i].pull_time;
         
-        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id,
                 worker_logs[i].Gstart,
                 worker_logs[i].Gend,
                 worker_logs[i].worker_start_time, 
+                worker_logs[i].worker_inference_time, 
                 worker_logs[i].worker_request_time, 
                 worker_logs[i].worker_receive_time, 
+                worker_logs[i].worker_postprocess_time, 
                 worker_logs[i].worker_end_time,
                 worker_logs[i].push_time,
                 worker_logs[i].compute_time,
@@ -538,8 +542,8 @@ static void threadFunc(thread_data_t data)
     }
     pthread_mutex_unlock(&mutex_init);
 
-    for (int s = 0; s < num_layer; s+=12){
-        for (int e = s + 1; e < num_layer; e+=2){
+    for (int s = 0; s < 1; s++){
+        for (int e = s + 1; e < num_layer; e++){
             pthread_barrier_wait(&barrier);
             // 각 워커별 GPU 사용 범위 설정
             int Gstart = layer_indexes[s];    // GPU 작업 시작 레이어 인덱스
@@ -574,6 +578,7 @@ static void threadFunc(thread_data_t data)
                 resized = resize_min(im, net.w);
                 cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
                 X = cropped.data;
+                double worker_inference_time = current_time_in_ms();
                 
                 // GPU를 사용하는 경우와 사용하지 않는 경우를 구분
                 if (Gstart == Gend) {
@@ -604,6 +609,7 @@ static void threadFunc(thread_data_t data)
                     
                     
                     double worker_receive_time = worker_request_time;
+                    double worker_postprocess_time = current_time_in_ms();
                     
                     predictions = get_network_output(net, 0);
                     
@@ -613,8 +619,10 @@ static void threadFunc(thread_data_t data)
                     worker_log.Gstart = Gstart;
                     worker_log.Gend = Gend;
                     worker_log.worker_start_time = worker_start_time;
+                    worker_log.worker_inference_time = worker_inference_time;
                     worker_log.worker_request_time = worker_request_time;
                     worker_log.worker_receive_time = worker_receive_time;
+                    worker_log.worker_postprocess_time = worker_postprocess_time;
                     worker_log.worker_end_time = 0; // 나중에 설정
                     worker_log.push_time = 0;       // CPU 전용 모드에서는 0
                     worker_log.compute_time = 0;    // CPU 전용 모드에서는 0
@@ -818,7 +826,7 @@ static void threadFunc(thread_data_t data)
                         post_state.input = l.output;
                     }
                     
-                    
+                    double worker_postprocess_time = current_time_in_ms();
                     if (Gend == net.n) predictions = get_network_output_gpu(net);
                     else predictions = get_network_output(net, 0);
                     reset_wait_stream_events();
@@ -850,8 +858,10 @@ static void threadFunc(thread_data_t data)
                     worker_log.Gstart = Gstart;
                     worker_log.Gend = Gend;
                     worker_log.worker_start_time = worker_start_time;
+                    worker_log.worker_inference_time = worker_inference_time;
                     worker_log.worker_request_time = worker_request_time;
                     worker_log.worker_receive_time = worker_receive_time;
+                    worker_log.worker_postprocess_time = worker_postprocess_time;
                     worker_log.push_time = push_time;
                     worker_log.compute_time = compute_time;
                     worker_log.pull_time = pull_time;
