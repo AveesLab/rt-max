@@ -212,14 +212,17 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    fprintf(fp_gpu, "thread_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,push_delay,compute_delay,pull_delay,total_delay\n");
+    fprintf(fp_gpu, "thread_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
+        // 큐 대기 시간
+        double queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;
         double push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
-        double compute_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
+        // compute_delay를 gpu_inference_delay로 이름 변경
+        double gpu_inference_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
         double pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
         double total_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
         
-        fprintf(fp_gpu, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_gpu, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 gpu_logs[i].thread_id,
                 gpu_logs[i].Gstart,
                 gpu_logs[i].Gend,
@@ -230,8 +233,9 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
                 gpu_logs[i].gpu_end_time,
                 gpu_logs[i].pull_start_time,
                 gpu_logs[i].pull_end_time,
+                queue_waiting_delay,    // 위치 변경됨: push_delay 앞으로 이동
                 push_delay,
-                compute_delay,
+                gpu_inference_delay,    // 변수명 변경됨: compute_delay -> gpu_inference_delay
                 pull_delay,
                 total_delay);
     }
@@ -246,14 +250,16 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time, worker_inference_time, worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,push_time,compute_time,pull_time,total_gpu_time,preprocessing_time,postprocessing_time,total_time\n");
+    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,cpu_inference_delay_2,postprocess_delay,total_delay\n");
     for (int i = 0; i < worker_log_count; i++) {
-        double preprocessing_time = worker_logs[i].worker_request_time - worker_logs[i].worker_start_time;
-        double postprocessing_time = worker_logs[i].worker_end_time - worker_logs[i].worker_receive_time;
-        double total_time = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
-        double total_gpu_time = worker_logs[i].push_time + worker_logs[i].compute_time + worker_logs[i].pull_time;
+        // 새로운 지연 시간 계산
+        double preprocess_delay = worker_logs[i].worker_inference_time - worker_logs[i].worker_start_time;
+        double cpu_inference_delay_1 = worker_logs[i].worker_request_time - worker_logs[i].worker_inference_time;
+        double cpu_inference_delay_2 = worker_logs[i].worker_postprocess_time - worker_logs[i].worker_receive_time;
+        double postprocess_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_postprocess_time;
+        double total_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
         
-        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id,
                 worker_logs[i].Gstart,
                 worker_logs[i].Gend,
@@ -263,13 +269,11 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
                 worker_logs[i].worker_receive_time, 
                 worker_logs[i].worker_postprocess_time, 
                 worker_logs[i].worker_end_time,
-                worker_logs[i].push_time,
-                worker_logs[i].compute_time,
-                worker_logs[i].pull_time,
-                total_gpu_time,
-                preprocessing_time,
-                postprocessing_time,
-                total_time);
+                preprocess_delay,
+                cpu_inference_delay_1,
+                cpu_inference_delay_2,
+                postprocess_delay,
+                total_delay);
     }
     fclose(fp_worker);
 }
