@@ -27,6 +27,8 @@
 #define VISUAL 0
 #define MAX_BUFFER_SIZE 2097152
 
+static int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
+
 int layer_indexes[500];
 int num_layer = 0;
 
@@ -945,6 +947,12 @@ static void threadFunc(thread_data_t data)
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
+
+    if (MAXCORES < num_thread) {
+    	printf("Error! Too many CPU cores!\n");
+    	return 0;
+    }
+
     int rc;
     int i;
     pthread_t gpu_thread;
@@ -968,10 +976,10 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         exit(-1);
     }
 
-    // GPU 스레드를 코어 1에 고정
+    // GPU 스레드를 코어 3에 고정
     cpu_set_t gpu_cpuset;
     CPU_ZERO(&gpu_cpuset);
-    CPU_SET(1, &gpu_cpuset);
+    CPU_SET(3, &gpu_cpuset);
     rc = pthread_setaffinity_np(gpu_thread, sizeof(gpu_cpuset), &gpu_cpuset);
     if (rc != 0) {
         fprintf(stderr, "GPU thread: pthread_setaffinity_np() failed\n");
@@ -1009,7 +1017,7 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         // __CPU AFFINITY SETTING__
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(i + 2, &cpuset); // 코어 할당 (1부터 시작, 1은 GPU 스레드용, 0은 OS 작업용)
+        CPU_SET(coreIDOrder[i], &cpuset); // 코어 할당 (3은 GPU 스레드용, 0, 1, 2은 OS 작업용)
         
         int ret = pthread_setaffinity_np(threads[i], sizeof(cpuset), &cpuset);
         if (ret != 0) {

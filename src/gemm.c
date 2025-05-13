@@ -13,6 +13,7 @@
 #endif
 
 #include <cblas.h>
+#include "blis/blis.h"
 
 #if defined(_MSC_VER)
 #if defined(_M_ARM) || defined(_M_ARM64)
@@ -115,12 +116,23 @@ void gemm (int TA ,int TB ,int M ,int N ,int K ,float ALPHA ,
     float BETA ,  
     float *C ,int ldc, bool do_reclaiming)  
 {
-    int blas = 1;
 #ifdef OPENBLAS
-
-            //printf("cblas_sgemm 함수 호출\n");
+    if (do_reclaiming) {
+        // printf("cblas_sgemm 함수 호출\n");
 	    cblas_sgemm (CblasRowMajor ,CblasNoTrans ,CblasNoTrans ,M ,N ,K ,ALPHA ,A ,lda ,B ,ldb ,BETA ,C ,ldc );  
-
+    }
+    else {
+        // printf("bli_sgemm 함수 호출\n");
+        bli_sgemm(
+            BLIS_NO_TRANSPOSE, BLIS_NO_TRANSPOSE,
+            M, N, K,
+            &ALPHA,
+            A, lda, 1,  // A 행렬: 데이터, 열 간격, 행 간격 수정
+            B, ldb, 1,  // B 행렬: 데이터, 열 간격, 행 간격 수정
+            &BETA,
+            C, ldc, 1   // C 행렬: 데이터, 열 간격, 행 간격 수정
+        );
+    }
 #else  
 	gemm_cpu (TA ,TB ,M ,N ,K ,ALPHA ,A ,lda ,B ,ldb ,BETA ,C ,ldc );  
 #endif  

@@ -23,10 +23,104 @@
 #endif
 #endif
 
-pthread_barrier_t barrier;
+#define START_IDX 3
+#define VISUAL 0
 
-static int coreIDOrder[MAXCORES] = {3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11};
+static int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
 
+// 로그 쓰기를 위한 barrier와 뮤텍스
+static pthread_barrier_t log_barrier;
+static pthread_mutex_t log_write_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int log_written = 0;  // 로그가 이미 작성되었는지 확인하는 플래그
+
+// 시간 측정 함수
+static double current_time_in_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+}
+
+// 로그 파일 핸들
+static FILE *fp_worker;
+
+// 기존 동기화 객체
+static pthread_barrier_t barrier;
+static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
+
+// 작업 로그 관련 구조체 및 변수
+#define MAX_TASKS 1000  // 최대 작업 수 (로그 저장용)
+
+typedef struct worker_log_t {
+    int thread_id;
+    double worker_start_time;
+    double worker_preprocess_end_time;
+    double worker_inference_end_time;
+    double worker_postprocess_end_time;
+    double worker_end_time;
+} worker_log_t;
+
+// 로그 저장용 배열
+static worker_log_t worker_logs[MAX_TASKS];
+static int worker_log_count = 0;
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// 로그 함수 - 배열에 저장
+static void save_worker_log(worker_log_t log) {
+    pthread_mutex_lock(&log_mutex);
+    if (worker_log_count < MAX_TASKS) {
+        worker_logs[worker_log_count] = log;
+        worker_log_count++;
+    }
+    pthread_mutex_unlock(&log_mutex);
+}
+
+// 정렬 비교 함수
+static int compare_worker_logs(const void *a, const void *b) {
+    worker_log_t *log_a = (worker_log_t *)a;
+    worker_log_t *log_b = (worker_log_t *)b;
+    if (log_a->worker_start_time < log_b->worker_start_time) return -1;
+    if (log_a->worker_start_time > log_b->worker_start_time) return 1;
+    return 0;
+}
+
+// 로그 파일 작성 함수
+static void write_logs_to_file(char *model_name, char *worker_path) {
+    // 워커 로그 정렬 및 파일 작성
+    qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
+
+    fp_worker = fopen(worker_path, "w");
+    if (!fp_worker) {
+        perror("파일 열기 실패");
+        exit(1);
+    }
+
+    // 워커 CSV 헤더
+    fprintf(fp_worker, "thread_id,worker_start_time,worker_preprocess_end_time,worker_inference_end_time,worker_postprocess_end_time,worker_end_time,preprocess_delay,inference_delay,postprocess_delay,total_delay\n");
+    
+    for (int i = 0; i < worker_log_count; i++) {
+        // 워커 지연 시간 계산
+        double preprocess_delay = worker_logs[i].worker_preprocess_end_time - worker_logs[i].worker_start_time;
+        double inference_delay = worker_logs[i].worker_inference_end_time - worker_logs[i].worker_preprocess_end_time;
+        double postprocess_delay = worker_logs[i].worker_postprocess_end_time - worker_logs[i].worker_inference_end_time;
+        double total_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
+        
+        // 워커 로그와 CPU 지연 시간 저장
+        fprintf(fp_worker, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+                worker_logs[i].thread_id,
+                worker_logs[i].worker_start_time, 
+                worker_logs[i].worker_preprocess_end_time, 
+                worker_logs[i].worker_inference_end_time, 
+                worker_logs[i].worker_postprocess_end_time, 
+                worker_logs[i].worker_end_time,
+                preprocess_delay,
+                inference_delay,
+                postprocess_delay,
+                total_delay);
+    }
+    fclose(fp_worker);
+}
+
+// 스레드 데이터 구조체
 typedef struct thread_data_t{
     char *datacfg;
     char *cfgfile;
@@ -41,187 +135,38 @@ typedef struct thread_data_t{
     int letter_box;
     int benchmark_layers;
     int thread_id;
+    int num_thread;
     bool isTest;
 } thread_data_t;
 
-#ifdef MEASURE
-static double core_id_list[1000];
-static double start_preprocess[1000];
-static double end_preprocess[1000];
-static double e_preprocess[1000];
-
-static double start_infer[1000];
-static double end_infer[1000];
-static double e_infer[1000];
-
-static double start_postprocess[1000];
-static double end_postprocess[1000];
-static double e_postprocess[1000];
-#endif
-
-static double execution_time[1000];
-static double execution_time_max[1000];
-
-static float avg_execution_time;
-static float max_execution_time;
-static float R;
-
-#ifdef MEASURE
-static int compare(const void *a, const void *b) {
-    double valueA = *((double *)a + 1);
-    double valueB = *((double *)b + 1);
-
-    if (valueA < valueB) return -1;
-    if (valueA > valueB) return 1;
-    return 0;
-}
-
-static int write_result(char *file_path) 
-{
-    static int exist=0;
-    FILE *fp;
-    int tick = 0;
-
-    fp = fopen(file_path, "w+");
-
-    int i;
-    if (fp == NULL) 
-    {
-        /* make directory */
-        while(!exist)
-        {
-            int result;
-
-            usleep(10 * 1000);
-
-            result = mkdir(MEASUREMENT_PATH, 0766);
-            if(result == 0) { 
-                exist = 1;
-
-                fp = fopen(file_path,"w+");
-            }
-
-            if(tick == 100)
-            {
-                fprintf(stderr, "\nERROR: Fail to Create %s\n", file_path);
-
-                return -1;
-            }
-            else tick++;
-        }
-    }
-    else printf("\nWrite output in %s\n", file_path); 
-
-    double sum_measure_data[num_exp * num_thread][15];
-    for(i = 0; i < num_exp * num_thread; i++)
-    {
-        sum_measure_data[i][0] = core_id_list[i],
-        sum_measure_data[i][1] = start_preprocess[i];
-        sum_measure_data[i][2] = e_preprocess[i];
-        sum_measure_data[i][3] = end_preprocess[i];
-        sum_measure_data[i][4] = start_infer[i];
-        sum_measure_data[i][5] = e_infer[i];
-        sum_measure_data[i][6] = end_infer[i];
-        sum_measure_data[i][7] = start_postprocess[i];
-        sum_measure_data[i][8] = e_postprocess[i];
-        sum_measure_data[i][9] = end_postprocess[i];
-        sum_measure_data[i][10] = execution_time[i];
-        sum_measure_data[i][11] = execution_time_max[i];
-        sum_measure_data[i][12] = max_execution_time;
-        sum_measure_data[i][13] = 0.0;
-        sum_measure_data[i][14] = 0.0;
-    }
-    
-    qsort(sum_measure_data, sizeof(sum_measure_data)/sizeof(sum_measure_data[0]), sizeof(sum_measure_data[0]), compare);
-
-    int startIdx = 5 * num_thread; // Delete some ROWs
-    double new_sum_measure_data[sizeof(sum_measure_data)/sizeof(sum_measure_data[0])-startIdx][sizeof(sum_measure_data[0])];
-
-    int newIndex = 0;
-    for (int i = startIdx; i < sizeof(sum_measure_data)/sizeof(sum_measure_data[0]); i++) {
-        for (int j = 0; j < sizeof(sum_measure_data[0]); j++) {
-            new_sum_measure_data[newIndex][j] = sum_measure_data[i][j];
-        }
-        newIndex++;
-    }
-
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n", 
-            "core_id", 
-            "start_preprocess",     "e_preprocess",     "end_preprocess", 
-            "start_infer",          "e_infer",          "end_infer", 
-            "start_postprocess",    "e_postprocess",    "end_postprocess", 
-            "execution_time", "execution_time_max", "execution_time_max_value", "cycle_time", "frame_rate");
-
-
-    double frame_rate = 0.0;
-    double cycle_time = 0.0;
-
-    for(i = 0; i < num_exp * num_thread - startIdx; i++)
-    {
-        if (i == 0) cycle_time = NAN;
-        else cycle_time = new_sum_measure_data[i][1] - new_sum_measure_data[i-1][1];
-
-        if (i == 0) frame_rate = NAN;
-        else frame_rate = 1000/cycle_time;
-
-        new_sum_measure_data[i][13] = cycle_time;
-        new_sum_measure_data[i][14] = frame_rate;
-
-        fprintf(fp, "%0.0f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f,%0.2f\n",  
-                new_sum_measure_data[i][0], new_sum_measure_data[i][1], new_sum_measure_data[i][2], 
-                new_sum_measure_data[i][3], new_sum_measure_data[i][4], new_sum_measure_data[i][5], 
-                new_sum_measure_data[i][6], new_sum_measure_data[i][7], new_sum_measure_data[i][8], 
-                new_sum_measure_data[i][9], new_sum_measure_data[i][10], new_sum_measure_data[i][11], new_sum_measure_data[i][12], new_sum_measure_data[i][13], new_sum_measure_data[i][14]);
-    }
-    
-    fclose(fp);
-
-    return 1;
-}
-#endif
-
+// 워커 스레드 함수 수정
 static void threadFunc(thread_data_t data)
 {
-    // __CPU AFFINITY SETTING__
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(coreIDOrder[data.thread_id-1], &cpuset); // cpu core index
-
-    int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
-    if (ret != 0) {
-        fprintf(stderr, "pthread_setaffinity_np() failed \n");
-        exit(0);
-    } 
-
+    // __Worker-thread-initialization__
+    pthread_mutex_lock(&mutex_init);
+    // GPU SETUP - 초기화만 수행, 실제 GPU 작업은 GPU 스레드가 담당
     list *options = read_data_cfg(data.datacfg);
     char *name_list = option_find_str(options, "names", "data/names.list");
     int names_size = 0;
-    char **names = get_labels_custom(name_list, &names_size); //get_labels(name_list)
-
+    char **names = get_labels_custom(name_list, &names_size);
     char buff[256];
     char *input = buff;
-
     image **alphabet = load_alphabet();
-
-    float nms = .45;    // 0.4F
-    // double time;
-
+    float nms = .45;
+    double time;
     int top = 5;
-    int nboxes, index, i, j, k = 0;
+    int index, i, j, k = 0;
     int* indexes = (int*)xcalloc(top, sizeof(int));
-
+    int nboxes;
+    detection *dets;
     image im, resized, cropped;
     float *X, *predictions;
-    detection *dets;
-
     char *target_model = "yolo";
     int object_detection = strstr(data.cfgfile, target_model);
-
-    int device = 0; // Choose CPU or GPU
-
-    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device); // set batch=1
+    int device = 1;
+    extern gpu_yolo;
+    network net = parse_network_cfg_custom(data.cfgfile, 1, 1, device);
     layer l = net.layers[net.n - 1];
-
     if (data.weightfile) {
         load_weights(&net, data.weightfile);
     }
@@ -229,92 +174,75 @@ static void threadFunc(thread_data_t data)
     net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
-
     srand(2222222);
-
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
 
-    double remaining_time = 0.0;
-    double wait_start = 0.0;
-    double wait_end = 0.0;
-    double work_time = 0.0;
+    pthread_mutex_unlock(&mutex_init);
 
-    double start_task_time = 0.0;
+    if (data.thread_id == 1) {
+        // 로그 카운터 초기화
+        worker_log_count = 0;
+
+        // 로그 배열 초기화 (선택적)
+        memset(worker_logs, 0, sizeof(worker_logs));
+        printf("Data parallel with %d worker threads\n", num_thread);
+    }
+
+    // __Chekc-worker-thread-initialization__
+    if (VISUAL) printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", data.thread_id, sched_getcpu());
+    pthread_barrier_wait(&barrier);
 
     for (i = 0; i < num_exp; i++) {
+        if (i == START_IDX) pthread_barrier_wait(&barrier);
 
-        if (i ==0) pthread_barrier_wait(&barrier);
-
-        if (!data.isTest) {
-            if (i == 5) {
-                pthread_barrier_wait(&barrier);
-                // usleep(R * (data.thread_id - 1) * 1000);
-
-                // Busy wait for the remaining time
-                remaining_time = R * (data.thread_id - 1);
-                wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-                
-                if (remaining_time > 0) {
-                    wait_start = get_time_in_ms();
-                    wait_end;
-                    do {
-                        wait_end = get_time_in_ms();
-                        work_time = wait_end - wait_start;
-                    } while(work_time < remaining_time);
-                }
-            }
-        }
-
-        // __Preprocess__
-#ifdef MEASURE
-        start_task_time = get_time_in_ms();
-        int count = i * num_thread + data.thread_id - 1;
-        start_preprocess[count] = get_time_in_ms();
-#endif
-
-#ifdef NVTX
-        char task[100];
-        sprintf(task, "Task (cpu: %d)", data.thread_id);
-        nvtxRangeId_t nvtx_task;
-        nvtx_task = nvtxRangeStartA(task);
-#endif
-
-#ifdef MEASURE
-        // printf("\nThread %d is set to CPU core %d count(%d) : %d \n\n", data.thread_id, sched_getcpu(), data.thread_id, count);
-#else
-        printf("\nThread %d is set to CPU core %d\n\n", data.thread_id, sched_getcpu());
-#endif
+        // 워커 작업 시작 시간 기록
+        double worker_start_time = current_time_in_ms();
         
+        // __Preprocess__
         im = load_image(input, 0, 0, net.c);
         resized = resize_min(im, net.w);
         cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         X = cropped.data;
         
-#ifdef MEASURE
-        end_preprocess[count] = get_time_in_ms();
-        e_preprocess[count] = end_preprocess[count] - start_preprocess[count];
-#endif
+        // 전처리 완료 시간 기록
+        double worker_preprocess_end_time = current_time_in_ms();
         
-        // __Inference__
-#ifdef MEASURE
-        start_infer[count] = get_time_in_ms();
-#endif
+        // 전체 네트워크를 CPU에서 실행
+        network_state state;
+        state.index = 0;
+        state.net = net;
+        state.input = X;
+        state.truth = 0;
+        state.train = 0;
+        state.delta = 0;
+        state.workspace = net.workspace_cpu;
+        
+        for(j = 0; j < net.n; ++j){
+            state.index = j;
+            l = net.layers[j];
+        
+            if(l.delta && state.train && l.train){
+                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+            }
+            l.forward(l, state);
 
-        if (device) predictions = network_predict(net, X);
-        else predictions = network_predict_cpu(net, X);
-
-#ifdef MEASURE
-        end_infer[count] = get_time_in_ms();
-        e_infer[count] = end_infer[count] - start_infer[count];
-#endif
-
+            state.input = l.output;
+        }
+        
+        // 추론 완료 시간 기록
+        double worker_inference_end_time = current_time_in_ms();
+        
+        predictions = get_network_output(net, 0);
+        
+        // 워커 로그 직접 저장 (CPU 전용 모드)
+        worker_log_t worker_log;
+        worker_log.thread_id = data.thread_id;
+        worker_log.worker_start_time = worker_start_time;
+        worker_log.worker_preprocess_end_time = worker_preprocess_end_time;
+        worker_log.worker_inference_end_time = worker_inference_end_time;
+        
         // __Postprecess__
-#ifdef MEASURE
-        start_postprocess[count] = get_time_in_ms();
-#endif
-
-        // __NMS & TOP acccuracy__
         if (object_detection) {
             dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
             if (nms) {
@@ -322,107 +250,89 @@ static void threadFunc(thread_data_t data)
                 else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
             }
             draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
-        } // yolo model
+        }
         else {
             if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
             top_k(predictions, net.outputs, top, indexes);
             for(j = 0; j < top; ++j){
                 index = indexes[j];
-                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-
-#ifndef MEASURE
-                else printf("%s: %f\n",names[index], predictions[index]);
-#endif
-
+                if (VISUAL) {
+                    if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                    else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                }
             }
-        } // classifier model
-
-        // __Display__
-        // if (!data.dont_show) {
-        //     show_image(im, "predictions");
-        //     wait_key_cv(1);
-        // }
+        }
+        
+        // 후처리 완료 시간 기록
+        double worker_postprocess_end_time = current_time_in_ms();
+        
+        // 워커 작업 종료 시간 기록
+        double worker_end_time = current_time_in_ms();
+        worker_log.worker_postprocess_end_time = worker_postprocess_end_time;
+        worker_log.worker_end_time = worker_end_time;
+        
+        save_worker_log(worker_log);
 
         // free memory
         free_image(im);
         free_image(resized);
         free_image(cropped);
-
-
-#ifdef MEASURE
-        end_postprocess[count] = get_time_in_ms();
-        e_postprocess[count] = end_postprocess[count] - start_postprocess[count];
-        execution_time[count] = end_postprocess[count] - start_preprocess[count];
-        core_id_list[count] = (double)sched_getcpu();
-        // printf("\n%s: Predicted in %0.3f milli-seconds.\n", input, e_infer[count]);
-#else
-        // execution_time[i] = get_time_in_ms() - time;
-        // frame_rate[i] = 1000.0 / (execution_time[i] / num_thread); // N thread
-        // printf("\n%s: Predicted in %0.3f milli-seconds. (%0.3lf fps)\n", input, execution_time[i], frame_rate[i]);
-#endif
-
-
-        // Busy wait for the remaining time
-        // if (!data.isTest) {
-        //     remaining_time = R * num_thread - (get_time_in_ms() - start_preprocess[count]);
-        //     wait_start, wait_end, work_time = 0.0, 0.0, 0.0;
-            
-        //     if (remaining_time > 0) {
-        //         wait_start = get_time_in_ms();
-        //         wait_end;
-        //         do {
-        //             wait_end = get_time_in_ms();
-        //             work_time = wait_end - wait_start;
-        //         } while(work_time < remaining_time);
-        //     }
-        // }
-
-        execution_time_max[count] = get_time_in_ms() - start_preprocess[count];
-
-        // Sleep
-        //usleep(sleep_time * 1000);
-
-#ifdef NVTX
-        nvtxRangeEnd(nvtx_task);
-#endif
     }
+    // 스레드 작업 완료 후 barrier에서 대기
+    pthread_barrier_wait(&log_barrier);
+    // thread_id가 1인 스레드만 로그 작성
+    pthread_mutex_lock(&log_write_mutex);
+    if (data.thread_id == 1) {
+        char* model_name = malloc(strlen(data.cfgfile) + 1);
+        strncpy(model_name, data.cfgfile + 6, (strlen(data.cfgfile)-10));
+        model_name[strlen(data.cfgfile)-10] = '\0';
 
+        char worker_path[256];
+        sprintf(worker_path, "./measure/data-parallel/%s/worker%d/worker_task_log.csv", model_name, num_thread);
 
+        // 로그 파일 작성
+        write_logs_to_file(model_name, worker_path);
+        if (VISUAL) printf("write_logs_to_file --> worker_log_count: %d\n", worker_log_count);
+        
+        // 메모리 해제
+        free(model_name);
+    }
+    pthread_mutex_unlock(&log_write_mutex);
+    
     // free memory
     free_detections(dets, nboxes);
     free_ptrs((void**)names, net.layers[net.n - 1].classes);
     free_list_contents_kvp(options);
     free_list(options);
     free_alphabet(alphabet);
-    // free_network(net); // Error occur
-
     pthread_exit(NULL);
-    
 }
 
 void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
-
-    //printf("\n\nData-Parallel with %d threads \n", num_thread);
-
-    pthread_t threads[num_thread];
+    if (MAXCORES < num_thread) {
+    	printf("Error! Too many CPU cores!\n");
+    	return 0;
+    }
+    
     int rc;
     int i;
-
+    pthread_t threads[num_thread];
     thread_data_t data[num_thread];
 
-    R = 0.0;
-    max_execution_time = 0.0;
-    avg_execution_time = 0.0;
-
-    printf("\n\nData-parallel with \"No\" Jitter Compensation  --> \"NO\" Sleep\n");
-    printf("\n::EXP:: Data-parallel with %d threads\n", num_thread);
-
+    // 로그 카운터 초기화
+    worker_log_count = 0;
+    
+    // 워커 스레드 배리어 초기화
     pthread_barrier_init(&barrier, NULL, num_thread);
+    pthread_barrier_init(&log_barrier, NULL, num_thread);
+    
+    // 워커 스레드 생성
     for (i = 0; i < num_thread; i++) {
         data[i].datacfg = datacfg;
         data[i].cfgfile = cfgfile;
+        data[i].num_thread = num_thread;
         data[i].weightfile = weightfile;
         data[i].filename = filename;
         data[i].thresh = thresh;
@@ -434,90 +344,36 @@ void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
-        data[i].isTest = true;
+        
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
             exit(-1);
         }
+
+        // __CPU AFFINITY SETTING__
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(coreIDOrder[i], &cpuset); // 코어 할당 (0은 OS 작업용)
+        
+        int ret = pthread_setaffinity_np(threads[i], sizeof(cpuset), &cpuset);
+        if (ret != 0) {
+            fprintf(stderr, "Worker thread: pthread_setaffinity_np() failed\n");
+            exit(0);
+        } 
     }
 
+    // 워커 스레드 종료 대기
     for (i = 0; i < num_thread; i++) {
         pthread_join(threads[i], NULL);
     }
-
-    int startIdx = 5 * num_thread;
-    for (i = startIdx; i < num_thread * num_exp; i++) {
-        max_execution_time = MAX(max_execution_time, execution_time[i]);
-        avg_execution_time += execution_time[i];
-    }
-
-    avg_execution_time = avg_execution_time / (num_thread * num_exp - startIdx + 1);
-
-    double wcet_ratio = 1.0; // Already WCET (Parallel 11 thread with No R --> Maximum Memony contention)
-    max_execution_time = max_execution_time * wcet_ratio;
-
-    printf("\navg execution time (max) : %0.2lf (%0.2lf) \n", avg_execution_time, max_execution_time);
-    R = max_execution_time / num_thread;
-    printf("R : %0.2lf \n", R);
-
-
-    // printf("\n\n::EXP:: Data-parallel with %d threads\n", num_thread);
-
-    // for (i = 0; i < num_thread; i++) {
-    //     data[i].datacfg = datacfg;
-    //     data[i].cfgfile = cfgfile;
-    //     data[i].weightfile = weightfile;
-    //     data[i].filename = filename;
-    //     data[i].thresh = thresh;
-    //     data[i].hier_thresh = hier_thresh;
-    //     data[i].dont_show = dont_show;
-    //     data[i].ext_output = ext_output;
-    //     data[i].save_labels = save_labels;
-    //     data[i].outfile = outfile;
-    //     data[i].letter_box = letter_box;
-    //     data[i].benchmark_layers = benchmark_layers;
-    //     data[i].thread_id = i + 1;
-    //     data[i].isTest = false;
-    //     rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
-    //     if (rc) {
-    //         printf("Error: Unable to create thread, %d\n", rc);
-    //         exit(-1);
-    //     }
-    // }
-
-    // for (i = 0; i < num_thread; i++) {
-    //     pthread_join(threads[i], NULL);
-    // }
-
-#ifdef MEASURE
-    char file_path[256] = "measure/";
-
-    char* model_name = malloc(strlen(cfgfile) + 1);
-    strncpy(model_name, cfgfile + 6, (strlen(cfgfile)-10));
-    model_name[strlen(cfgfile)-10] = '\0';
     
+    if (VISUAL) printf("Logs written to files\n");
 
-    strcat(file_path, "data-parallel/");
-    strcat(file_path, model_name);
-    strcat(file_path, "/");
-
-    strcat(file_path, "data-parallel_");
-
-    char thread[20];
-    sprintf(thread, "%dthread", num_thread);
-    strcat(file_path, thread);
-
-    strcat(file_path, ".csv");
-    if(write_result(file_path) == -1) {
-        /* return error */
-        exit(0);
-    }
-#endif
-
-    // pthread_mutex_destroy(&mutex);
-    // pthread_cond_destroy(&cond);
+    // 동기화 객체 정리
+    pthread_mutex_destroy(&log_mutex);
+    pthread_barrier_destroy(&barrier);
+    pthread_barrier_destroy(&log_barrier);
 
     return 0;
-
 }
