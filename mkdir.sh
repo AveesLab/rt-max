@@ -91,6 +91,7 @@ do
     for ((num_worker=1; num_worker<=11; num_worker++))
     do
         mkdir -p measure/pseudo_layer_time/$model/cpu/worker$num_worker/
+        mkdir -p measure/gpu_segments/$model/
     done
 done
 
