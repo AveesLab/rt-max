@@ -3,8 +3,6 @@
 # 기본값 설정 (필요한 경우)
 model=""
 num_worker=8
-Gstart=0
-Gend=0
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -14,7 +12,7 @@ while [[ "$#" -gt 0 ]]; do
             shift
             ;;
         -worker)
-            num_worker="$2"
+            num_thread="$2"
             shift
             ;;
         -Gstart)
@@ -69,15 +67,4 @@ else
     exit 1
 fi
 
-./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 15 -Gstart $Gstart -Gend $Gend
-
-# GPU-accelerated with optimal_core
-# for ((Gstart=0; Gstart<=layer_num; Gstart++))
-# do
-#     for ((Gend=Gstart+1; Gend<=layer_num; Gend++))
-#     do
-#         sleep 3s
-#         ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $Gend -num_exp 20
-#         sleep 3s
-#     done
-# done
+./darknet detector gpu-accel_runner ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 20

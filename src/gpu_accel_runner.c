@@ -573,7 +573,7 @@ static void threadFunc(thread_data_t data)
     }
     pthread_mutex_unlock(&mutex_init);
 
-    for (int s = 0; s < num_layer; s++){
+    for (int s = 0; s < num_layer; s+=6){ // 6대로 실험
         for (int e = s + 1; e < num_layer; e++){
             pthread_barrier_wait(&barrier);
             // 각 워커별 GPU 사용 범위 설정
@@ -944,7 +944,7 @@ static void threadFunc(thread_data_t data)
     pthread_exit(NULL);
 }
 
-void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+void gpu_accel_runner(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers)
 {
 
