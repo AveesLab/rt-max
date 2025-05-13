@@ -37,6 +37,7 @@ int num_exp;
 int core_id;
 int num_blas;
 int num_thread;
+int num_csv_data;
 int r_time;
 int num_process;
 int gLayer;
@@ -1942,6 +1943,7 @@ void run_detector(int argc, char **argv)
     r_time = find_int_arg(argc, argv, "-r_time", 1);
     num_process = find_int_arg(argc, argv, "-num_process", 1);
     gLayer = find_int_arg(argc, argv, "-glayer", 1);
+    num_csv_data = find_int_arg(argc, argv, "-num_csv_data", 0);
     rLayer = find_int_arg(argc, argv, "-rlayer", 1);
     Gstart = find_int_arg(argc, argv, "-Gstart", 0);
     Gend = find_int_arg(argc, argv, "-Gend", 0);

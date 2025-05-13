@@ -57,7 +57,10 @@ void set_segment_time(gpu_task_t *task, int segment_idx, int start_layer, int en
         }
     }
 }
-// CSV 파일의 첫 번째 행에서 세그먼트 정보를 파싱하는 함수
+// 전역 변수 추가
+int num_csv_data = 0;  // 기본값은 0 (첫 번째 데이터 행)
+
+// 수정된 파싱 함수 - 특정 행의 데이터를 불러오도록 수정
 void parse_segment_file(char *model_name) {
     char filepath[256];
     sprintf(filepath, "./measure/gpu_segments/%s/gpu_segment_partitions_%s.csv", model_name, model_name);
@@ -68,15 +71,24 @@ void parse_segment_file(char *model_name) {
         return;
     }
     
-   if (VISUAL) printf("Reading segment file: %s\n", filepath);
+    if (VISUAL) printf("Reading segment file: %s (row index: %d)\n", filepath, num_csv_data);
     
     // 헤더 읽기
     char line[2048];  // 충분히 큰 버퍼 사용
     fgets(line, sizeof(line), fp);
     
-    // 첫 번째 데이터 행 읽기
+    // 지정된 행까지 스킵
+    for (int i = 0; i < num_csv_data; i++) {
+        if (!fgets(line, sizeof(line), fp)) {
+            printf("Error: CSV file does not have enough rows (requested row: %d)\n", num_csv_data);
+            fclose(fp);
+            return;
+        }
+    }
+    
+    // 지정된 데이터 행 읽기
     if (fgets(line, sizeof(line), fp)) {
-       if (VISUAL) printf("First data row: %s", line);
+        if (VISUAL) printf("Data row %d: %s", num_csv_data, line);
         
         // 메모리 해제 (이전에 할당되었을 경우)
         if (segments) {
@@ -115,7 +127,7 @@ void parse_segment_file(char *model_name) {
             }
         }
         
-       if (VISUAL) printf("Partition string after cleaning: %s\n", partition_str);
+        if (VISUAL) printf("Partition string after cleaning: %s\n", partition_str);
         
         // 세그먼트 파싱 - 형식: [(6,), (2,), (5,), ...]
         char *ptr = partition_str;
@@ -139,7 +151,7 @@ void parse_segment_file(char *model_name) {
                 strncpy(tuple_content, ptr, content_len);
                 tuple_content[content_len] = '\0';
                 
-               if (VISUAL) printf("Tuple content: %s\n", tuple_content);
+                if (VISUAL) printf("Tuple content: %s\n", tuple_content);
                 
                 // 튜플 내용 파싱
                 int layers[100] = {0};
@@ -161,9 +173,9 @@ void parse_segment_file(char *model_name) {
                     segments[num_segments].start_layer = layers[0];
                     segments[num_segments].end_layer = layers[num_layers - 1] + 1; // 마지막 레이어 + 1
                     
-                   if (VISUAL) printf("Added segment %d: Layers %d-%d\n", 
-                           num_segments, segments[num_segments].start_layer, 
-                           segments[num_segments].end_layer);
+                    if (VISUAL) printf("Added segment %d: Layers %d-%d\n", 
+                            num_segments, segments[num_segments].start_layer, 
+                            segments[num_segments].end_layer);
                     num_segments++;
                 }
             }
@@ -171,6 +183,10 @@ void parse_segment_file(char *model_name) {
             // 다음 튜플 검색 위치 이동
             ptr = end_ptr + 1;
         }
+    } else {
+        printf("Error: Failed to read data row %d\n", num_csv_data);
+        fclose(fp);
+        return;
     }
     
     fclose(fp);
@@ -180,12 +196,12 @@ void parse_segment_file(char *model_name) {
         qsort(segments, num_segments, sizeof(segment_t), compare_segments);
         
         // 파싱된 세그먼트 출력
-       if (VISUAL) printf("Parsed %d segments from first row:\n", num_segments);
+       if (VISUAL) printf("Parsed %d segments from row %d:\n", num_segments, num_csv_data + 1); // 사용자에게는 1-based로 표시
         for (int i = 0; i < num_segments; i++) {
            if (VISUAL) printf("Segment %d: Layers %d-%d\n", i, segments[i].start_layer, segments[i].end_layer);
         }
     } else {
-        printf("Warning: No segments parsed. Using default segment (all layers).\n");
+       if (VISUAL) printf("Warning: No segments parsed from row %d. Using default segment (all layers).\n", num_csv_data + 1);
         
         // 기본 세그먼트 생성
         segments = (segment_t*)realloc(segments, sizeof(segment_t));
@@ -193,7 +209,7 @@ void parse_segment_file(char *model_name) {
             segments[0].start_layer = 0;
             segments[0].end_layer = 999; // 큰 값으로 설정하여 모든 레이어 포함
             num_segments = 1;
-            printf("Using default segment: Layers %d-%d\n", segments[0].start_layer, segments[0].end_layer);
+           if (VISUAL) printf("Using default segment: Layers %d-%d\n", segments[0].start_layer, segments[0].end_layer);
         }
     }
 }
@@ -231,7 +247,7 @@ void save_segment_time(char *model_name, int num_worker, int segment_idx, double
     if (!file_exists) {
         // 헤더 추가
         fprintf(fp, "Execution_Time\n");
-        printf("Created new log file: %s\n", filepath);
+       if (VISUAL) printf("Created new log file: %s\n", filepath);
     }
     
     // 시간 기록
@@ -1069,10 +1085,10 @@ static void threadFunc(thread_data_t data)
         model_name[strlen(data.cfgfile)-10] = '\0';
 
         char gpu_path[256];
-        sprintf(gpu_path, "./measure/pseudo_layer_time/%s/gpu/worker%d/G%d/gpu_segment_time_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+        sprintf(gpu_path, "./measure/gpu_segments/%s/gpu_task_log/worker%d/gpu_task_gpu_segments_%d.csv", model_name, num_thread, num_csv_data);
 
         char worker_path[256];
-        sprintf(worker_path, "./measure/worker_task_log_G%d_%d.csv", Gstart, Gend);
+        sprintf(worker_path, "./measure/gpu_segments/%s/worker_task_log/worker%d/worker_task_gpu_segments_%d.csv", model_name, num_thread, num_csv_data);
 
         // 로그 파일 작성
         write_logs_to_files_with_segment(model_name, gpu_path, worker_path);

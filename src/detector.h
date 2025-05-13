@@ -51,6 +51,7 @@ extern int num_process;
 extern int gLayer;
 extern int rLayer;
 extern int Gstart;
+extern int num_csv_data;
 extern int Gend;
 extern int skip_layers[1000][10];
 

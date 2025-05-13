@@ -107,9 +107,10 @@ do
     
     for ((num_worker=1; num_worker<=11; num_worker++))
     do
+        mkdir -p measure/gpu_segments/$model/gpu_task_log/worker$num_worker/
+        mkdir -p measure/gpu_segments/$model/worker_task_log/worker$num_worker/
         for ((Gstart=0; Gstart<=layer_num; Gstart++))
         do
-            mkdir -p measure/pseudo_layer_time/$model/gpu/worker$num_worker/G$Gstart/
             mkdir -p measure/pseudo_layer_time/$model/gpu/worker$num_worker/G$Gstart/
         done
     done
