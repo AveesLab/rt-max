@@ -84,13 +84,29 @@ do
     done
 done
 
-## CPU/GPU Layer Time
+## CPU Layer Time
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0" "resnet10"
 do
 	mkdir -p measure/pseudo_layer_time/$model/
     for ((num_worker=1; num_worker<=11; num_worker++))
     do
-        mkdir -p measure/pseudo_layer_time/$model/worker$num_worker/
+        mkdir -p measure/pseudo_layer_time/$model/cpu/worker$num_worker/
+    done
+done
+
+## GPU Layer Time
+for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0" "resnet10"
+do
+    get_model_info "$model"  # 모델에 맞는 layer_num 설정
+    mkdir -p measure/pseudo_layer_time/$model/
+    
+    for ((num_worker=1; num_worker<=11; num_worker++))
+    do
+        for ((Gstart=0; Gstart<=layer_num; Gstart++))
+        do
+            mkdir -p measure/pseudo_layer_time/$model/gpu/worker$num_worker/G$Gstart/
+            mkdir -p measure/pseudo_layer_time/$model/gpu/worker$num_worker/G$Gstart/
+        done
     done
 done
 

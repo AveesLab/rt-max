@@ -2026,6 +2026,7 @@ void run_detector(int argc, char **argv)
     else if (0 == strcmp(argv[2], "cpu_layer_time")) cpu_layer_time(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel")) gpu_accel(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "gpu-accel_runner")) gpu_accel_runner(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
+    else if (0 == strcmp(argv[2], "gpu_segment_time")) gpu_segment_time(datacfg, cfg, weights, filename, thresh, hier_thresh, dont_show, theoretical_exp, theo_thread, ext_output, save_labels, outfile, letter_box, benchmark_layers);
     else if (0 == strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear, dont_show, calc_map, thresh, iou_thresh, mjpeg_port, show_imgs, benchmark_layers, chart_path, mAP_epochs);
     else if (0 == strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights, outfile);
     else if (0 == strcmp(argv[2], "recall")) validate_detector_recall(datacfg, cfg, weights);

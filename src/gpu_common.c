@@ -120,7 +120,7 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    fprintf(fp_gpu, "thread_id,core_idGstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
+    fprintf(fp_gpu, "thread_id,core_id, Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
         // 큐 대기 시간
         double queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;

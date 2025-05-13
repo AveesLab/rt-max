@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# 기본값 설정
+# 기본값 설정 (필요한 경우)
 model=""
-num_thread=8  # 기본값
+num_worker=8
+Gstart=0
+Gend=1
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -11,8 +13,16 @@ while [[ "$#" -gt 0 ]]; do
             model="$2"
             shift
             ;;
-        -num_thread)
-            num_thread="$2"
+        -worker)
+            num_worker="$2"
+            shift
+            ;;
+        -Gstart)
+            Gstart="$2"
+            shift
+            ;;
+        -Gend)
+            Gend="$2"
             shift
             ;;
         *)
@@ -39,6 +49,9 @@ elif [ "$model" == "resnet10" ]; then
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
     layer_num=81
+elif [ "$model" == "resnet10" ]; then
+    data_file="imagenet1k"
+    layer_num=136
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
     layer_num=50
@@ -62,8 +75,15 @@ else
     exit 1
 fi
 
-for num_thread in {1..8}
-do
-    echo "Running with num_thread = $num_thread"
-    ./darknet detector cpu_layer_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 1000
-done
+./darknet detector gpu_segment_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 30 -Gstart $Gstart -Gend $Gend
+
+# GPU-accelerated with optimal_core
+# for ((Gstart=0; Gstart<=layer_num; Gstart++))
+# do
+#     for ((Gend=Gstart+1; Gend<=layer_num; Gend++))
+#     do
+#         sleep 3s
+#         ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $Gend -num_exp 20
+#         sleep 3s
+#     done
+# done

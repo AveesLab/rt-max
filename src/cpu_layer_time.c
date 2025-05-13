@@ -48,7 +48,7 @@ static pthread_barrier_t barrier;
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 
 // 작업 로그 관련 구조체 및 변수
-#define MAX_TASKS 1000  // 최대 작업 수 (로그 저장용)
+#define MAX_TASKS 10000  // 최대 작업 수 (로그 저장용)
 
 // worker_log_t 구조체에 레이어별 시간 추가
 typedef struct worker_log_t {
@@ -429,11 +429,11 @@ static void threadFunc(thread_data_t data)
         model_name[strlen(data.cfgfile)-10] = '\0';
 
         char worker_path[256];
-        sprintf(worker_path, "./measure/pseudo_layer_time/%s/worker%d/cpu_pseudo_layer_time.csv", model_name, data.num_thread);
+        sprintf(worker_path, "./measure/pseudo_layer_time/%s/cpu/worker%d/cpu_pseudo_layer_time.csv", model_name, data.num_thread);
 
         // 디렉토리 생성 확인 (디렉토리가 없을 수 있음)
         char dir_cmd[512];
-        sprintf(dir_cmd, "mkdir -p ./measure/pseudo_layer_time/%s/worker%d", model_name, data.num_thread);
+        sprintf(dir_cmd, "mkdir -p ./measure/pseudo_layer_time/%s/cpu/worker%d", model_name, data.num_thread);
         int dir_result = system(dir_cmd);
         if (dir_result != 0) {
             printf("Warning: Directory creation may have failed: %s\n", dir_cmd);
@@ -441,7 +441,7 @@ static void threadFunc(thread_data_t data)
 
         // 디렉토리 존재 확인 (디버깅)
         // char check_dir_cmd[512];
-        // sprintf(check_dir_cmd, "ls -la ./measure/pseudo_layer_time/%s/worker%d", model_name, data.num_thread);
+        // sprintf(check_dir_cmd, "ls -la ./measure/pseudo_layer_time/%s/cpu/worker%d", model_name, data.num_thread);
         // system(check_dir_cmd);
 
         // 로그 파일 작성 (레이어 수 전달)
