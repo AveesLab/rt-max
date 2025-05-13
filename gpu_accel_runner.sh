@@ -70,4 +70,14 @@ else
     exit 1
 fi
 
-./darknet detector gpu-accel_runner ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 30
+for i in {1..8}
+do
+  echo "Running with num_thread=$i"
+  ./darknet detector gpu-accel_runner \
+    ./cfg/${data_file}.data \
+    ./cfg/${model}.cfg \
+    ./weights/${model}.weights \
+    data/dog.jpg \
+    -num_thread $i \
+    -num_exp 30
+done
