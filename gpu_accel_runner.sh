@@ -82,5 +82,5 @@ do
     ./weights/${model}.weights \
     data/dog.jpg \
     -num_thread $i \
-    -num_exp 30
+    -num_exp 100
 done

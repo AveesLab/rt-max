@@ -86,6 +86,6 @@ for ((thread=1; thread<=8; thread++)); do
     for ((i=0; i<num_lines; i++)); do
         echo "Running: thread=$thread, csv_data=$i"
         ./darknet detector gpu_segment_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg \
-            -num_thread $thread -num_exp 30 -num_csv_data $i
+            -num_thread $thread -num_exp 100 -num_csv_data $i
     done
 done
