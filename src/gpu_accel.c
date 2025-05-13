@@ -24,10 +24,10 @@
 #endif
 
 #define START_IDX 3
-#define VISUAL 0
+#define VISUAL 1
 #define MAX_BUFFER_SIZE 2097152
 
-static int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
+int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
 
 int layer_indexes[500];
 int num_layer = 0;
@@ -66,12 +66,12 @@ FILE *fp_worker;
 
 // 기존 동기화 객체
 pthread_barrier_t barrier;
-static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 
-int skip_layers[1000][10] = {0};
-static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-static int current_thread = 1;
+extern int skip_layers[1000][10];
+pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+int current_thread = 1;
 
 // GPU 작업 큐 관련 구조체 및 변수
 #define MAX_GPU_QUEUE_SIZE 128
@@ -560,7 +560,6 @@ static void threadFunc(thread_data_t data)
     net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
-    extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
     for(i = 0; i < net.n; i++) {
         for(j = 0; j < 10; j++) {
@@ -585,8 +584,8 @@ static void threadFunc(thread_data_t data)
     // int Gstart = layer_indexes[0];    // GPU 작업 시작 레이어 인덱스
     // int Gend = layer_indexes[1];    // GPU 작업 종료 레이어 인덱스
 
-    int Gstart = data.Gstart;
-    int Gend = data.Gend;
+    int Gstart = layer_indexes[data.Gstart];
+    int Gend = layer_indexes[data.Gend];
 
     if (data.thread_id == 1) {
         // 로그 카운터 초기화

@@ -24,7 +24,7 @@
 #endif
 
 #define START_IDX 3
-#define VISUAL 0
+#define VISUAL 1
 #define MAX_BUFFER_SIZE 2097152
 
 static int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
@@ -49,7 +49,7 @@ static void print_layer_info(network net)
 }
 
 // 로그 쓰기를 위한 barrier와 뮤텍스
-pthread_barrier_t log_barrier;
+static pthread_barrier_t log_barrier;
 static pthread_mutex_t log_write_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int log_written = 0;  // 로그가 이미 작성되었는지 확인하는 플래그
 
@@ -61,14 +61,14 @@ static double current_time_in_ms() {
 }
 
 // 로그 파일 핸들
-FILE *fp_gpu;
-FILE *fp_worker;
+static FILE *fp_gpu;
+static FILE *fp_worker;
 
 // 기존 동기화 객체
-pthread_barrier_t barrier;
+static pthread_barrier_t barrier;
 static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 
-int skip_layers[1000][10] = {0};
+extern int skip_layers[1000][10];
 static pthread_mutex_t mutex_gpu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static int current_thread = 1;
@@ -83,6 +83,7 @@ typedef struct gpu_task_t {
     network net;               // 네트워크 정보
     int task_id;               // 작업 ID
     int thread_id;             // 요청한 스레드 ID
+    int core_id;
     int completed;             // 완료 여부 플래그
     float *output;             // 출력 데이터가 저장될 위치
     
@@ -115,6 +116,7 @@ typedef struct gpu_task_t {
 // 로그 저장용 구조체
 typedef struct gpu_log_t {
     int thread_id;
+    int core_id;
     int Gstart;                // GPU 시작 레이어
     int Gend;                  // GPU 종료 레이어
     double request_time;
@@ -128,6 +130,7 @@ typedef struct gpu_log_t {
 
 typedef struct worker_log_t {
     int thread_id;
+    int core_id;
     int Gstart;                // GPU 시작 레이어
     int Gend;                  // GPU 종료 레이어
     double worker_start_time;
@@ -143,26 +146,27 @@ typedef struct worker_log_t {
 } worker_log_t;
 
 // 로그 저장용 배열
-gpu_log_t gpu_logs[MAX_TASKS];
-worker_log_t worker_logs[MAX_TASKS];
+static gpu_log_t gpu_logs[MAX_TASKS];
+static worker_log_t worker_logs[MAX_TASKS];
 static int gpu_log_count = 0;
 static int worker_log_count = 0;
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-gpu_task_t gpu_task_queue[MAX_GPU_QUEUE_SIZE];
+static gpu_task_t gpu_task_queue[MAX_GPU_QUEUE_SIZE];
 static int gpu_task_head = 0, gpu_task_tail = 0;
 static pthread_mutex_t gpu_queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t gpu_queue_cond = PTHREAD_COND_INITIALIZER;
 
 // 결과 동기화를 위한 뮤텍스와 조건 변수
-pthread_mutex_t result_mutex[MAX_GPU_QUEUE_SIZE];
-pthread_cond_t result_cond[MAX_GPU_QUEUE_SIZE];
+static pthread_mutex_t result_mutex[MAX_GPU_QUEUE_SIZE];
+static pthread_cond_t result_cond[MAX_GPU_QUEUE_SIZE];
 
 // 로그 함수 - 배열에 저장
 static void save_gpu_log(gpu_task_t task) {
     pthread_mutex_lock(&log_mutex);
     if (gpu_log_count < MAX_TASKS) {
         gpu_logs[gpu_log_count].thread_id = task.thread_id;
+        gpu_logs[gpu_log_count].core_id = task.core_id;
         gpu_logs[gpu_log_count].Gstart = task.Gstart;
         gpu_logs[gpu_log_count].Gend = task.Gend;
         gpu_logs[gpu_log_count].request_time = task.request_time;
@@ -214,7 +218,7 @@ static void write_logs_to_files(char *model_name, char *gpu_path, char *worker_p
         exit(1);
     }
 
-    fprintf(fp_gpu, "thread_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
+    fprintf(fp_gpu, "thread_id,core_idGstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
         // 큐 대기 시간
         double queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;
@@ -224,8 +228,9 @@ static void write_logs_to_files(char *model_name, char *gpu_path, char *worker_p
         double pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
         double total_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
         
-        fprintf(fp_gpu, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_gpu, "%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 gpu_logs[i].thread_id,
+                gpu_logs[i].core_id,
                 gpu_logs[i].Gstart,
                 gpu_logs[i].Gend,
                 gpu_logs[i].request_time, 
@@ -253,7 +258,7 @@ static void write_logs_to_files(char *model_name, char *gpu_path, char *worker_p
     }
 
     // 워커 CSV 헤더 - GPU 지연 시간 필드의 위치 수정
-    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay,cpu_inference_delay_2,postprocess_delay,total_delay\n");
+    fprintf(fp_worker, "thread_id,core_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay,cpu_inference_delay_2,postprocess_delay,total_delay\n");
     
     for (int i = 0; i < worker_log_count; i++) {
         // 워커 지연 시간 계산
@@ -280,8 +285,9 @@ static void write_logs_to_files(char *model_name, char *gpu_path, char *worker_p
         }
         
         // 워커 로그와 GPU 지연 시간 함께 저장 - GPU 관련 필드 위치 수정
-        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_worker, "%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id,
+                worker_logs[i].core_id,
                 worker_logs[i].Gstart,
                 worker_logs[i].Gend,
                 worker_logs[i].worker_start_time, 
@@ -554,7 +560,6 @@ static void threadFunc(thread_data_t data)
     net.benchmark_layers = data.benchmark_layers;
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
-    extern int skip_layers[1000][10];
     int skipped_layers[1000] = {0, };
     for(i = 0; i < net.n; i++) {
         for(j = 0; j < 10; j++) {
@@ -571,369 +576,372 @@ static void threadFunc(thread_data_t data)
         print_layer_info(net);
         printf("num_layer: %d\n", num_layer);
     }
+    int core_id = sched_getcpu();
     pthread_mutex_unlock(&mutex_init);
 
-    for (int s = 0; s < num_layer; s+=6){ // 6대로 실험
-        for (int e = s + 1; e < num_layer; e++){
-            pthread_barrier_wait(&barrier);
-            // 각 워커별 GPU 사용 범위 설정
-            int Gstart = layer_indexes[s];    // GPU 작업 시작 레이어 인덱스
-            int Gend = layer_indexes[e];    // GPU 작업 종료 레이어 인덱스
+    pthread_barrier_wait(&barrier);
+    // 각 워커별 GPU 사용 범위 설정
+    // int Gstart = layer_indexes[0];    // GPU 작업 시작 레이어 인덱스
+    // int Gend = layer_indexes[1];    // GPU 작업 종료 레이어 인덱스
 
-            if (data.thread_id == 1) {
-                // 로그 카운터 초기화
-                gpu_log_count = 0;
-                worker_log_count = 0;
+    int Gstart = layer_indexes[data.Gstart];
+    int Gend = layer_indexes[data.Gend];
 
-                // 로그 배열 초기화 (선택적)
-                memset(gpu_logs, 0, sizeof(gpu_logs));
-                memset(worker_logs, 0, sizeof(worker_logs));
-                printf("GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
-            }
+    if (data.thread_id == 1) {
+        // 로그 카운터 초기화
+        gpu_log_count = 0;
+        worker_log_count = 0;
 
-            // __Chekc-worker-thread-initialization__
-            if (Gstart == Gend) {
-                if (VISUAL) printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", data.thread_id, sched_getcpu());
-            } else {
-                if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", data.thread_id, sched_getcpu(), Gstart, Gend);
-            }
-            pthread_barrier_wait(&barrier);
+        // 로그 배열 초기화 (선택적)
+        memset(gpu_logs, 0, sizeof(gpu_logs));
+        memset(worker_logs, 0, sizeof(worker_logs));
+        printf("GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
+    }
 
-            for (i = 0; i < num_exp; i++) {
-                if (i == START_IDX) pthread_barrier_wait(&barrier);
+    // __Chekc-worker-thread-initialization__
+    if (Gstart == Gend) {
+        if (VISUAL) printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", data.thread_id, sched_getcpu());
+    } else {
+        if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", data.thread_id, sched_getcpu(), Gstart, Gend);
+    }
+    pthread_barrier_wait(&barrier);
 
-                // 워커 작업 시작 시간 기록
-                double worker_start_time = current_time_in_ms();
-                // __Preprocess__ (Pre-GPU 1)
-                im = load_image(input, 0, 0, net.c);
-                resized = resize_min(im, net.w);
-                cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
-                X = cropped.data;
-                double worker_inference_time = current_time_in_ms();
-                
-                // GPU를 사용하는 경우와 사용하지 않는 경우를 구분
-                if (Gstart == Gend) {
-                    // GPU 사용 없이 CPU에서만 처리하는 경우
-                    double worker_request_time = current_time_in_ms();
-                    
-                    // 전체 네트워크를 CPU에서 실행
-                    network_state state;
-                    state.index = 0;
-                    state.net = net;
-                    state.input = X;
-                    state.truth = 0;
-                    state.train = 0;
-                    state.delta = 0;
-                    state.workspace = net.workspace_cpu;
-                    
-                    for(j = 0; j < net.n; ++j){
-                        state.index = j;
-                        l = net.layers[j];
-                    
-                        if(l.delta && state.train && l.train){
-                            scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-                        }
-                        l.forward(l, state);
+    for (i = 0; i < num_exp; i++) {
+        if (i == START_IDX) pthread_barrier_wait(&barrier);
+
+        // 워커 작업 시작 시간 기록
+        double worker_start_time = current_time_in_ms();
+        // __Preprocess__ (Pre-GPU 1)
+        im = load_image(input, 0, 0, net.c);
+        resized = resize_min(im, net.w);
+        cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
+        X = cropped.data;
+        double worker_inference_time = current_time_in_ms();
+        
+        // GPU를 사용하는 경우와 사용하지 않는 경우를 구분
+        if (Gstart == Gend) {
+            // GPU 사용 없이 CPU에서만 처리하는 경우
+            double worker_request_time = current_time_in_ms();
             
-                        state.input = l.output;
+            // 전체 네트워크를 CPU에서 실행
+            network_state state;
+            state.index = 0;
+            state.net = net;
+            state.input = X;
+            state.truth = 0;
+            state.train = 0;
+            state.delta = 0;
+            state.workspace = net.workspace_cpu;
+            
+            for(j = 0; j < net.n; ++j){
+                state.index = j;
+                l = net.layers[j];
+            
+                if(l.delta && state.train && l.train){
+                    scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+                }
+                l.forward(l, state);
+    
+                state.input = l.output;
+            }
+            
+            
+            double worker_receive_time = worker_request_time;
+            double worker_postprocess_time = current_time_in_ms();
+            
+            predictions = get_network_output(net, 0);
+            
+            // 워커 로그 직접 저장 (CPU 전용 모드)
+            worker_log_t worker_log;
+            worker_log.thread_id = data.thread_id;
+            worker_log.core_id = core_id;
+            worker_log.Gstart = Gstart;
+            worker_log.Gend = Gend;
+            worker_log.worker_start_time = worker_start_time;
+            worker_log.worker_inference_time = worker_inference_time;
+            worker_log.worker_request_time = worker_request_time;
+            worker_log.worker_receive_time = worker_receive_time;
+            worker_log.worker_postprocess_time = worker_postprocess_time;
+            worker_log.worker_end_time = 0; // 나중에 설정
+            worker_log.push_time = 0;       // CPU 전용 모드에서는 0
+            worker_log.compute_time = 0;    // CPU 전용 모드에서는 0
+            worker_log.pull_time = 0;       // CPU 전용 모드에서는 0
+            
+            // __Postprecess__
+            if (object_detection) {
+                dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
+                if (nms) {
+                    if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+                    else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+                }
+                draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
+            }
+            else {
+                if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+                top_k(predictions, net.outputs, top, indexes);
+                for(j = 0; j < top; ++j){
+                    index = indexes[j];
+                    if (VISUAL) {
+                        if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                        else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
                     }
-                    
-                    
-                    double worker_receive_time = worker_request_time;
-                    double worker_postprocess_time = current_time_in_ms();
-                    
-                    predictions = get_network_output(net, 0);
-                    
-                    // 워커 로그 직접 저장 (CPU 전용 모드)
-                    worker_log_t worker_log;
-                    worker_log.thread_id = data.thread_id;
-                    worker_log.Gstart = Gstart;
-                    worker_log.Gend = Gend;
-                    worker_log.worker_start_time = worker_start_time;
-                    worker_log.worker_inference_time = worker_inference_time;
-                    worker_log.worker_request_time = worker_request_time;
-                    worker_log.worker_receive_time = worker_receive_time;
-                    worker_log.worker_postprocess_time = worker_postprocess_time;
-                    worker_log.worker_end_time = 0; // 나중에 설정
-                    worker_log.push_time = 0;       // CPU 전용 모드에서는 0
-                    worker_log.compute_time = 0;    // CPU 전용 모드에서는 0
-                    worker_log.pull_time = 0;       // CPU 전용 모드에서는 0
-                    
-                    // __Postprecess__
-                    if (object_detection) {
-                        dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
-                        if (nms) {
-                            if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
-                            else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
-                        }
-                        draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
-                    }
-                    else {
-                        if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
-                        top_k(predictions, net.outputs, top, indexes);
-                        for(j = 0; j < top; ++j){
-                            index = indexes[j];
-                            if (VISUAL) {
-                                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                                else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
-                            }
-                        }
-                    }
-                    
-                    // 워커 작업 종료 시간 기록
-                    double worker_end_time = current_time_in_ms();
-                    worker_log.worker_end_time = worker_end_time;
-                    
-                    save_worker_log(worker_log);
-                    
-                } else {
-                    // GPU를 사용하는 경우 (수정된 부분)
-                    
-                    // 네트워크 상태 초기화
-                    int size = get_network_input_size(net) * net.batch;
-                    network_state pre_state;
-                    pre_state.index = 0;
-                    pre_state.net = net;
-                    pre_state.workspace = net.workspace_cpu;
-                    
-                    // Gstart가 0인 경우와 0이 아닌 경우 구분
-                    float *gpu_input = NULL;
-                    
+                }
+            }
+            
+            // 워커 작업 종료 시간 기록
+            double worker_end_time = current_time_in_ms();
+            worker_log.worker_end_time = worker_end_time;
+            
+            save_worker_log(worker_log);
+            
+        } else {
+            // GPU를 사용하는 경우 (수정된 부분)
+            
+            // 네트워크 상태 초기화
+            int size = get_network_input_size(net) * net.batch;
+            network_state pre_state;
+            pre_state.index = 0;
+            pre_state.net = net;
+            pre_state.workspace = net.workspace_cpu;
+            
+            // Gstart가 0인 경우와 0이 아닌 경우 구분
+            float *gpu_input = NULL;
+            
+        
+            if (Gstart == 0) {
+                // Gstart가 0인 경우: 원본 입력 데이터 사용
                 
-                    if (Gstart == 0) {
-                        // Gstart가 0인 경우: 원본 입력 데이터 사용
-                        
-                        // 입력 데이터 복사본 생성 (메모리 정렬 보장)
-                        size = get_network_input_size(net) * net.batch;
-                        gpu_input = (float*)malloc(size * sizeof(float));
-                        if (gpu_input) {
-                            memcpy(gpu_input, X, size * sizeof(float));
-                        } else {
-                            printf("ERROR: Failed to allocate memory for aligned copy\n");
-                        }
-                    } else {
-                        // Gstart가 0이 아닌 경우 - CPU에서 Gstart까지 처리
-                        pre_state.input = X;
-                        
-                        for(j = 0; j < Gstart; ++j){
-                            pre_state.index = j;
-                            l = net.layers[j];
-                        
-                            if(l.delta && pre_state.train && l.train){
-                                scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-                            }
-                        
-                            l.forward(l, pre_state);
-                        
-                            pre_state.input = l.output;
-                        }
-                        
-                        // 처리된 데이터 복사본 생성
-                        size = net.layers[Gstart - 1].outputs * net.batch;
-                        gpu_input = (float*)malloc(size * sizeof(float));
-                        if (gpu_input) {
-                            memcpy(gpu_input, pre_state.input, size * sizeof(float));
-                        } else {
-                            printf("ERROR: Failed to allocate memory for aligned copy\n");
-                        }
-                        
+                // 입력 데이터 복사본 생성 (메모리 정렬 보장)
+                size = get_network_input_size(net) * net.batch;
+                gpu_input = (float*)malloc(size * sizeof(float));
+                if (gpu_input) {
+                    memcpy(gpu_input, X, size * sizeof(float));
+                } else {
+                    printf("ERROR: Failed to allocate memory for aligned copy\n");
+                }
+            } else {
+                // Gstart가 0이 아닌 경우 - CPU에서 Gstart까지 처리
+                pre_state.input = X;
+                
+                for(j = 0; j < Gstart; ++j){
+                    pre_state.index = j;
+                    l = net.layers[j];
+                
+                    if(l.delta && pre_state.train && l.train){
+                        scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
                     }
+                
+                    l.forward(l, pre_state);
+                
+                    pre_state.input = l.output;
+                }
+                
+                // 처리된 데이터 복사본 생성
+                size = net.layers[Gstart - 1].outputs * net.batch;
+                gpu_input = (float*)malloc(size * sizeof(float));
+                if (gpu_input) {
+                    memcpy(gpu_input, pre_state.input, size * sizeof(float));
+                } else {
+                    printf("ERROR: Failed to allocate memory for aligned copy\n");
+                }
+                
+            }
 
-                    // GPU 작업 요청 준비
-                    int task_id;
-                    if (Gstart > 0) {
-                        // CPU에서 Gstart까지 처리한 후 skip connection 검사
-                        int skip_count = 0;
+            // GPU 작업 요청 준비
+            int task_id;
+            if (Gstart > 0) {
+                // CPU에서 Gstart까지 처리한 후 skip connection 검사
+                int skip_count = 0;
 
+                
+                // Gstart부터 Gend까지의 레이어들이 참조하는 모든 skip connection 확인
+                for(int i = Gstart; i < Gend; i++) {
+                    // 각 레이어의 skip connection 배열 검사
+                    for(int j = 0; j < 10; j++) {
+                        int skip_layer_idx = skip_layers[i][j];
                         
-                        // Gstart부터 Gend까지의 레이어들이 참조하는 모든 skip connection 확인
-                        for(int i = Gstart; i < Gend; i++) {
-                            // 각 레이어의 skip connection 배열 검사
-                            for(int j = 0; j < 10; j++) {
-                                int skip_layer_idx = skip_layers[i][j];
-                                
-                                // 유효한 skip connection이고 Gstart 이전 레이어인 경우만 처리
-                                if(skip_layer_idx > 0 && skip_layer_idx < Gstart) {
-                                    // 이미 추가된 skip connection인지 확인 (중복 방지)
-                                    bool already_added = false;
-                                    for(int k = 0; k < skip_count; k++) {
-                                        if(gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[k] == skip_layer_idx) {
-                                            already_added = true;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    // 아직 추가되지 않은 skip connection이면 추가
-                                    if(!already_added && skip_count < 10) {
-                                        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[skip_count] = skip_layer_idx;
-                                        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_data[skip_count] = 
-                                            net.layers[skip_layer_idx].output;
-                                        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_size[skip_count] = 
-                                            net.layers[skip_layer_idx].outputs * net.layers[skip_layer_idx].batch;
-                                        
-                                        skip_count++;
-                                    }
+                        // 유효한 skip connection이고 Gstart 이전 레이어인 경우만 처리
+                        if(skip_layer_idx > 0 && skip_layer_idx < Gstart) {
+                            // 이미 추가된 skip connection인지 확인 (중복 방지)
+                            bool already_added = false;
+                            for(int k = 0; k < skip_count; k++) {
+                                if(gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[k] == skip_layer_idx) {
+                                    already_added = true;
+                                    break;
                                 }
                             }
-                        }
-
-                        gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
-                        if (VISUAL && skip_count > 0) printf("Worker %d: Added %d skip connections to GPU task\n", data.thread_id, skip_count);
-                    }
-                    // GPU 작업 요청 시간 기록
-                    double worker_request_time = current_time_in_ms();
-                    
-                    // GPU 작업 큐에 작업 추가
-                    pthread_mutex_lock(&gpu_queue_mutex);
-                    task_id = gpu_task_tail;
-                    
-                    // GPU 작업 정보 설정
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = gpu_input;
-
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].net = net;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
-                    
-                    // GPU 작업 범위 설정
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gstart = Gstart;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gend = Gend;
-                    
-                    // 시간 정보 설정
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
-                    gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
-                    
-                    // 입력 데이터는 GPU 스레드에서 직접 복사하도록 설정 (memcpy 제거)
-                    gpu_task_tail++;
-                    pthread_cond_signal(&gpu_queue_cond);
-                    pthread_mutex_unlock(&gpu_queue_mutex);
-                    
-                    if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
-                    
-                    
-                    // GPU 작업이 완료될 때까지 대기
-                    pthread_mutex_lock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
-                    while (!gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed) {
-                        pthread_cond_wait(&result_cond[task_id % MAX_GPU_QUEUE_SIZE], &result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
-                    }
-                    
-                    // GPU 결과 수신 시간 기록
-                    double worker_receive_time = current_time_in_ms();
-                    
-                    // GPU 작업 시간 정보 가져오기
-                    gpu_task_t completed_task = gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE];
-                    double push_time = completed_task.push_end_time - completed_task.push_start_time;
-                    double compute_time = completed_task.gpu_end_time - completed_task.gpu_start_time;
-                    double pull_time = completed_task.pull_end_time - completed_task.pull_start_time;
-                    
-                    // 메모리 해제 추가
-                    if (gpu_input) {
-                        free(gpu_input);
-                    }
-                    
-                    pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
-                    
-                    if (VISUAL) printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
-                    
-                    // CPU Inference (Post-GPU) - Gend부터 끝까지 CPU에서 처리
-                    network_state post_state;
-                    post_state.index = 0;
-                    post_state.net = net;
-                    post_state.input = net.layers[Gend-1].output;  // GPU에서 계산한 출력을 입력으로 사용
-                    post_state.workspace = net.workspace_cpu;
-                    gpu_yolo = 0;
-                    
-                    for(j = Gend; j < net.n; ++j){
-                        post_state.index = j;
-                        l = net.layers[j];
-
-                        if(l.delta && post_state.train && l.train){
-                            scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
-                        }
-                        l.forward(l, post_state);
-
-                        post_state.input = l.output;
-                    }
-                    
-                    double worker_postprocess_time = current_time_in_ms();
-                    if (Gend == net.n) predictions = get_network_output_gpu(net);
-                    else predictions = get_network_output(net, 0);
-                    reset_wait_stream_events();
-
-                    // __Postprecess__ (Post-GPU 2)
-                    if (object_detection) {
-                        dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
-                        if (nms) {
-                            if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
-                            else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
-                        }
-                        draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
-                    }
-                    else {
-                        if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
-                        top_k(predictions, net.outputs, top, indexes);
-                        for(j = 0; j < top; ++j){
-                            index = indexes[j];
-                            if (VISUAL) {
-                                if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
-                                else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                            
+                            // 아직 추가되지 않은 skip connection이면 추가
+                            if(!already_added && skip_count < 10) {
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_idx[skip_count] = skip_layer_idx;
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_data[skip_count] = 
+                                    net.layers[skip_layer_idx].output;
+                                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_layers_size[skip_count] = 
+                                    net.layers[skip_layer_idx].outputs * net.layers[skip_layer_idx].batch;
+                                
+                                skip_count++;
                             }
                         }
                     }
-
-                    // 워커 로그 직접 저장 (로컬 변수 사용)
-                    worker_log_t worker_log;
-                    worker_log.thread_id = data.thread_id;
-                    worker_log.Gstart = Gstart;
-                    worker_log.Gend = Gend;
-                    worker_log.worker_start_time = worker_start_time;
-                    worker_log.worker_inference_time = worker_inference_time;
-                    worker_log.worker_request_time = worker_request_time;
-                    worker_log.worker_receive_time = worker_receive_time;
-                    worker_log.worker_postprocess_time = worker_postprocess_time;
-                    worker_log.push_time = push_time;
-                    worker_log.compute_time = compute_time;
-                    worker_log.pull_time = pull_time;
-                    
-                    // 워커 작업 종료 시간 기록
-                    double worker_end_time = current_time_in_ms();
-                    worker_log.worker_end_time = worker_end_time;
-
-                    save_worker_log(worker_log);
                 }
 
-                // free memory
-                free_image(im);
-                free_image(resized);
-                free_image(cropped);
+                gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].skip_count = skip_count;
+                if (VISUAL && skip_count > 0) printf("Worker %d: Added %d skip connections to GPU task\n", data.thread_id, skip_count);
             }
-            // 스레드 작업 완료 후 barrier에서 대기
-            pthread_barrier_wait(&log_barrier);
-            // thread_id가 1인 스레드만 로그 작성
-            pthread_mutex_lock(&log_write_mutex);
-            if (data.thread_id == 1) {
-                char* model_name = malloc(strlen(data.cfgfile) + 1);
-                strncpy(model_name, data.cfgfile + 6, (strlen(data.cfgfile)-10));
-                model_name[strlen(data.cfgfile)-10] = '\0';
+            // GPU 작업 요청 시간 기록
+            double worker_request_time = current_time_in_ms();
+            
+            // GPU 작업 큐에 작업 추가
+            pthread_mutex_lock(&gpu_queue_mutex);
+            task_id = gpu_task_tail;
+            
+            // GPU 작업 정보 설정
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].input = gpu_input;
 
-                char gpu_path[256];
-                sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
-
-                char worker_path[256];
-                sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
-
-                // 로그 파일 작성
-                write_logs_to_files(model_name, gpu_path, worker_path);
-                if (VISUAL) printf("write_logs_to_files (GPU layers: %d-%d) --> worker_log_count: %d, gpu_log_count: %d\n", Gstart, Gend, worker_log_count, gpu_log_count);
-                
-                // 메모리 해제
-                free(model_name);
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].size = size;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].net = net;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].core_id = core_id;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
+            
+            // GPU 작업 범위 설정
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gstart = Gstart;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].Gend = Gend;
+            
+            // 시간 정보 설정
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_start_time = worker_start_time;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].worker_request_time = worker_request_time;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].request_time = worker_request_time;
+            
+            // 입력 데이터는 GPU 스레드에서 직접 복사하도록 설정 (memcpy 제거)
+            gpu_task_tail++;
+            pthread_cond_signal(&gpu_queue_cond);
+            pthread_mutex_unlock(&gpu_queue_mutex);
+            
+            if (VISUAL) printf("Worker %d: Requested GPU task %d (layers %d-%d)\n", data.thread_id, task_id, Gstart, Gend);
+            
+            
+            // GPU 작업이 완료될 때까지 대기
+            pthread_mutex_lock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
+            while (!gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed) {
+                pthread_cond_wait(&result_cond[task_id % MAX_GPU_QUEUE_SIZE], &result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
             }
-            pthread_mutex_unlock(&log_write_mutex);
+            
+            // GPU 결과 수신 시간 기록
+            double worker_receive_time = current_time_in_ms();
+            
+            // GPU 작업 시간 정보 가져오기
+            gpu_task_t completed_task = gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE];
+            double push_time = completed_task.push_end_time - completed_task.push_start_time;
+            double compute_time = completed_task.gpu_end_time - completed_task.gpu_start_time;
+            double pull_time = completed_task.pull_end_time - completed_task.pull_start_time;
+            
+            // 메모리 해제 추가
+            if (gpu_input) {
+                free(gpu_input);
+            }
+            
+            pthread_mutex_unlock(&result_mutex[task_id % MAX_GPU_QUEUE_SIZE]);
+            
+            if (VISUAL) printf("Worker %d: Received GPU result for task %d\n", data.thread_id, task_id);
+            
+            // CPU Inference (Post-GPU) - Gend부터 끝까지 CPU에서 처리
+            network_state post_state;
+            post_state.index = 0;
+            post_state.net = net;
+            post_state.input = net.layers[Gend-1].output;  // GPU에서 계산한 출력을 입력으로 사용
+            post_state.workspace = net.workspace_cpu;
+            gpu_yolo = 0;
+            
+            for(j = Gend; j < net.n; ++j){
+                post_state.index = j;
+                l = net.layers[j];
+
+                if(l.delta && post_state.train && l.train){
+                    scal_cpu(l.outputs * l.batch, 0, l.delta, 1);
+                }
+                l.forward(l, post_state);
+
+                post_state.input = l.output;
+            }
+            
+            double worker_postprocess_time = current_time_in_ms();
+            if (Gend == net.n) predictions = get_network_output_gpu(net);
+            else predictions = get_network_output(net, 0);
+            reset_wait_stream_events();
+
+            // __Postprecess__ (Post-GPU 2)
+            if (object_detection) {
+                dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
+                if (nms) {
+                    if (l.nms_kind == DEFAULT_NMS) do_nms_sort(dets, nboxes, l.classes, nms);
+                    else diounms_sort(dets, nboxes, l.classes, nms, l.nms_kind, l.beta_nms);
+                }
+                draw_detections_v3(im, dets, nboxes, data.thresh, names, alphabet, l.classes, data.ext_output);
+            }
+            else {
+                if(net.hierarchy) hierarchy_predictions(predictions, net.outputs, net.hierarchy, 0);
+                top_k(predictions, net.outputs, top, indexes);
+                for(j = 0; j < top; ++j){
+                    index = indexes[j];
+                    if (VISUAL) {
+                        if(net.hierarchy) printf("%d, %s: %f, parent: %s \n",index, names[index], predictions[index], (net.hierarchy->parent[index] >= 0) ? names[net.hierarchy->parent[index]] : "Root");
+                        else printf("[%d] %d thread %s: %f\n", i, data.thread_id, names[index], predictions[index]);
+                    }
+                }
+            }
+
+            // 워커 로그 직접 저장 (로컬 변수 사용)
+            worker_log_t worker_log;
+            worker_log.thread_id = data.thread_id;
+            worker_log.core_id = core_id;
+            worker_log.Gstart = Gstart;
+            worker_log.Gend = Gend;
+            worker_log.worker_start_time = worker_start_time;
+            worker_log.worker_inference_time = worker_inference_time;
+            worker_log.worker_request_time = worker_request_time;
+            worker_log.worker_receive_time = worker_receive_time;
+            worker_log.worker_postprocess_time = worker_postprocess_time;
+            worker_log.push_time = push_time;
+            worker_log.compute_time = compute_time;
+            worker_log.pull_time = pull_time;
+            
+            // 워커 작업 종료 시간 기록
+            double worker_end_time = current_time_in_ms();
+            worker_log.worker_end_time = worker_end_time;
+
+            save_worker_log(worker_log);
         }
+
+        // free memory
+        free_image(im);
+        free_image(resized);
+        free_image(cropped);
     }
+    // 스레드 작업 완료 후 barrier에서 대기
+    pthread_barrier_wait(&log_barrier);
+    // thread_id가 1인 스레드만 로그 작성
+    pthread_mutex_lock(&log_write_mutex);
+    if (data.thread_id == 1) {
+        char* model_name = malloc(strlen(data.cfgfile) + 1);
+        strncpy(model_name, data.cfgfile + 6, (strlen(data.cfgfile)-10));
+        model_name[strlen(data.cfgfile)-10] = '\0';
+
+        char gpu_path[256];
+        sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+
+        char worker_path[256];
+        sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+
+        // 로그 파일 작성
+        write_logs_to_files(model_name, gpu_path, worker_path);
+        if (VISUAL) printf("write_logs_to_files (GPU layers: %d-%d) --> worker_log_count: %d, gpu_log_count: %d\n", Gstart, Gend, worker_log_count, gpu_log_count);
+        
+        // 메모리 해제
+        free(model_name);
+    }
+    pthread_mutex_unlock(&log_write_mutex);
     
     // free memory
     free_detections(dets, nboxes);
@@ -1006,8 +1014,8 @@ void gpu_accel_runner(char *datacfg, char *cfgfile, char *weightfile, char *file
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
-        data[i].Gstart = 0;
-        data[i].Gend = 0;
+        data[i].Gstart = Gstart;
+        data[i].Gend = Gend;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);

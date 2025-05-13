@@ -4,7 +4,7 @@
 model=""
 num_worker=8
 Gstart=0
-Gend=0
+Gend=1
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
