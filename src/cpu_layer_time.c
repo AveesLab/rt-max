@@ -68,32 +68,31 @@ static worker_log_t worker_logs[MAX_TASKS];
 static int worker_log_count = 0;
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// 로그 함수 - 배열에 저장 (수정)
-static void save_worker_log(worker_log_t log) {
-    pthread_mutex_lock(&log_mutex);
-    if (worker_log_count < MAX_TASKS) {
-        // 깊은 복사를 위한 메모리 할당
-        worker_logs[worker_log_count].thread_id = log.thread_id;
-        worker_logs[worker_log_count].core_id = log.core_id;
-        worker_logs[worker_log_count].worker_start_time = log.worker_start_time;
-        worker_logs[worker_log_count].worker_preprocess_end_time = log.worker_preprocess_end_time;
-        worker_logs[worker_log_count].worker_inference_end_time = log.worker_inference_end_time;
-        worker_logs[worker_log_count].worker_postprocess_end_time = log.worker_postprocess_end_time;
-        worker_logs[worker_log_count].worker_end_time = log.worker_end_time;
-        worker_logs[worker_log_count].num_layers = log.num_layers;
-        
-        // layer_times 배열 깊은 복사
-        worker_logs[worker_log_count].layer_times = (double*)malloc(sizeof(double) * log.num_layers);
-        if (worker_logs[worker_log_count].layer_times) {
-            memcpy(worker_logs[worker_log_count].layer_times, log.layer_times, sizeof(double) * log.num_layers);
+// 글로벌 변수 추가
+static int pseudo_layer_indexes[500];  // pseudo 레이어의 인덱스를 저장
+static int num_pseudo_layer = 0;              // pseudo 레이어 수
+
+// 레이어 정보 출력 및 pseudo 레이어 인덱스 계산 함수
+static void print_layer_info(network net)
+{
+    int i;
+    num_pseudo_layer = 0;  // 초기화
+    
+    for(i = 0; i < net.n; ++i){
+        layer l = net.layers[i];
+        if(l.type == CONVOLUTIONAL || l.type == CONNECTED){
+            // printf("ConV/FC Layer %d: num_pseudo_layer=%d, pseudo_layer_indexes[num_pseudo_layer]=%d\n", i, num_pseudo_layer, pseudo_layer_indexes[num_pseudo_layer]);
+            pseudo_layer_indexes[num_pseudo_layer] = i;
+            num_pseudo_layer++;
         }
-        
-        worker_log_count++;
     }
-    pthread_mutex_unlock(&log_mutex);
+    pseudo_layer_indexes[num_pseudo_layer] = net.n;
+    num_pseudo_layer++;
 }
 
-// 정렬 비교 함수
+
+
+// 정렬 비교 함수 (작업 시작 시간 기준)
 static int compare_worker_logs(const void *a, const void *b) {
     worker_log_t *log_a = (worker_log_t *)a;
     worker_log_t *log_b = (worker_log_t *)b;
@@ -101,6 +100,25 @@ static int compare_worker_logs(const void *a, const void *b) {
     if (log_a->worker_start_time > log_b->worker_start_time) return 1;
     return 0;
 }
+
+// 스레드 데이터 구조체
+typedef struct thread_data_t{
+    char *datacfg;
+    char *cfgfile;
+    char *weightfile;
+    char *filename;
+    float thresh;
+    float hier_thresh;
+    int dont_show;
+    int ext_output;
+    int save_labels;
+    char *outfile;
+    int letter_box;
+    int benchmark_layers;
+    int thread_id;
+    int num_thread;
+    bool isTest;
+} thread_data_t;
 
 // 로그 파일 작성 함수 (수정)
 static void write_logs_to_file(char *model_name, char *worker_path, int num_layers) {
@@ -116,9 +134,9 @@ static void write_logs_to_file(char *model_name, char *worker_path, int num_laye
     // 워커 CSV 헤더 - 기본 정보 먼저 출력
     fprintf(fp_worker, "thread_id,core_id,worker_start_time,worker_preprocess_end_time,worker_inference_end_time,worker_postprocess_end_time,worker_end_time,preprocess_delay,inference_delay,postprocess_delay,total_delay");
     
-    // 레이어별 열을 마지막에 추가
-    for (int l = 0; l < num_layers; l++) {
-        fprintf(fp_worker, ",layer%d_time", l);
+    // Pseudo 레이어별 열을 마지막에 추가
+    for (int l = 0; l < num_pseudo_layer - 1; l++) {  // 마지막 인덱스는 net.n이므로 제외
+        fprintf(fp_worker, ",pseudo_layer%d_time", l);
     }
     fprintf(fp_worker, "\n");
     
@@ -143,33 +161,19 @@ static void write_logs_to_file(char *model_name, char *worker_path, int num_laye
             postprocess_delay,
             total_delay);
         
-        // 레이어별 시간을 마지막에 출력
-        for (int l = 0; l < worker_logs[i].num_layers; l++) {
-            fprintf(fp_worker, ",%.2f", worker_logs[i].layer_times[l]);
+        // Pseudo 레이어별 시간을 마지막에 출력
+        for (int p = 0; p < num_pseudo_layer - 1; p++) {  // 각 pseudo 레이어에 대해
+            double pseudo_layer_time = 0.0;
+            // pseudo_layer_indexes[p]부터 pseudo_layer_indexes[p+1]-1까지의 레이어 시간 합산
+            for (int l = pseudo_layer_indexes[p]; l < pseudo_layer_indexes[p+1]; l++) {
+                pseudo_layer_time += worker_logs[i].layer_times[l];
+            }
+            fprintf(fp_worker, ",%.2f", pseudo_layer_time);
         }
         fprintf(fp_worker, "\n");
     }
     fclose(fp_worker);
 }
-
-// 스레드 데이터 구조체
-typedef struct thread_data_t{
-    char *datacfg;
-    char *cfgfile;
-    char *weightfile;
-    char *filename;
-    float thresh;
-    float hier_thresh;
-    int dont_show;
-    int ext_output;
-    int save_labels;
-    char *outfile;
-    int letter_box;
-    int benchmark_layers;
-    int thread_id;
-    int num_thread;
-    bool isTest;
-} thread_data_t;
 
 // 워커 스레드 함수 수정
 static void threadFunc(thread_data_t data)
@@ -219,6 +223,10 @@ static void threadFunc(thread_data_t data)
         // 로그 배열 초기화 (선택적)
         memset(worker_logs, 0, sizeof(worker_logs));
         printf("Measure CPU Layer Time with %d worker threads\n", num_thread);
+        
+        // Pseudo 레이어 정보 출력
+        print_layer_info(net);
+        printf("num_pseudo_layer: %d\n", num_pseudo_layer);
     }
 
     // __Check-worker-thread-initialization__
@@ -340,16 +348,16 @@ static void threadFunc(thread_data_t data)
         model_name[strlen(data.cfgfile)-10] = '\0';
 
         char worker_path[256];
-        sprintf(worker_path, "./measure/layer_time/%s/worker%d/cpu_layer_time.csv", model_name, num_thread);
+        sprintf(worker_path, "./measure/pseudo_layer_time/%s/worker%d/cpu_pseudo_layer_time.csv", model_name, num_thread);
 
         // 디렉토리 생성 확인 (디렉토리가 없을 수 있음)
         char dir_cmd[512];
-        sprintf(dir_cmd, "mkdir -p ./measure/layer_time/%s/worker%d", model_name, num_thread);
+        sprintf(dir_cmd, "mkdir -p ./measure/pseudo_layer_time/%s/worker%d", model_name, num_thread);
         system(dir_cmd);
 
         // 로그 파일 작성 (레이어 수 전달)
         write_logs_to_file(model_name, worker_path, net.n);
-        if (VISUAL) printf("write_logs_to_file --> worker_log_count: %d\n", worker_log_count);
+        if (VISUAL) printf("write_logs_to_file --> worker_log_count: %d, num_pseudo_layer: %d\n", worker_log_count, num_pseudo_layer);
         
         // 메모리 해제
         free(model_name);

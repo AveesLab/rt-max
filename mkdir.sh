@@ -83,10 +83,10 @@ done
 ## CPU/GPU Layer Time
 for model in "yolov4" "yolov4-tiny" "yolov7" "yolov7-tiny" "densenet201" "resnet152" "csmobilenet-v2" "squeezenet" "enetb0"
 do
-	mkdir -p measure/layer_time/$model/
+	mkdir -p measure/pseudo_layer_time/$model/
     for ((num_worker=1; num_worker<=11; num_worker++))
     do
-        mkdir -p measure/layer_time/$model/worker$num_worker/
+        mkdir -p measure/pseudo_layer_time/$model/worker$num_worker/
     done
 done
 
