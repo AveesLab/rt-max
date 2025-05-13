@@ -233,9 +233,9 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
                 gpu_logs[i].gpu_end_time,
                 gpu_logs[i].pull_start_time,
                 gpu_logs[i].pull_end_time,
-                queue_waiting_delay,    // 위치 변경됨: push_delay 앞으로 이동
+                queue_waiting_delay,
                 push_delay,
-                gpu_inference_delay,    // 변수명 변경됨: compute_delay -> gpu_inference_delay
+                gpu_inference_delay,
                 pull_delay,
                 total_delay);
     }
@@ -250,16 +250,35 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,cpu_inference_delay_2,postprocess_delay,total_delay\n");
+    // 워커 CSV 헤더에 GPU 지연 시간 필드 추가
+    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,cpu_inference_delay_2,postprocess_delay,total_delay,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay\n");
+    
     for (int i = 0; i < worker_log_count; i++) {
-        // 새로운 지연 시간 계산
+        // 워커 지연 시간 계산
         double preprocess_delay = worker_logs[i].worker_inference_time - worker_logs[i].worker_start_time;
         double cpu_inference_delay_1 = worker_logs[i].worker_request_time - worker_logs[i].worker_inference_time;
         double cpu_inference_delay_2 = worker_logs[i].worker_postprocess_time - worker_logs[i].worker_receive_time;
         double postprocess_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_postprocess_time;
         double total_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
         
-        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        // GPU 지연 시간 가져오기 (동일한 인덱스 i 사용)
+        double queue_waiting_delay = 0.0;
+        double push_delay = 0.0;
+        double gpu_inference_delay = 0.0;
+        double pull_delay = 0.0;
+        double total_gpu_delay = 0.0;
+        
+        // GPU 로그와 워커 로그의 개수가 동일하다고 가정
+        if (i < gpu_log_count) {
+            queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;
+            push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
+            gpu_inference_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
+            pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
+            total_gpu_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
+        }
+        
+        // 워커 로그와 GPU 지연 시간 함께 저장
+        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id,
                 worker_logs[i].Gstart,
                 worker_logs[i].Gend,
@@ -273,7 +292,13 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
                 cpu_inference_delay_1,
                 cpu_inference_delay_2,
                 postprocess_delay,
-                total_delay);
+                total_delay,
+                // GPU 지연 시간 필드 추가
+                queue_waiting_delay,
+                push_delay,
+                gpu_inference_delay,
+                pull_delay,
+                total_gpu_delay);  // GPU의 total_delay를 total_gpu_delay로 이름 변경
     }
     fclose(fp_worker);
 }
