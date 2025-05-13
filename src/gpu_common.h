@@ -26,6 +26,7 @@
 #endif
 #endif
 
+#define MAX_SEGMENTS 100
 #define START_IDX 3
 #define VISUAL 1
 #define MAX_BUFFER_SIZE 2097152
@@ -73,6 +74,13 @@ typedef struct gpu_task_t {
     double pull_start_time;    // GPU 메모리에서 복사 시작 시간
     double pull_end_time;      // GPU 메모리에서 복사 완료 시간
 
+    
+    // 세그먼트 시간 (추가된 부분)
+    double segment_times[MAX_SEGMENTS];
+    int segment_starts[MAX_SEGMENTS];
+    int segment_ends[MAX_SEGMENTS];
+    int num_segments;
+
     // Skip connection을 위한 추가 필드
     int skip_count;                 // skip connection 개수
     int skip_layers_idx[10];        // skip connection 레이어 인덱스
@@ -96,6 +104,12 @@ typedef struct gpu_log_t {
     double gpu_end_time;
     double pull_start_time;
     double pull_end_time;
+
+    // 세그먼트 시간 추가 (배열로 저장)
+    double segment_times[MAX_SEGMENTS];
+    int num_segments;
+    int segment_starts[MAX_SEGMENTS];
+    int segment_ends[MAX_SEGMENTS];
 } gpu_log_t;
 
 typedef struct worker_log_t {

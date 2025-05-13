@@ -46,10 +46,21 @@ int compare_segments(const void *a, const void *b) {
         return seg_a->end_layer - seg_b->end_layer;
 }
 
+// GPU 세그먼트 실행 시간 설정 함수
+void set_segment_time(gpu_task_t *task, int segment_idx, int start_layer, int end_layer, double execution_time) {
+    if (segment_idx < MAX_SEGMENTS) {
+        task->segment_times[segment_idx] = execution_time;
+        task->segment_starts[segment_idx] = start_layer;
+        task->segment_ends[segment_idx] = end_layer;
+        if (segment_idx >= task->num_segments) {
+            task->num_segments = segment_idx + 1;
+        }
+    }
+}
 // CSV 파일의 첫 번째 행에서 세그먼트 정보를 파싱하는 함수
 void parse_segment_file(char *model_name) {
     char filepath[256];
-    sprintf(filepath, "measure/gpu_segments/%s/gpu_segment_partitions_%s.csv", model_name, model_name);
+    sprintf(filepath, "./measure/gpu_segments/%s/gpu_segment_partitions_%s.csv", model_name, model_name);
     
     FILE *fp = fopen(filepath, "r");
     if (!fp) {
@@ -186,14 +197,16 @@ void parse_segment_file(char *model_name) {
         }
     }
 }
-
-// 세그먼트 실행 시간 기록 함수
+// 세그먼트 실행 시간 기록 함수 - 별도 파일에 저장
 void save_segment_time(char *model_name, int num_worker, int segment_idx, double execution_time) {
     if (segment_idx >= num_segments) return;
     
+    int pseudo_start = segments[segment_idx].start_layer;
+    int pseudo_end = segments[segment_idx].end_layer - 1; // 종료 레이어는 +1되어 있으므로 -1
+    
     char dirpath[256];
-    sprintf(dirpath, "measure/pseudo_layer_time/%s/gpu/worker%d/G%d", 
-            model_name, num_worker, segments[segment_idx].start_layer);
+    sprintf(dirpath, "./measure/pseudo_layer_time/%s/gpu/worker%d/G%d", 
+            model_name, num_worker, pseudo_start);
     
     // 디렉토리 생성
     char mkdir_cmd[512];
@@ -202,7 +215,7 @@ void save_segment_time(char *model_name, int num_worker, int segment_idx, double
     
     char filepath[512];
     sprintf(filepath, "%s/gpu_segment_time_G%d_%d.csv", 
-            dirpath, segments[segment_idx].start_layer, segments[segment_idx].end_layer);
+            dirpath, pseudo_start, pseudo_end);
     
     // 파일이 없으면 헤더 추가
     FILE *fp = fopen(filepath, "r");
@@ -218,11 +231,170 @@ void save_segment_time(char *model_name, int num_worker, int segment_idx, double
     if (!file_exists) {
         // 헤더 추가
         fprintf(fp, "Execution_Time\n");
+        printf("Created new log file: %s\n", filepath);
     }
     
     // 시간 기록
     fprintf(fp, "%.6f\n", execution_time);
     fclose(fp);
+    
+    printf("Saved execution time (%.6f ms) for segment G%d-%d to %s\n", 
+           execution_time, pseudo_start, pseudo_end, filepath);
+}
+
+// 로그 함수 - 세그먼트 시간 포함하여 배열에 저장
+void save_gpu_log_with_segment(gpu_task_t task) {
+    pthread_mutex_lock(&log_mutex);
+    if (gpu_log_count < MAX_TASKS) {
+        gpu_logs[gpu_log_count].thread_id = task.thread_id;
+        gpu_logs[gpu_log_count].core_id = task.core_id;
+        gpu_logs[gpu_log_count].Gstart = task.Gstart;
+        gpu_logs[gpu_log_count].Gend = task.Gend;
+        gpu_logs[gpu_log_count].request_time = task.request_time;
+        gpu_logs[gpu_log_count].push_start_time = task.push_start_time;
+        gpu_logs[gpu_log_count].push_end_time = task.push_end_time;
+        gpu_logs[gpu_log_count].gpu_start_time = task.gpu_start_time;
+        gpu_logs[gpu_log_count].gpu_end_time = task.gpu_end_time;
+        gpu_logs[gpu_log_count].pull_start_time = task.pull_start_time;
+        gpu_logs[gpu_log_count].pull_end_time = task.pull_end_time;
+        
+        // 세그먼트 정보 복사
+        gpu_logs[gpu_log_count].num_segments = task.num_segments;
+        for (int i = 0; i < task.num_segments; i++) {
+            gpu_logs[gpu_log_count].segment_times[i] = task.segment_times[i];
+            gpu_logs[gpu_log_count].segment_starts[i] = task.segment_starts[i];
+            gpu_logs[gpu_log_count].segment_ends[i] = task.segment_ends[i];
+        }
+        
+        gpu_log_count++;
+    }
+    pthread_mutex_unlock(&log_mutex);
+}
+
+// 로그 파일 작성 함수 - 세그먼트 시간 열 추가
+void write_logs_to_files_with_segment(char *model_name, char *gpu_path, char *worker_path) {
+    FILE *fp_gpu, *fp_worker;
+    
+    // GPU 로그 정렬 및 파일 작성
+    qsort(gpu_logs, gpu_log_count, sizeof(gpu_log_t), compare_gpu_logs);
+
+    fp_gpu = fopen(gpu_path, "w");
+    if (!fp_gpu) {
+        perror("파일 열기 실패");
+        exit(1);
+    }
+
+    // GPU 로그 기본 헤더
+    fprintf(fp_gpu, "thread_id,core_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay");
+    
+    // 각 세그먼트에 대한 열 추가
+    for (int i = 0; i < gpu_logs[0].num_segments; i++) {
+        fprintf(fp_gpu, ",G%d-%d", 
+                gpu_logs[0].segment_starts[i], 
+                gpu_logs[0].segment_ends[i]);
+    }
+    fprintf(fp_gpu, "\n");
+    
+    // GPU 로그 데이터 작성
+    for (int i = 0; i < gpu_log_count; i++) {
+        // 지연 시간 계산
+        double queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;
+        double push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
+        double gpu_inference_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
+        double pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
+        double total_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
+        
+        // 기본 필드 출력
+        fprintf(fp_gpu, "%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f", 
+                gpu_logs[i].thread_id,
+                gpu_logs[i].core_id,
+                gpu_logs[i].Gstart,
+                gpu_logs[i].Gend,
+                gpu_logs[i].request_time, 
+                gpu_logs[i].push_start_time, 
+                gpu_logs[i].push_end_time,
+                gpu_logs[i].gpu_start_time, 
+                gpu_logs[i].gpu_end_time,
+                gpu_logs[i].pull_start_time,
+                gpu_logs[i].pull_end_time,
+                queue_waiting_delay,
+                push_delay,
+                gpu_inference_delay,
+                pull_delay,
+                total_delay);
+        
+        // 세그먼트 시간 출력
+        for (int j = 0; j < gpu_logs[i].num_segments; j++) {
+            fprintf(fp_gpu, ",%.2f", gpu_logs[i].segment_times[j]);
+        }
+        fprintf(fp_gpu, "\n");
+    }
+    fclose(fp_gpu);
+    
+    // 워커 로그 정렬 및 파일 작성 (기존 코드와 동일)
+    qsort(worker_logs, worker_log_count, sizeof(worker_log_t), compare_worker_logs);
+
+    fp_worker = fopen(worker_path, "w");
+    if (!fp_worker) {
+        perror("파일 열기 실패");
+        exit(1);
+    }
+
+    // 워커 CSV 헤더 - GPU 지연 시간 필드의 위치 수정
+    fprintf(fp_worker, "thread_id,core_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay,cpu_inference_delay_2,postprocess_delay,total_delay\n");
+    
+    for (int i = 0; i < worker_log_count; i++) {
+        // 워커 지연 시간 계산
+        double preprocess_delay = worker_logs[i].worker_inference_time - worker_logs[i].worker_start_time;
+        double cpu_inference_delay_1 = worker_logs[i].worker_request_time - worker_logs[i].worker_inference_time;
+        double cpu_inference_delay_2 = worker_logs[i].worker_postprocess_time - worker_logs[i].worker_receive_time;
+        double postprocess_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_postprocess_time;
+        double total_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
+        
+        // GPU 지연 시간 가져오기 (동일한 인덱스 i 사용)
+        double queue_waiting_delay = 0.0;
+        double push_delay = 0.0;
+        double gpu_inference_delay = 0.0;
+        double pull_delay = 0.0;
+        double total_gpu_delay = 0.0;
+        
+        // GPU 로그와 워커 로그의 개수가 동일하다고 가정
+        if (i < gpu_log_count) {
+            queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;
+            push_delay = gpu_logs[i].push_end_time - gpu_logs[i].push_start_time;
+            gpu_inference_delay = gpu_logs[i].gpu_end_time - gpu_logs[i].gpu_start_time;
+            pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
+            total_gpu_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
+        }
+        
+        // 워커 로그와 GPU 지연 시간 함께 저장 - GPU 관련 필드 위치 수정
+        fprintf(fp_worker, "%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+                worker_logs[i].thread_id,
+                worker_logs[i].core_id,
+                worker_logs[i].Gstart,
+                worker_logs[i].Gend,
+                worker_logs[i].worker_start_time, 
+                worker_logs[i].worker_inference_time, 
+                worker_logs[i].worker_request_time, 
+                worker_logs[i].worker_receive_time, 
+                worker_logs[i].worker_postprocess_time, 
+                worker_logs[i].worker_end_time,
+                preprocess_delay,
+                cpu_inference_delay_1,
+                // GPU 지연 시간 필드 (cpu_inference_delay_1과 cpu_inference_delay_2 사이로 이동)
+                queue_waiting_delay,
+                push_delay,
+                gpu_inference_delay,
+                pull_delay,
+                total_gpu_delay,
+                cpu_inference_delay_2,
+                postprocess_delay,
+                total_delay);
+    }
+    fclose(fp_worker);
+    
+    printf("GPU log written to: %s\n", gpu_path);
+    printf("Worker log written to: %s\n", worker_path);
 }
 // GPU 전용 스레드 함수 수정
 static void* gpu_dedicated_thread(void* arg) {
@@ -367,7 +539,14 @@ static void* gpu_dedicated_thread(void* arg) {
             csv_data = 1; // 한 번만 로드하도록 플래그 설정
         }
         
+        // 세그먼트 실행 시작 전 초기화
+        current_task.num_segments = 0;
+
         // 모든 세그먼트 실행 (각각 시간 측정)
+        int total_measurements = 0;
+        printf("\nStarting GPU segment measurements for model: %s\n", model_name);
+        printf("-------------------------------------------------------\n");
+
         for (int seg_idx = 0; seg_idx < num_segments; seg_idx++) {
             int pseudo_start = segments[seg_idx].start_layer;
             int pseudo_end = segments[seg_idx].end_layer;
@@ -378,13 +557,13 @@ static void* gpu_dedicated_thread(void* arg) {
             
             // 마지막 pseudo 레이어인 경우 네트워크 끝까지, 아니면 다음 pseudo 레이어 - 1
             if (pseudo_end >= num_pseudo_layer) {
-                real_end = current_task.net.n; // 네트워크의 총 레이어 수
+                real_end = current_task.net.n - 1; // 네트워크의 총 레이어 수 - 1
             } else {
                 real_end = pseudo_layer_indexes[pseudo_end] - 1;
             }
             
-            printf("Processing segment %d: Pseudo layers %d-%d, Real layers %d-%d\n", 
-                seg_idx, pseudo_start, pseudo_end, real_start, real_end);
+            printf("Processing segment %d: Pseudo layers %d-%d (Real layers %d-%d)\n", 
+                seg_idx, pseudo_start, pseudo_end - 1, real_start, real_end);
             
             // 세그먼트 실행 시작 시간
             double segment_start_time = current_time_in_ms();
@@ -407,14 +586,27 @@ static void* gpu_dedicated_thread(void* arg) {
             // 세그먼트 실행 종료 시간 및 소요 시간 계산
             double segment_end_time = current_time_in_ms();
             double segment_execution_time = segment_end_time - segment_start_time;
+            total_measurements++;
             
-            // 세그먼트 실행 시간 저장 (pseudo 레이어 인덱스 사용)
-            save_segment_time(model_name, current_task.thread_id, seg_idx, segment_execution_time);
+            // 세그먼트 실행 시간 저장 (task와 별도 파일 모두)
+            current_task.segment_times[seg_idx] = segment_execution_time;
+            current_task.segment_starts[seg_idx] = pseudo_start;
+            current_task.segment_ends[seg_idx] = pseudo_end - 1;
+            current_task.num_segments = MAX(current_task.num_segments, seg_idx + 1);
             
-            printf("Segment %d (Pseudo layers %d-%d, Real layers %d-%d) execution time: %.6f ms\n", 
-                seg_idx, pseudo_start, pseudo_end, real_start, real_end, segment_execution_time);
+            // 별도 파일에도 저장
+            save_segment_time(model_name, num_thread, seg_idx, segment_execution_time);
+            
+            printf("Segment %d measurement complete: Execution time = %.6f ms\n", 
+                seg_idx, segment_execution_time);
         }
-        
+
+        printf("-------------------------------------------------------\n");
+        printf("GPU segment measurements complete: %d segments measured\n", total_measurements);
+        printf("All measurement results saved to ./measure/pseudo_layer_time/%s/gpu/worker%d/ directory\n", 
+            model_name, num_thread);
+        printf("-------------------------------------------------------\n");
+                
         // 메모리 해제
         free(model_name);
         
@@ -447,7 +639,7 @@ static void* gpu_dedicated_thread(void* arg) {
         current_task.pull_end_time = current_time_in_ms();
         
         // GPU 작업 로그 저장
-        save_gpu_log(current_task);
+        save_gpu_log_with_segment(current_task);
         
         // 작업 완료 표시 및 워커 스레드에 알림
         pthread_mutex_lock(&result_mutex[current_task.task_id % MAX_GPU_QUEUE_SIZE]);
@@ -881,7 +1073,7 @@ static void threadFunc(thread_data_t data)
         sprintf(worker_path, "./measure/worker_task_log_G%d_%d.csv", Gstart, Gend);
 
         // 로그 파일 작성
-        write_logs_to_files(model_name, gpu_path, worker_path);
+        write_logs_to_files_with_segment(model_name, gpu_path, worker_path);
         
         // 메모리 해제
         free(model_name);
