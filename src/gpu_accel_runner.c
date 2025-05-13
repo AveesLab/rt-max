@@ -276,8 +276,8 @@ static void threadFunc(thread_data_t data)
             pthread_barrier_wait(&barrier);
 
             // 각 워커별 GPU 사용 범위 설정
-            int Gstart = layer_indexes[s];    // GPU 작업 시작 레이어 인덱스
-            int Gend = layer_indexes[e];    // GPU 작업 종료 레이어 인덱스
+            int Gstart = pseudo_layer_indexes[s];    // GPU 작업 시작 레이어 인덱스
+            int Gend = pseudo_layer_indexes[e];    // GPU 작업 종료 레이어 인덱스
 
             if (data.thread_id == 1) {
                 // 로그 카운터 초기화

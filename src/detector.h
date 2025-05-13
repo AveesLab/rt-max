@@ -28,6 +28,9 @@ void sequential(char *datacfg, char *cfgfile, char *weightfile, char *filename, 
 void data_parallel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers);
 
+void cpu_layer_time(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
+    float hier_thresh, int dont_show, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers);
+
 void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh,
     float hier_thresh, int dont_show, int theoretical_exp, int theo_thread, int ext_output, int save_labels, char *outfile, int letter_box, int benchmark_layers);
 

@@ -34,7 +34,7 @@
 #define MAX_TASKS 1000  // 최대 작업 수 (로그 저장용)
 
 extern int coreIDOrder[MAXCORES];
-extern int layer_indexes[500];
+extern int pseudo_layer_indexes[500];
 extern int num_pseudo_layer;
 extern int num_thread;
 extern int num_exp;
