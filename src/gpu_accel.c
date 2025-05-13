@@ -250,8 +250,8 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    // 워커 CSV 헤더에 GPU 지연 시간 필드 추가
-    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,cpu_inference_delay_2,postprocess_delay,total_delay,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay\n");
+    // 워커 CSV 헤더 - GPU 지연 시간 필드의 위치 수정
+    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay,cpu_inference_delay_2,postprocess_delay,total_delay\n");
     
     for (int i = 0; i < worker_log_count; i++) {
         // 워커 지연 시간 계산
@@ -277,7 +277,7 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
             total_gpu_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
         }
         
-        // 워커 로그와 GPU 지연 시간 함께 저장
+        // 워커 로그와 GPU 지연 시간 함께 저장 - GPU 관련 필드 위치 수정
         fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id,
                 worker_logs[i].Gstart,
@@ -290,15 +290,15 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
                 worker_logs[i].worker_end_time,
                 preprocess_delay,
                 cpu_inference_delay_1,
-                cpu_inference_delay_2,
-                postprocess_delay,
-                total_delay,
-                // GPU 지연 시간 필드 추가
+                // GPU 지연 시간 필드 (cpu_inference_delay_1과 cpu_inference_delay_2 사이로 이동)
                 queue_waiting_delay,
                 push_delay,
                 gpu_inference_delay,
                 pull_delay,
-                total_gpu_delay);  // GPU의 total_delay를 total_gpu_delay로 이름 변경
+                total_gpu_delay,
+                cpu_inference_delay_2,
+                postprocess_delay,
+                total_delay);
     }
     fclose(fp_worker);
 }
