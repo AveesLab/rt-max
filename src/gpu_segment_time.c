@@ -88,7 +88,7 @@ void parse_segment_file(char *model_name) {
     
     // 지정된 데이터 행 읽기
     if (fgets(line, sizeof(line), fp)) {
-        if (VISUAL) printf("Data row %d: %s", num_csv_data, line);
+        printf("Data row %d: %s", num_csv_data, line);
         
         // 메모리 해제 (이전에 할당되었을 경우)
         if (segments) {

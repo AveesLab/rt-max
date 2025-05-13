@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 기본값 설정 (필요한 경우)
+# 기본값 설정
 model=""
 num_worker=8
 Gstart=0
@@ -33,7 +33,7 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# model 값에 따른 layer_num 값 설정
+# model 값에 따른 layer_num 및 data_file 설정
 if [ "$model" == "densenet201" ]; then
     data_file="imagenet1k"
     layer_num=306
@@ -49,9 +49,6 @@ elif [ "$model" == "resnet10" ]; then
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
     layer_num=81
-elif [ "$model" == "resnet10" ]; then
-    data_file="imagenet1k"
-    layer_num=136
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
     layer_num=50
@@ -75,15 +72,20 @@ else
     exit 1
 fi
 
-./darknet detector gpu_segment_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 30 -Gstart $Gstart -Gend $Gend
+# CSV 행 개수 가져오기 (헤더 제외)
+csv_file="./measure/gpu_segments/$model/gpu_segment_partitions_${model}.csv"
+if [ ! -f "$csv_file" ]; then
+    echo "CSV file not found: $csv_file"
+    exit 1
+fi
 
-# GPU-accelerated with optimal_core
-# for ((Gstart=0; Gstart<=layer_num; Gstart++))
-# do
-#     for ((Gend=Gstart+1; Gend<=layer_num; Gend++))
-#     do
-#         sleep 3s
-#         ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $Gend -num_exp 20
-#         sleep 3s
-#     done
-# done
+num_lines=$(tail -n +2 "$csv_file" | wc -l)
+
+# 스레드 수 (1~8) 및 csv 데이터 index (0~num_lines-1)에 따라 반복 실행
+for ((thread=1; thread<=8; thread++)); do
+    for ((i=0; i<num_lines; i++)); do
+        echo "Running: thread=$thread, csv_data=$i"
+        ./darknet detector gpu_segment_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg \
+            -num_thread $thread -num_exp 30 -num_csv_data $i
+    done
+done
