@@ -4,7 +4,7 @@
 int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
 
 int layer_indexes[500];
-int num_layer = 0;
+int num_pseudo_layer = 0;
 
 // 로그 쓰기를 위한 barrier와 뮤텍스
 pthread_barrier_t log_barrier;
@@ -46,14 +46,14 @@ void print_layer_info(network net)
     for(i = 0; i < net.n; ++i){
         layer l = net.layers[i];
         if(l.type == CONVOLUTIONAL || l.type == CONNECTED){
-            // printf("ConV/FC Layer %d: num_layer=%d, layer_indexes[num_layer]=%d\n", i, num_layer, layer_indexes[num_layer]);
+            // printf("ConV/FC Layer %d: num_pseudo_layer=%d, layer_indexes[num_pseudo_layer]=%d\n", i, num_pseudo_layer, layer_indexes[num_pseudo_layer]);
 
-            layer_indexes[num_layer] = i;
-            num_layer++;
+            layer_indexes[num_pseudo_layer] = i;
+            num_pseudo_layer++;
         }
     }
-    layer_indexes[num_layer] = net.n;
-    num_layer++;
+    layer_indexes[num_pseudo_layer] = net.n;
+    num_pseudo_layer++;
 }
 
 // 시간 측정 함수

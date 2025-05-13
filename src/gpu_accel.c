@@ -265,7 +265,7 @@ static void threadFunc(thread_data_t data)
 
     if (data.thread_id == 1){
         print_layer_info(net);
-        printf("num_layer: %d\n", num_layer);
+        printf("num_pseudo_layer: %d\n", num_pseudo_layer);
     }
     int core_id = sched_getcpu();
     pthread_mutex_unlock(&mutex_init);
@@ -286,7 +286,7 @@ static void threadFunc(thread_data_t data)
         // 로그 배열 초기화 (선택적)
         memset(gpu_logs, 0, sizeof(gpu_logs));
         memset(worker_logs, 0, sizeof(worker_logs));
-        printf("GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
+        printf("[Test] GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
     }
 
     // __Chekc-worker-thread-initialization__

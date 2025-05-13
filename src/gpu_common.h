@@ -27,7 +27,7 @@
 #endif
 
 #define START_IDX 3
-#define VISUAL 1
+#define VISUAL 0
 #define MAX_BUFFER_SIZE 2097152
 
 #define MAX_GPU_QUEUE_SIZE 128
@@ -35,7 +35,7 @@
 
 extern int coreIDOrder[MAXCORES];
 extern int layer_indexes[500];
-extern int num_layer;
+extern int num_pseudo_layer;
 extern int num_thread;
 extern int num_exp;
 extern int Gstart;
