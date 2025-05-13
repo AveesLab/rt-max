@@ -1,13 +1,18 @@
 #!/bin/bash
 
-# 기본값 설정 (필요한 경우)
+# 기본값 설정
 model=""
+num_thread=8  # 기본값
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -model)
             model="$2"
+            shift
+            ;;
+        -num_thread)
+            num_thread="$2"
             shift
             ;;
         *)
@@ -54,6 +59,5 @@ else
     exit 1
 fi
 
-# Data_parallel
-./darknet detector data-parallel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread 11 -num_exp 30
-
+# Data_parallel 실행
+./darknet detector data-parallel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread "$num_thread" -num_exp 100
