@@ -542,7 +542,7 @@ static void threadFunc(thread_data_t data)
     }
     pthread_mutex_unlock(&mutex_init);
 
-    for (int s = 0; s < num_layer; s+=6){
+    for (int s = 0; s < num_layer; s++){
         for (int e = s + 1; e < num_layer; e++){
             pthread_barrier_wait(&barrier);
             // 각 워커별 GPU 사용 범위 설정
