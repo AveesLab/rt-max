@@ -24,7 +24,7 @@
 #endif
 
 #define START_IDX 3
-#define VISUAL 1
+#define VISUAL 0
 
 static int coreIDOrder[MAXCORES] = {4, 5, 6, 7, 8, 9, 10, 11};
 
