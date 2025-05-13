@@ -27,7 +27,7 @@
 #endif
 
 #define START_IDX 3
-#define VISUAL 0
+#define VISUAL 1
 #define MAX_BUFFER_SIZE 2097152
 
 #define MAX_GPU_QUEUE_SIZE 128
@@ -78,6 +78,9 @@ typedef struct gpu_task_t {
     int skip_layers_idx[10];        // skip connection 레이어 인덱스
     float *skip_layers_data[10];    // 각 skip connection 레이어의 데이터 포인터
     int skip_layers_size[10];       // 각 skip connection 레이어의 데이터 크기
+
+    // 새로 추가된 필드
+    char cfgfile[256]; // 모델 설정 파일 경로
 } gpu_task_t;
 
 // 로그 저장용 구조체
