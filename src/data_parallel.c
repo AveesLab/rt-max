@@ -52,6 +52,7 @@ static pthread_mutex_t mutex_init = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct worker_log_t {
     int thread_id;
+    int core_id;  // 추가된 코어 ID 필드
     double worker_start_time;
     double worker_preprocess_end_time;
     double worker_inference_end_time;
@@ -95,7 +96,7 @@ static void write_logs_to_file(char *model_name, char *worker_path) {
     }
 
     // 워커 CSV 헤더
-    fprintf(fp_worker, "thread_id,worker_start_time,worker_preprocess_end_time,worker_inference_end_time,worker_postprocess_end_time,worker_end_time,preprocess_delay,inference_delay,postprocess_delay,total_delay\n");
+    fprintf(fp_worker, "thread_id,core_id,worker_start_time,worker_preprocess_end_time,worker_inference_end_time,worker_postprocess_end_time,worker_end_time,preprocess_delay,inference_delay,postprocess_delay,total_delay\n");
     
     for (int i = 0; i < worker_log_count; i++) {
         // 워커 지연 시간 계산
@@ -105,17 +106,18 @@ static void write_logs_to_file(char *model_name, char *worker_path) {
         double total_delay = worker_logs[i].worker_end_time - worker_logs[i].worker_start_time;
         
         // 워커 로그와 CPU 지연 시간 저장
-        fprintf(fp_worker, "%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
-                worker_logs[i].thread_id,
-                worker_logs[i].worker_start_time, 
-                worker_logs[i].worker_preprocess_end_time, 
-                worker_logs[i].worker_inference_end_time, 
-                worker_logs[i].worker_postprocess_end_time, 
-                worker_logs[i].worker_end_time,
-                preprocess_delay,
-                inference_delay,
-                postprocess_delay,
-                total_delay);
+        fprintf(fp_worker, "%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+            worker_logs[i].thread_id,
+            worker_logs[i].core_id,  // core_id 추가됨
+            worker_logs[i].worker_start_time, 
+            worker_logs[i].worker_preprocess_end_time, 
+            worker_logs[i].worker_inference_end_time, 
+            worker_logs[i].worker_postprocess_end_time, 
+            worker_logs[i].worker_end_time,
+            preprocess_delay,
+            inference_delay,
+            postprocess_delay,
+            total_delay);
     }
     fclose(fp_worker);
 }
@@ -177,7 +179,7 @@ static void threadFunc(thread_data_t data)
     srand(2222222);
     if (data.filename) strncpy(input, data.filename, 256);
     else printf("Error! File is not exist.");
-
+    int core_id = sched_getcpu();
     pthread_mutex_unlock(&mutex_init);
 
     if (data.thread_id == 1) {
@@ -189,7 +191,7 @@ static void threadFunc(thread_data_t data)
         printf("Data parallel with %d worker threads\n", num_thread);
     }
 
-    // __Chekc-worker-thread-initialization__
+    // __Check-worker-thread-initialization__
     if (VISUAL) printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", data.thread_id, sched_getcpu());
     pthread_barrier_wait(&barrier);
 
@@ -238,6 +240,7 @@ static void threadFunc(thread_data_t data)
         // 워커 로그 직접 저장 (CPU 전용 모드)
         worker_log_t worker_log;
         worker_log.thread_id = data.thread_id;
+        worker_log.core_id = core_id;  // 코어 ID 정보 저장
         worker_log.worker_start_time = worker_start_time;
         worker_log.worker_preprocess_end_time = worker_preprocess_end_time;
         worker_log.worker_inference_end_time = worker_inference_end_time;
