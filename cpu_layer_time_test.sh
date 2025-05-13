@@ -60,4 +60,4 @@ else
 fi
 
 # Data_parallel 실행
-./darknet detector cpu_layer_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 2
+./darknet detector cpu_layer_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 100
