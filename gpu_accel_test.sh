@@ -43,9 +43,15 @@ elif [ "$model" == "resnet152" ]; then
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
     layer_num=136
+elif [ "$model" == "resnet10" ]; then
+    data_file="imagenet1k"
+    layer_num=17
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
     layer_num=81
+elif [ "$model" == "resnet10" ]; then
+    data_file="imagenet1k"
+    layer_num=136
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
     layer_num=50
@@ -69,7 +75,7 @@ else
     exit 1
 fi
 
-./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 20 -Gstart $Gstart -Gend $Gend
+./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 30 -Gstart $Gstart -Gend $Gend
 
 # GPU-accelerated with optimal_core
 # for ((Gstart=0; Gstart<=layer_num; Gstart++))

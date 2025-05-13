@@ -30,6 +30,9 @@ if [ "$model" == "densenet201" ]; then
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
     layer_num=206
+elif [ "$model" == "resnet152" ]; then
+    data_file="imagenet1k"
+    layer_num=17
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
     layer_num=136
@@ -60,4 +63,4 @@ else
 fi
 
 # Data_parallel 실행
-./darknet detector data-parallel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 10
+./darknet detector data-parallel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 100

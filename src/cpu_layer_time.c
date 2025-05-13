@@ -90,9 +90,9 @@ static void print_layer_info(network net)
         }
     }
     pseudo_layer_indexes[num_pseudo_layer] = net.n;
-   if (VISUAL) printf("Final pseudo layer index (net.n): %d\n", net.n);
     num_pseudo_layer++;
-    
+    printf("Number of pseudo layer index: %d, Total (net.n): %d\n", num_pseudo_layer, net.n);
+
     // 모든 pseudo 레이어 인덱스 출력 (디버깅)
    if (VISUAL) printf("Pseudo layer indexes (%d total): ", num_pseudo_layer);
     for (i = 0; i < num_pseudo_layer; i++) {
@@ -180,9 +180,9 @@ static void write_logs_to_file(char *model_name, char *worker_path, int num_laye
         perror("파일 열기 실패");
         printf("Failed to open file: %s\n", worker_path);
         // 디렉토리 존재 확인
-        char check_dir_cmd[512];
-        sprintf(check_dir_cmd, "ls -la $(dirname \"%s\")", worker_path);
-        system(check_dir_cmd);
+        // char check_dir_cmd[512];
+        // sprintf(check_dir_cmd, "ls -la $(dirname \"%s\")", worker_path);
+        // system(check_dir_cmd);
         exit(1);
     }
 
@@ -306,7 +306,7 @@ static void threadFunc(thread_data_t data)
         
         // Pseudo 레이어 정보 출력
         print_layer_info(net);
-        printf("num_pseudo_layer: %d\n", num_pseudo_layer);
+        if (VISUAL) printf("num_pseudo_layer: %d\n", num_pseudo_layer);
     }
 
     // __Check-worker-thread-initialization__
@@ -440,9 +440,9 @@ static void threadFunc(thread_data_t data)
         }
 
         // 디렉토리 존재 확인 (디버깅)
-        char check_dir_cmd[512];
-        sprintf(check_dir_cmd, "ls -la ./measure/pseudo_layer_time/%s/worker%d", model_name, data.num_thread);
-        system(check_dir_cmd);
+        // char check_dir_cmd[512];
+        // sprintf(check_dir_cmd, "ls -la ./measure/pseudo_layer_time/%s/worker%d", model_name, data.num_thread);
+        // system(check_dir_cmd);
 
         // 로그 파일 작성 (레이어 수 전달)
         write_logs_to_file(model_name, worker_path, net.n);
