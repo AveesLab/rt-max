@@ -68,7 +68,7 @@ void parse_segment_file(char *model_name) {
         return;
     }
     
-    printf("Reading segment file: %s\n", filepath);
+   if (VISUAL) printf("Reading segment file: %s\n", filepath);
     
     // 헤더 읽기
     char line[2048];  // 충분히 큰 버퍼 사용
@@ -76,7 +76,7 @@ void parse_segment_file(char *model_name) {
     
     // 첫 번째 데이터 행 읽기
     if (fgets(line, sizeof(line), fp)) {
-        printf("First data row: %s", line);
+       if (VISUAL) printf("First data row: %s", line);
         
         // 메모리 해제 (이전에 할당되었을 경우)
         if (segments) {
@@ -115,7 +115,7 @@ void parse_segment_file(char *model_name) {
             }
         }
         
-        printf("Partition string after cleaning: %s\n", partition_str);
+       if (VISUAL) printf("Partition string after cleaning: %s\n", partition_str);
         
         // 세그먼트 파싱 - 형식: [(6,), (2,), (5,), ...]
         char *ptr = partition_str;
@@ -139,7 +139,7 @@ void parse_segment_file(char *model_name) {
                 strncpy(tuple_content, ptr, content_len);
                 tuple_content[content_len] = '\0';
                 
-                printf("Tuple content: %s\n", tuple_content);
+               if (VISUAL) printf("Tuple content: %s\n", tuple_content);
                 
                 // 튜플 내용 파싱
                 int layers[100] = {0};
@@ -161,7 +161,7 @@ void parse_segment_file(char *model_name) {
                     segments[num_segments].start_layer = layers[0];
                     segments[num_segments].end_layer = layers[num_layers - 1] + 1; // 마지막 레이어 + 1
                     
-                    printf("Added segment %d: Layers %d-%d\n", 
+                   if (VISUAL) printf("Added segment %d: Layers %d-%d\n", 
                            num_segments, segments[num_segments].start_layer, 
                            segments[num_segments].end_layer);
                     num_segments++;
@@ -180,9 +180,9 @@ void parse_segment_file(char *model_name) {
         qsort(segments, num_segments, sizeof(segment_t), compare_segments);
         
         // 파싱된 세그먼트 출력
-        printf("Parsed %d segments from first row:\n", num_segments);
+       if (VISUAL) printf("Parsed %d segments from first row:\n", num_segments);
         for (int i = 0; i < num_segments; i++) {
-            printf("Segment %d: Layers %d-%d\n", i, segments[i].start_layer, segments[i].end_layer);
+           if (VISUAL) printf("Segment %d: Layers %d-%d\n", i, segments[i].start_layer, segments[i].end_layer);
         }
     } else {
         printf("Warning: No segments parsed. Using default segment (all layers).\n");
@@ -238,7 +238,7 @@ void save_segment_time(char *model_name, int num_worker, int segment_idx, double
     fprintf(fp, "%.6f\n", execution_time);
     fclose(fp);
     
-    printf("Saved execution time (%.6f ms) for segment G%d-%d to %s\n", 
+   if (VISUAL) printf("Saved execution time (%.6f ms) for segment G%d-%d to %s\n", 
            execution_time, pseudo_start, pseudo_end, filepath);
 }
 
@@ -393,8 +393,8 @@ void write_logs_to_files_with_segment(char *model_name, char *gpu_path, char *wo
     }
     fclose(fp_worker);
     
-    printf("GPU log written to: %s\n", gpu_path);
-    printf("Worker log written to: %s\n", worker_path);
+   if (VISUAL) printf("GPU log written to: %s\n", gpu_path);
+   if (VISUAL) printf("Worker log written to: %s\n", worker_path);
 }
 // GPU 전용 스레드 함수 수정
 static void* gpu_dedicated_thread(void* arg) {
@@ -544,10 +544,12 @@ static void* gpu_dedicated_thread(void* arg) {
 
         // 모든 세그먼트 실행 (각각 시간 측정)
         int total_measurements = 0;
-        printf("\nStarting GPU segment measurements for model: %s\n", model_name);
-        printf("-------------------------------------------------------\n");
+       if (VISUAL) printf("\nStarting GPU segment measurements for model: %s\n", model_name);
+       if (VISUAL) printf("-------------------------------------------------------\n");
 
         for (int seg_idx = 0; seg_idx < num_segments; seg_idx++) {
+            // 세그먼트 실행 시작 시간
+            double segment_start_time = current_time_in_ms();
             int pseudo_start = segments[seg_idx].start_layer;
             int pseudo_end = segments[seg_idx].end_layer;
             
@@ -562,11 +564,10 @@ static void* gpu_dedicated_thread(void* arg) {
                 real_end = pseudo_layer_indexes[pseudo_end] - 1;
             }
             
-            printf("Processing segment %d: Pseudo layers %d-%d (Real layers %d-%d)\n", 
+           if (VISUAL) printf("Processing segment %d: Pseudo layers %d-%d (Real layers %d-%d)\n", 
                 seg_idx, pseudo_start, pseudo_end - 1, real_start, real_end);
             
-            // 세그먼트 실행 시작 시간
-            double segment_start_time = current_time_in_ms();
+
             
             // 세그먼트의 레이어들 실행 (실제 레이어 인덱스 사용)
             for (int j = real_start; j <= real_end; ++j) {
@@ -582,7 +583,11 @@ static void* gpu_dedicated_thread(void* arg) {
             
             // 각 세그먼트 후 동기화
             CHECK_CUDA(cudaStreamSynchronize(get_cuda_stream()));
-            
+
+            current_task.segment_starts[seg_idx] = pseudo_start;
+            current_task.segment_ends[seg_idx] = pseudo_end - 1;
+            current_task.num_segments = MAX(current_task.num_segments, seg_idx + 1);
+
             // 세그먼트 실행 종료 시간 및 소요 시간 계산
             double segment_end_time = current_time_in_ms();
             double segment_execution_time = segment_end_time - segment_start_time;
@@ -590,22 +595,19 @@ static void* gpu_dedicated_thread(void* arg) {
             
             // 세그먼트 실행 시간 저장 (task와 별도 파일 모두)
             current_task.segment_times[seg_idx] = segment_execution_time;
-            current_task.segment_starts[seg_idx] = pseudo_start;
-            current_task.segment_ends[seg_idx] = pseudo_end - 1;
-            current_task.num_segments = MAX(current_task.num_segments, seg_idx + 1);
-            
+
             // 별도 파일에도 저장
             save_segment_time(model_name, num_thread, seg_idx, segment_execution_time);
             
-            printf("Segment %d measurement complete: Execution time = %.6f ms\n", 
+           if (VISUAL) printf("Segment %d measurement complete: Execution time = %.6f ms\n", 
                 seg_idx, segment_execution_time);
         }
 
-        printf("-------------------------------------------------------\n");
-        printf("GPU segment measurements complete: %d segments measured\n", total_measurements);
-        printf("All measurement results saved to ./measure/pseudo_layer_time/%s/gpu/worker%d/ directory\n", 
+       if (VISUAL) printf("-------------------------------------------------------\n");
+       if (VISUAL) printf("GPU segment measurements complete: %d segments measured\n", total_measurements);
+       if (VISUAL) printf("All measurement results saved to ./measure/pseudo_layer_time/%s/gpu/worker%d/ directory\n", 
             model_name, num_thread);
-        printf("-------------------------------------------------------\n");
+       if (VISUAL) printf("-------------------------------------------------------\n");
                 
         // 메모리 해제
         free(model_name);
@@ -702,7 +704,7 @@ static void threadFunc(thread_data_t data)
 
     if (data.thread_id == 1){
         print_layer_info(net);
-        printf("num_pseudo_layer: %d\n", num_pseudo_layer);
+       if (VISUAL) printf("num_pseudo_layer: %d\n", num_pseudo_layer);
     }
     int core_id = sched_getcpu();
     pthread_mutex_unlock(&mutex_init);

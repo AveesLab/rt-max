@@ -62,6 +62,9 @@ elif [ "$model" == "yolov4" ]; then
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
     layer_num=38
+elif [ "$model" == "yolov2-tiny" ]; then
+    data_file="coco"
+    layer_num=38
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
     exit 1
