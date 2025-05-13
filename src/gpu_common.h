@@ -28,7 +28,7 @@
 
 #define MAX_SEGMENTS 100
 #define START_IDX 3
-#define VISUAL 1
+#define VISUAL 0
 #define MAX_BUFFER_SIZE 2097152
 
 #define MAX_GPU_QUEUE_SIZE 128
