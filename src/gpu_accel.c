@@ -83,6 +83,7 @@ typedef struct gpu_task_t {
     network net;               // 네트워크 정보
     int task_id;               // 작업 ID
     int thread_id;             // 요청한 스레드 ID
+    int core_id;
     int completed;             // 완료 여부 플래그
     float *output;             // 출력 데이터가 저장될 위치
     
@@ -115,6 +116,7 @@ typedef struct gpu_task_t {
 // 로그 저장용 구조체
 typedef struct gpu_log_t {
     int thread_id;
+    int core_id;
     int Gstart;                // GPU 시작 레이어
     int Gend;                  // GPU 종료 레이어
     double request_time;
@@ -128,6 +130,7 @@ typedef struct gpu_log_t {
 
 typedef struct worker_log_t {
     int thread_id;
+    int core_id;
     int Gstart;                // GPU 시작 레이어
     int Gend;                  // GPU 종료 레이어
     double worker_start_time;
@@ -163,6 +166,7 @@ void save_gpu_log(gpu_task_t task) {
     pthread_mutex_lock(&log_mutex);
     if (gpu_log_count < MAX_TASKS) {
         gpu_logs[gpu_log_count].thread_id = task.thread_id;
+        gpu_logs[gpu_log_count].core_id = task.core_id;
         gpu_logs[gpu_log_count].Gstart = task.Gstart;
         gpu_logs[gpu_log_count].Gend = task.Gend;
         gpu_logs[gpu_log_count].request_time = task.request_time;
@@ -214,7 +218,7 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         exit(1);
     }
 
-    fprintf(fp_gpu, "thread_id,Gstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
+    fprintf(fp_gpu, "thread_id,core_idGstart,Gend,request_time,push_start_time,push_end_time,gpu_start_time,gpu_end_time,pull_start_time,pull_end_time,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_delay\n");
     for (int i = 0; i < gpu_log_count; i++) {
         // 큐 대기 시간
         double queue_waiting_delay = gpu_logs[i].push_start_time - gpu_logs[i].request_time;
@@ -224,8 +228,9 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         double pull_delay = gpu_logs[i].pull_end_time - gpu_logs[i].pull_start_time;
         double total_delay = gpu_logs[i].pull_end_time - gpu_logs[i].push_start_time;
         
-        fprintf(fp_gpu, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_gpu, "%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 gpu_logs[i].thread_id,
+                gpu_logs[i].core_id,
                 gpu_logs[i].Gstart,
                 gpu_logs[i].Gend,
                 gpu_logs[i].request_time, 
@@ -253,7 +258,7 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
     }
 
     // 워커 CSV 헤더 - GPU 지연 시간 필드의 위치 수정
-    fprintf(fp_worker, "thread_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay,cpu_inference_delay_2,postprocess_delay,total_delay\n");
+    fprintf(fp_worker, "thread_id,core_id,Gstart,Gend,worker_start_time,worker_inference_time,worker_request_time,worker_receive_time,worker_postprocess_time,worker_end_time,preprocess_delay,cpu_inference_delay_1,queue_waiting_delay,push_delay,gpu_inference_delay,pull_delay,total_gpu_delay,cpu_inference_delay_2,postprocess_delay,total_delay\n");
     
     for (int i = 0; i < worker_log_count; i++) {
         // 워커 지연 시간 계산
@@ -280,8 +285,9 @@ void write_logs_to_files(char *model_name, char *gpu_path, char *worker_path) {
         }
         
         // 워커 로그와 GPU 지연 시간 함께 저장 - GPU 관련 필드 위치 수정
-        fprintf(fp_worker, "%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
+        fprintf(fp_worker, "%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", 
                 worker_logs[i].thread_id,
+                worker_logs[i].core_id,
                 worker_logs[i].Gstart,
                 worker_logs[i].Gend,
                 worker_logs[i].worker_start_time, 
@@ -571,12 +577,16 @@ static void threadFunc(thread_data_t data)
         print_layer_info(net);
         printf("num_layer: %d\n", num_layer);
     }
+    int core_id = sched_getcpu();
     pthread_mutex_unlock(&mutex_init);
 
     pthread_barrier_wait(&barrier);
     // 각 워커별 GPU 사용 범위 설정
-    int Gstart = layer_indexes[0];    // GPU 작업 시작 레이어 인덱스
-    int Gend = layer_indexes[1];    // GPU 작업 종료 레이어 인덱스
+    // int Gstart = layer_indexes[0];    // GPU 작업 시작 레이어 인덱스
+    // int Gend = layer_indexes[1];    // GPU 작업 종료 레이어 인덱스
+
+    int Gstart = data.Gstart;
+    int Gend = data.Gend;
 
     if (data.thread_id == 1) {
         // 로그 카운터 초기화
@@ -645,6 +655,7 @@ static void threadFunc(thread_data_t data)
             // 워커 로그 직접 저장 (CPU 전용 모드)
             worker_log_t worker_log;
             worker_log.thread_id = data.thread_id;
+            worker_log.core_id = core_id;
             worker_log.Gstart = Gstart;
             worker_log.Gend = Gend;
             worker_log.worker_start_time = worker_start_time;
@@ -792,6 +803,7 @@ static void threadFunc(thread_data_t data)
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].net = net;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].task_id = task_id;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].thread_id = data.thread_id;
+            gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].core_id = core_id;
             gpu_task_queue[task_id % MAX_GPU_QUEUE_SIZE].completed = 0;
             
             // GPU 작업 범위 설정
@@ -884,6 +896,7 @@ static void threadFunc(thread_data_t data)
             // 워커 로그 직접 저장 (로컬 변수 사용)
             worker_log_t worker_log;
             worker_log.thread_id = data.thread_id;
+            worker_log.core_id = core_id;
             worker_log.Gstart = Gstart;
             worker_log.Gend = Gend;
             worker_log.worker_start_time = worker_start_time;
@@ -1002,8 +1015,8 @@ void gpu_accel(char *datacfg, char *cfgfile, char *weightfile, char *filename, f
         data[i].letter_box = letter_box;
         data[i].benchmark_layers = benchmark_layers;
         data[i].thread_id = i + 1;
-        data[i].Gstart = 0;
-        data[i].Gend = 0;
+        data[i].Gstart = Gstart;
+        data[i].Gend = Gend;
         rc = pthread_create(&threads[i], NULL, threadFunc, &data[i]);
         if (rc) {
             printf("Error: Unable to create thread, %d\n", rc);
