@@ -286,7 +286,7 @@ static void threadFunc(thread_data_t data)
         // 로그 배열 초기화 (선택적)
         memset(gpu_logs, 0, sizeof(gpu_logs));
         memset(worker_logs, 0, sizeof(worker_logs));
-        printf("[Test] GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
+        printf("[Test] GPU-Accel with %d worker threads (GPU layers: %d-%d (%d-%d))\n", num_thread, data.Gstart, data.Gend, Gstart, Gend);
     }
 
     // __Chekc-worker-thread-initialization__
