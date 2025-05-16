@@ -564,6 +564,7 @@ static void threadFunc(thread_data_t data)
                     reset_wait_stream_events();
 
                     // __Postprecess__ (Post-GPU 2)
+                    layer l = net.layers[net.n - 1];
                     if (object_detection) {
                         dets = get_network_boxes(&net, im.w, im.h, data.thresh, data.hier_thresh, 0, 1, &nboxes, data.letter_box);
                         if (nms) {
