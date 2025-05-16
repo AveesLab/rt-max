@@ -64,6 +64,9 @@ elif [ "$model" == "yolov7-tiny" ]; then
 elif [ "$model" == "yolov4" ]; then
     data_file="coco"
     layer_num=162
+elif [ "$model" == "resnet18" ]; then
+    data_file="imagenet1k"
+    layer_num=206
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
     layer_num=38

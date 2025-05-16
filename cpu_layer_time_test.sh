@@ -39,6 +39,9 @@ elif [ "$model" == "resnet10" ]; then
 elif [ "$model" == "csmobilenet-v2" ]; then
     data_file="imagenet1k"
     layer_num=81
+elif [ "$model" == "resnet18" ]; then
+    data_file="imagenet1k"
+    layer_num=206
 elif [ "$model" == "squeezenet" ]; then
     data_file="imagenet1k"
     layer_num=50

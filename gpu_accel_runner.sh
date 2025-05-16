@@ -38,6 +38,9 @@ if [ "$model" == "densenet201" ]; then
 elif [ "$model" == "resnet152" ]; then
     data_file="imagenet1k"
     layer_num=206
+elif [ "$model" == "resnet18" ]; then
+    data_file="imagenet1k"
+    layer_num=206
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
     layer_num=136
@@ -82,5 +85,5 @@ do
     ./weights/${model}.weights \
     data/dog.jpg \
     -num_thread $i \
-    -num_exp 100
+    -num_exp 1
 done

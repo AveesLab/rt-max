@@ -43,6 +43,9 @@ elif [ "$model" == "resnet152" ]; then
 elif [ "$model" == "enetb0" ]; then
     data_file="imagenet1k"
     layer_num=136
+elif [ "$model" == "resnet18" ]; then
+    data_file="imagenet1k"
+    layer_num=206
 elif [ "$model" == "resnet10" ]; then
     data_file="imagenet1k"
     layer_num=17
