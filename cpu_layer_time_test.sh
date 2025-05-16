@@ -43,5 +43,5 @@ fi
 for num_thread in {1..8}
 do
     echo "Running with num_thread = $num_thread"
-    ./darknet detector cpu_layer_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 1000
+    ./darknet detector cpu_layer_time ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 100
 done
