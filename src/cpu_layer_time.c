@@ -194,7 +194,7 @@ static void write_logs_to_file(char *model_name, char *worker_path, int num_laye
     
     // Pseudo 레이어별 열을 마지막에 추가
     for (int l = 0; l < num_pseudo_layer - 1; l++) {  // 마지막 인덱스는 net.n이므로 제외
-        fprintf(fp_worker, ",pseudo_layer%d_time", l);
+        fprintf(fp_worker, ",C%d", l);
     }
     fprintf(fp_worker, "\n");
     
