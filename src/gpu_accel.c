@@ -620,14 +620,14 @@ static void threadFunc(thread_data_t data)
         model_name[strlen(data.cfgfile)-10] = '\0';
 
         char gpu_path[256];
-        sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+        sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, data.Gstart, data.Gstart, data.Gend);
 
         char worker_path[256];
-        sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+        sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, data.Gstart, data.Gstart, data.Gend);
 
         // 로그 파일 작성
         write_logs_to_files(model_name, gpu_path, worker_path);
-        if (VISUAL) printf("write_logs_to_files (GPU layers: %d-%d) --> worker_log_count: %d, gpu_log_count: %d\n", Gstart, Gend, worker_log_count, gpu_log_count);
+        if (VISUAL) printf("write_logs_to_files (GPU layers: %d-%d) --> worker_log_count: %d, gpu_log_count: %d\n", data.Gstart, data.Gend, worker_log_count, gpu_log_count);
         
         // 메모리 해제
         free(model_name);
