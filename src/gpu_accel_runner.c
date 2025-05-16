@@ -287,14 +287,14 @@ static void threadFunc(thread_data_t data)
                 // 로그 배열 초기화 (선택적)
                 memset(gpu_logs, 0, sizeof(gpu_logs));
                 memset(worker_logs, 0, sizeof(worker_logs));
-                printf("[Runner] GPU-Accel with %d worker threads (GPU layers: %d-%d)\n", num_thread, Gstart, Gend);
+                printf("[Runner] GPU-Accel with %d worker threads (GPU layers: %d-%d (%d-%d))\n", num_thread, s, e, Gstart, Gend);
             }
 
             // __Chekc-worker-thread-initialization__
             if (Gstart == Gend) {
                 if (VISUAL) printf("\nThread %d is set to CPU core %d (CPU-only mode, no GPU layers)\n\n", data.thread_id, sched_getcpu());
             } else {
-                if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d)\n\n", data.thread_id, sched_getcpu(), Gstart, Gend);
+                if (VISUAL) printf("\nThread %d is set to CPU core %d (GPU layers: %d-%d (%d-%d))\n\n", data.thread_id, sched_getcpu(), s, e, Gstart, Gend);
             }
             pthread_barrier_wait(&barrier);
 
@@ -621,14 +621,14 @@ static void threadFunc(thread_data_t data)
                 model_name[strlen(data.cfgfile)-10] = '\0';
 
                 char gpu_path[256];
-                sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+                sprintf(gpu_path, "./measure/gpu-accel/%s/gpu_task_log/worker%d/G%d/gpu_task_log_G%d_%d.csv", model_name, num_thread, s, s, e);
 
                 char worker_path[256];
-                sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, Gstart, Gstart, Gend);
+                sprintf(worker_path, "./measure/gpu-accel/%s/worker_task_log/worker%d/G%d/worker_task_log_G%d_%d.csv", model_name, num_thread, s, s, e);
 
                 // 로그 파일 작성
                 write_logs_to_files(model_name, gpu_path, worker_path);
-                if (VISUAL) printf("write_logs_to_files (GPU layers: %d-%d) --> worker_log_count: %d, gpu_log_count: %d\n", Gstart, Gend, worker_log_count, gpu_log_count);
+                if (VISUAL) printf("write_logs_to_files (GPU layers: %d-%d) --> worker_log_count: %d, gpu_log_count: %d\n", s, e, worker_log_count, gpu_log_count);
                 
                 // 메모리 해제
                 free(model_name);
