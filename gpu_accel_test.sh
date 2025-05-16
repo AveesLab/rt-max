@@ -34,45 +34,18 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # model 값에 따른 layer_num 값 설정
-if [ "$model" == "densenet201" ]; then
+if [ "$model" == "resnet10" ]; then
     data_file="imagenet1k"
-    layer_num=306
-elif [ "$model" == "resnet152" ]; then
-    data_file="imagenet1k"
-    layer_num=206
-elif [ "$model" == "enetb0" ]; then
-    data_file="imagenet1k"
-    layer_num=136
-elif [ "$model" == "resnet10" ]; then
-    data_file="imagenet1k"
-    layer_num=17
-elif [ "$model" == "csmobilenet-v2" ]; then
-    data_file="imagenet1k"
-    layer_num=81
-elif [ "$model" == "resnet10" ]; then
-    data_file="imagenet1k"
-    layer_num=136
-elif [ "$model" == "squeezenet" ]; then
-    data_file="imagenet1k"
-    layer_num=50
-elif [ "$model" == "yolov7" ]; then
-    data_file="coco"
-    layer_num=143
-elif [ "$model" == "yolov7-tiny" ]; then
-    data_file="coco"
-    layer_num=99
-elif [ "$model" == "yolov4" ]; then
-    data_file="coco"
-    layer_num=162
+    layer_num=11
 elif [ "$model" == "resnet18" ]; then
     data_file="imagenet1k"
-    layer_num=206
-elif [ "$model" == "yolov4-tiny" ]; then
-    data_file="coco"
-    layer_num=38
+    layer_num=19
 elif [ "$model" == "yolov2-tiny" ]; then
     data_file="coco"
-    layer_num=38
+    layer_num=10
+elif [ "$model" == "yolov4-tiny" ]; then
+    data_file="coco"
+    layer_num=22
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
     exit 1
@@ -82,14 +55,3 @@ else
 fi
 
 ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 30 -Gstart $Gstart -Gend $Gend
-
-# GPU-accelerated with optimal_core
-# for ((Gstart=0; Gstart<=layer_num; Gstart++))
-# do
-#     for ((Gend=Gstart+1; Gend<=layer_num; Gend++))
-#     do
-#         sleep 3s
-#         ./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -Gstart $Gstart -Gend $Gend -num_exp 20
-#         sleep 3s
-#     done
-# done

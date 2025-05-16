@@ -13,18 +13,6 @@ while [[ "$#" -gt 0 ]]; do
             model="$2"
             shift
             ;;
-        -worker)
-            num_worker="$2"
-            shift
-            ;;
-        -Gstart)
-            Gstart="$2"
-            shift
-            ;;
-        -Gend)
-            Gend="$2"
-            shift
-            ;;
         *)
             echo "Unknown parameter: $1"
             exit 1
@@ -34,39 +22,18 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # model 값에 따른 layer_num 및 data_file 설정
-if [ "$model" == "densenet201" ]; then
+if [ "$model" == "resnet10" ]; then
     data_file="imagenet1k"
-    layer_num=306
-elif [ "$model" == "resnet152" ]; then
-    data_file="imagenet1k"
-    layer_num=206
-elif [ "$model" == "enetb0" ]; then
-    data_file="imagenet1k"
-    layer_num=136
+    layer_num=11
 elif [ "$model" == "resnet18" ]; then
     data_file="imagenet1k"
-    layer_num=206
-elif [ "$model" == "resnet10" ]; then
-    data_file="imagenet1k"
-    layer_num=17
-elif [ "$model" == "csmobilenet-v2" ]; then
-    data_file="imagenet1k"
-    layer_num=81
-elif [ "$model" == "squeezenet" ]; then
-    data_file="imagenet1k"
-    layer_num=50
-elif [ "$model" == "yolov7" ]; then
+    layer_num=19
+elif [ "$model" == "yolov2-tiny" ]; then
     data_file="coco"
-    layer_num=143
-elif [ "$model" == "yolov7-tiny" ]; then
-    data_file="coco"
-    layer_num=99
-elif [ "$model" == "yolov4" ]; then
-    data_file="coco"
-    layer_num=162
+    layer_num=10
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
-    layer_num=38
+    layer_num=22
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
     exit 1
@@ -75,13 +42,23 @@ else
     exit 1
 fi
 
-# CSV 행 개수 가져오기 (헤더 제외)
+# CSV 파일 경로 설정
 csv_file="./measure/gpu_segments/$model/gpu_segment_partitions_${model}.csv"
+
+# CSV 파일 존재 확인 및 없으면 생성
 if [ ! -f "$csv_file" ]; then
     echo "CSV file not found: $csv_file"
-    exit 1
+    echo "Generating CSV using: python3 gpu_segment_partition_generator.py -model $model -n $layer_num"
+    python3 gpu_segment_partition_generator.py -model "$model" -n "$layer_num"
+
+    # 생성 이후에도 존재하지 않으면 오류 처리
+    if [ ! -f "$csv_file" ]; then
+        echo "Failed to generate CSV file. Check if the generator script ran correctly."
+        exit 1
+    fi
 fi
 
+# CSV 행 개수 가져오기 (헤더 제외)
 num_lines=$(tail -n +2 "$csv_file" | wc -l)
 
 # 스레드 수 (1~8) 및 csv 데이터 index (0~num_lines-1)에 따라 반복 실행
