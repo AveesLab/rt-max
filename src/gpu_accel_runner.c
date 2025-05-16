@@ -271,7 +271,7 @@ static void threadFunc(thread_data_t data)
     pthread_mutex_unlock(&mutex_init);
 
     for (int s = 0; s < num_pseudo_layer; s++){
-        for (int e = s + 1; e < num_pseudo_layer; e++){
+        for (int e = s; e < num_pseudo_layer; e++){
 
             pthread_barrier_wait(&barrier);
 
