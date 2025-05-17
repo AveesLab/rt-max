@@ -51,3 +51,18 @@ do
     -num_thread $i \
     -num_exp 30
 done
+
+for i in {1..8}
+do
+    ./gpu_accel_test.sh -model ${model} -num_thread $i -Gstart $j -Gend $j
+done
+
+for i in {1..8}
+do
+    echo "(CPU) Running with num_thread=$i"
+    for ((j=0; j<layer_num; j++))
+    do
+        echo "  Testing Gstart=$j Gend=$j"
+        ./gpu_accel_test.sh -model ${model} -num_thread $i -Gstart $j -Gend $j
+    done
+done
