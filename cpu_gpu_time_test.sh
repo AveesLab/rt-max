@@ -22,16 +22,16 @@ done
 # model 값에 따른 layer_num 값 설정
 if [ "$model" == "resnet10" ]; then
     data_file="imagenet1k"
-    layer_num=11
+    layer_num=10
 elif [ "$model" == "resnet18" ]; then
     data_file="imagenet1k"
-    layer_num=19
+    layer_num=18
 elif [ "$model" == "yolov2-tiny" ]; then
     data_file="coco"
-    layer_num=10
+    layer_num=9
 elif [ "$model" == "yolov4-tiny" ]; then
     data_file="coco"
-    layer_num=22
+    layer_num=21
 elif [ -z "$model" ]; then
     echo "Model not specified. Use -model to specify the model."
     exit 1

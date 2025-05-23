@@ -4,19 +4,19 @@ get_model_info() {
     case "$1" in
         "resnet10")
             data_file="imagenet1k"
-            layer_num=11
+            layer_num=10
             ;;
         "resnet18")
             data_file="imagenet1k"
-            layer_num=19
+            layer_num=18
             ;;
         "yolov2-tiny")
             data_file="coco"
-            layer_num=10
+            layer_num=9
             ;;
         "yolov4-tiny")
             data_file="coco"
-            layer_num=22
+            layer_num=21
             ;;
         *)
             echo "Unknown model: $1"
