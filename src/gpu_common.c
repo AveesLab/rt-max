@@ -54,6 +54,16 @@ void print_layer_info(network net)
     }
     pseudo_layer_indexes[num_pseudo_layer] = net.n;
     num_pseudo_layer++;
+
+    printf("Number of pseudo layer: %d, Last pseudo layer index: %d, Total (net.n): %d\n", num_pseudo_layer - 1, num_pseudo_layer, net.n);
+
+    // 모든 pseudo 레이어 인덱스 출력 (디버깅)
+    if (VISUAL) printf("Pseudo layer indexes (%d total): ", num_pseudo_layer);
+    for (i = 0; i < num_pseudo_layer; i++) {
+       if (VISUAL) printf("%d ", pseudo_layer_indexes[i]);
+    }
+   if (VISUAL) printf("\n");
+
 }
 
 // 시간 측정 함수

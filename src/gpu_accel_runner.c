@@ -265,7 +265,6 @@ static void threadFunc(thread_data_t data)
 
     if (data.thread_id == 1){
         print_layer_info(net);
-        printf("num_pseudo_layer: %d\n", num_pseudo_layer);
     }
     int core_id = sched_getcpu();
     pthread_mutex_unlock(&mutex_init);
