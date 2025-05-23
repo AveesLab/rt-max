@@ -3,7 +3,7 @@
 *.dSYM
 *.csv
 *.out
-
+*.png
 *.so
 *.exe
 *.dll
