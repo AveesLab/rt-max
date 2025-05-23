@@ -2,7 +2,7 @@
 
 # 기본값 설정 (필요한 경우)
 model=""
-num_worker=8
+num_thread=8
 Gstart=0
 Gend=1
 
@@ -14,7 +14,7 @@ while [[ "$#" -gt 0 ]]; do
             shift
             ;;
         -worker)
-            num_worker="$2"
+            num_thread="$2"
             shift
             ;;
         -Gstart)
@@ -54,4 +54,4 @@ else
     exit 1
 fi
 
-./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_worker -num_exp 30 -Gstart $Gstart -Gend $Gend
+./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 30 -Gstart $Gstart -Gend $Gend

@@ -2,7 +2,7 @@
 
 # 기본값 설정 (필요한 경우)
 model=""
-num_worker=8
+num_thread=8
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
