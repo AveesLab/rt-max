@@ -5,6 +5,7 @@ model=""
 num_thread=8
 Gstart=0
 Gend=1
+num_exp=30
 
 # 파라미터 처리
 while [[ "$#" -gt 0 ]]; do
@@ -23,6 +24,10 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         -Gend)
             Gend="$2"
+            shift
+            ;;
+        -num_exp)
+            num_exp="$2"
             shift
             ;;
         *)
@@ -54,4 +59,4 @@ else
     exit 1
 fi
 
-./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp 30 -Gstart $Gstart -Gend $Gend
+./darknet detector gpu-accel ./cfg/${data_file}.data ./cfg/${model}.cfg ./weights/${model}.weights data/dog.jpg -num_thread $num_thread -num_exp $num_exp -Gstart $Gstart -Gend $Gend
