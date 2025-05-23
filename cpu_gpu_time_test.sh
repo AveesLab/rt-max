@@ -41,10 +41,10 @@ else
 fi
 
 # CPU Layer time
-./cpu_layer_time.sh -model $model
+./cpu_layer_time_test.sh -model $model
 
 # GPU Segment time
-./gpu_segment_time.sh -model $model
+./gpu_segment_time_test.sh -model $model
 
 # GPU-accel (G[j], G[j]) --> CPU-only execution
 for i in {1..8}
