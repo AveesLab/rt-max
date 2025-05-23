@@ -1935,7 +1935,7 @@ void draw_object(char *datacfg, char *cfgfile, char *weightfile, char *filename,
 
 void run_detector(int argc, char **argv)
 {
-    num_exp = find_int_arg(argc, argv, "-num_exp", 1);
+    num_exp = find_int_arg(argc, argv, "-num_exp", 30);
     core_id = find_int_arg(argc, argv, "-core_id", 1);
     num_blas = find_int_arg(argc, argv, "-num_blas", 1);
     num_thread = find_int_arg(argc, argv, "-num_thread", 1);

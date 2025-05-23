@@ -218,7 +218,7 @@ void save_segment_time(char *model_name, int num_worker, int segment_idx, double
     if (segment_idx >= num_segments) return;
     
     int pseudo_start = segments[segment_idx].start_layer;
-    int pseudo_end = segments[segment_idx].end_layer - 1; // 종료 레이어는 +1되어 있으므로 -1
+    int pseudo_end = segments[segment_idx].end_layer; // (start=0;end=1;) 0번째 레이어만 GPU로 돌린 것
     
     char dirpath[256];
     sprintf(dirpath, "./measure/pseudo_layer_time/%s/gpu/worker%d/G%d", 
