@@ -13,7 +13,7 @@ while [[ "$#" -gt 0 ]]; do
             model="$2"
             shift
             ;;
-        -worker)
+        -num_thread)
             num_thread="$2"
             shift
             ;;
